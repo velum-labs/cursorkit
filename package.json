@@ -3,27 +3,57 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.4",
   "description": "Unofficial research bridge for experimenting with Cursor's ConnectRPC protocol against a self-hosted OpenAI-compatible model.",
   "license": "UNLICENSED",
+  "main": "./dist/src/cli.js",
+  "types": "./dist/src/cli.d.ts",
+  "exports": {
+    ".": "./dist/src/cli.js",
+    "./extensions": {
+      "types": "./dist/src/extensions/index.d.ts",
+      "import": "./dist/src/extensions/index.js"
+    },
+    "./providers/openai": {
+      "types": "./dist/src/providers/openai.d.ts",
+      "import": "./dist/src/providers/openai.js"
+    }
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "codegen": "buf generate proto && tsx src/tools/normalizeGeneratedCode.ts",
     "extract:protos": "cd vendor/extract-cursor-protos && go run . /Applications/Cursor.app ../../proto",
-    "test": "vitest run",
-    "serve": "node dist/cli.js serve",
+    "proto:inventory": "tsx src/tools/generateProtoInventory.ts",
+    "test": "vitest run tests",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"docs/**/*.md\" \"*.md\" \"*.json\" \"*.yaml\" \"examples/**/*.ts\" \".github/workflows/*.yml\"",
+    "check": "pnpm build && pnpm test && pnpm format:check",
+    "serve": "node dist/src/cli.js serve",
     "dev": "tsx src/cli.ts serve"
   },
   "bin": {
-    "cursor-rpc": "./dist/cli.js"
+    "cursor-rpc": "./dist/src/cli.js"
   },
+  "files": [
+    "dist/src",
+    "proto",
+    "docs",
+    "README.md",
+    "DISCLAIMER.md"
+  ],
   "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@connectrpc/connect": "^2.1.2",
+    "@connectrpc/connect-node": "^2.1.2",
     "protobufjs": "8.6.3",
     "selfsigned": "5.5.0",
     "undici": "8.4.1"
   },
   "devDependencies": {
+    "@bufbuild/buf": "^1.70.0",
+    "@bufbuild/protoc-gen-es": "^2.12.0",
     "@types/node": "24.10.1",
     "prettier": "3.8.4",
-    "tsx": "4.21.0",
+    "tsx": "4.22.4",
     "typescript": "6.0.3",
     "vitest": "4.1.8"
   },

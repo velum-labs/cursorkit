@@ -5,3 +5,10 @@ coverage/
 .env.*
 !.env.example
 *.log
+fixtures/captures/
+fixtures/local/
+certs/
+*.key
+*.pem
+*.tgz
+cursor-rpc-*.tgz

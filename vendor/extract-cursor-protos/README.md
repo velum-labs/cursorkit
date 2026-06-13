@@ -9,14 +9,14 @@ that extractor reportedly no longer works with recent Cursor versions.
 ## Requirements
 
 - Go 1.21+
-- Node.js and npm
-- Prettier. In this repo, run through `npm run extract:protos` so
+- Node.js and pnpm
+- Prettier. In this repo, run through `pnpm extract:protos` so
   `node_modules/.bin/prettier` is on PATH.
 
 ## Usage From This Repo
 
 ```bash
-npm run extract:protos
+pnpm extract:protos
 ```
 
 Or run the vendored tool directly:

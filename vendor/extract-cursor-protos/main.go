@@ -30,9 +30,9 @@ const (
 	fallbackTimeout     = 100
 	supportedOS         = "darwin"
 
-	prettierTimeout   = 5 * time.Minute
-	npmInstallTimeout = 5 * time.Minute
-	nodeScriptTimeout = 2 * time.Minute
+	prettierTimeout    = 5 * time.Minute
+	pnpmInstallTimeout = 5 * time.Minute
+	nodeScriptTimeout  = 2 * time.Minute
 )
 
 var (
@@ -56,7 +56,7 @@ type Config struct {
 	OutputDir  string
 	Prettier   string
 	Node       string
-	Npm        string
+	Pnpm       string
 	IsNightly  bool
 	Logger     *log.Logger
 }
@@ -134,7 +134,7 @@ func buildConfig(cursorPath string, outputDir string, logger *log.Logger) (*Conf
 		return nil, err
 	}
 
-	npm, err := findBinary("npm")
+	pnpm, err := findBinary("pnpm")
 	if err != nil {
 		return nil, err
 	}
@@ -156,7 +156,7 @@ func buildConfig(cursorPath string, outputDir string, logger *log.Logger) (*Conf
 		OutputDir:  absOutputDir,
 		Prettier:   prettier,
 		Node:       node,
-		Npm:        npm,
+		Pnpm:       pnpm,
 		IsNightly:  isNightly,
 		Logger:     logger,
 	}, nil
@@ -407,6 +407,8 @@ func (e *Extractor) setupNodePackage(dir string) error {
 	packageJSON := `{
   "type": "module",
   "dependencies": {
+    "ajv": "*",
+    "@jimp/core": "*",
     "@sentry/node": "*",
     "@vscode/ripgrep": "*",
     "node-pty": "*",
@@ -416,10 +418,20 @@ func (e *Extractor) setupNodePackage(dir string) error {
     "@opentelemetry/sdk-trace-node": "*",
     "@opentelemetry/exporter-trace-otlp-proto": "*",
     "@opentelemetry/api": "*",
+    "@opentelemetry/core": "*",
     "@opentelemetry/sdk-node": "*",
     "@opentelemetry/resources": "*",
+    "@opentelemetry/sdk-trace-base": "*",
     "@opentelemetry/semantic-conventions": "*",
-    "rxjs": "*"
+    "gray-matter": "*",
+    "iconv-lite": "*",
+    "jimp": "*",
+    "js-yaml": "*",
+    "jschardet": "*",
+    "jsonc-parser": "*",
+    "rxjs": "*",
+    "tar": "*",
+    "zod": "*"
   }
 }`
 
@@ -429,18 +441,18 @@ func (e *Extractor) setupNodePackage(dir string) error {
 
 	e.config.Logger.Println("Installing Node.js dependencies...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), npmInstallTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), pnpmInstallTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, e.config.Npm, "install", "--silent")
+	cmd := exec.CommandContext(ctx, e.config.Pnpm, "install", "--silent")
 	cmd.Dir = dir
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("npm install timed out after %v", npmInstallTimeout)
+			return fmt.Errorf("pnpm install timed out after %v", pnpmInstallTimeout)
 		}
-		return fmt.Errorf("npm install failed: %w\nOutput: %s", err, output)
+		return fmt.Errorf("pnpm install failed: %w\nOutput: %s", err, output)
 	}
 
 	return nil

@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm codegen
+      - run: git diff --exit-code -- src/gen
+      - run: pnpm build
+      - run: pnpm test
+      - run: pnpm format:check
+      - run: pnpm audit --audit-level moderate
+      - run: pnpm pack
+      - run: node dist/src/cli.js --help
+      - run: go test ./...
+        working-directory: vendor/extract-cursor-protos

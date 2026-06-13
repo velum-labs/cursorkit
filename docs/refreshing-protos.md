@@ -1,9 +1,9 @@
 # Refreshing Protos
 
 This repo vendors the proto extraction logic under `vendor/extract-cursor-protos`.
-The checked-in `proto/aiserver/v1/aiserver.proto` is currently a focused,
-hand-trimmed slice used by the bridge implementation. When Cursor version drift
-breaks the bridge, refresh from the installed Cursor app and then re-trim or
+The checked-in `proto/` directory is the full extracted proto surface used for
+endpoint visibility, runtime decoding, and TypeScript codegen. When Cursor
+version drift breaks the bridge, refresh from the installed Cursor app and
 update the runtime code against captured fixtures.
 
 ## Source
@@ -19,8 +19,8 @@ and treat the code as experimental research material.
 ## Refresh Stable Cursor
 
 ```bash
-npm install
-npm run extract:protos
+pnpm install
+pnpm extract:protos
 ```
 
 That command runs:
@@ -30,11 +30,27 @@ cd vendor/extract-cursor-protos
 go run . /Applications/Cursor.app ../../proto
 ```
 
-The output path is:
+The output path is the default proto directory used by the project:
 
 ```text
-proto/aiserver/v1/aiserver.proto
+proto/
 ```
+
+The current extraction is summarized in `docs/proto-inventory.md`. Regenerate
+the inventory, manifests, and TypeScript code after extraction:
+
+```bash
+pnpm proto:inventory
+pnpm codegen
+```
+
+The Cursor bundle exposes runtime descriptors with package and type names, but
+not original `.proto` file metadata. Some descriptors include foreign package
+references and nested names that would create invalid protoc import cycles if
+written one-file-per-package. The extractor therefore normalizes the full
+discovered graph for codegen: nested types are flattened, foreign message shapes
+are copied into the consuming package with provenance comments, and service
+paths keep their source package names.
 
 ## Refresh Cursor Nightly Or A Custom App Path
 
@@ -51,8 +67,10 @@ the upstream Nightly compatibility path.
 1. Capture real Cursor traffic again for `AvailableModels` and
    `StreamUnifiedChatWithTools`.
 2. Decode the captures with the refreshed proto.
-3. Update `fixtures/` and `docs/protocol.md`.
-4. Update the bridge translation code only after fixtures prove the field tags
+3. Run `pnpm proto:inventory`.
+4. Run `pnpm codegen`.
+5. Update `fixtures/` and `docs/protocol.md`.
+6. Update bridge routing or translation code only after fixtures prove the field tags
    and streaming event order.
 
 Do not assume a generated proto is sufficient by itself. Cursor’s server

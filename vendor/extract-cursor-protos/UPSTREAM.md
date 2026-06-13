@@ -13,4 +13,4 @@ infrastructure.
 Local patch:
 
 - `main.go` accepts an optional second argument for the output directory.
-- The repo script `npm run extract:protos` writes refreshed output to `proto/`.
+- The repo script `pnpm extract:protos` writes refreshed output to `proto/`.

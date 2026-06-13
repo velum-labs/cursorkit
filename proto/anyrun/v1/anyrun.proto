@@ -1,0 +1,294 @@
+syntax = "proto3";
+package anyrun.v1;
+option go_package = "cursor/gen/anyrun/v1;anyrunv1";
+
+enum ClonePurpose { // anyrun.v1.ClonePurpose
+	CLONE_PURPOSE_CLONE_PURPOSE_UNSPECIFIED = 0;
+	CLONE_PURPOSE_CLONE_PURPOSE_DOCKER_BUILD = 1;
+	CLONE_PURPOSE_CLONE_PURPOSE_WORKSPACE_SETUP = 2;
+}
+
+enum PrivateWorkerWaitReason { // anyrun.v1.PrivateWorkerWaitReason
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_UNSPECIFIED = 0;
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_NO_CONNECTED_WORKERS = 1;
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_LABEL_MISMATCH = 2;
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_OWNER_FILTERED = 3;
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_SHARED_ASSIGNMENT_FILTERED = 4;
+	PRIVATE_WORKER_WAIT_REASON_PRIVATE_WORKER_WAIT_REASON_ALL_BUSY = 5;
+}
+
+enum RestartReason { // anyrun.v1.RestartReason
+	RESTART_REASON_RESTART_REASON_UNSPECIFIED = 0;
+	RESTART_REASON_RESTART_REASON_PROCESS_EXITED = 1;
+	RESTART_REASON_RESTART_REASON_HEALTH_CHECK_FAILED = 2;
+}
+
+enum PodCreatingPhase { // anyrun.v1.PodCreatingPhase
+	POD_CREATING_PHASE_POD_CREATING_PHASE_UNSPECIFIED = 0;
+	POD_CREATING_PHASE_POD_CREATING_PHASE_CLONE = 1;
+	POD_CREATING_PHASE_POD_CREATING_PHASE_BUILD = 2;
+	POD_CREATING_PHASE_POD_CREATING_PHASE_POST_CREATE = 3;
+	POD_CREATING_PHASE_POD_CREATING_PHASE_UPDATE_CONTENT = 4;
+	POD_CREATING_PHASE_POD_CREATING_PHASE_POST_START = 5;
+}
+
+enum GitCloneFailureCategory { // anyrun.v1.GitCloneFailureCategory
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_UNSPECIFIED = 0;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_IP_ALLOW_LIST = 1;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_INVALID_CREDENTIALS = 2;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_SSO_REDIRECT = 3;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_PROXY_CONNECT = 4;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_CONNECTION_RESET = 5;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_TRANSPORT_INTERRUPTED = 6;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_REMOTE_FORBIDDEN = 7;
+	GIT_CLONE_FAILURE_CATEGORY_GIT_CLONE_FAILURE_CATEGORY_UPSTREAM_BAD_GATEWAY = 8;
+}
+
+enum SnapshotState { // anyrun.v1.SnapshotState
+	SNAPSHOT_STATE_SNAPSHOT_STATE_UNSPECIFIED = 0;
+	SNAPSHOT_STATE_SNAPSHOT_STATE_CREATING = 1;
+	SNAPSHOT_STATE_SNAPSHOT_STATE_READY = 2;
+	SNAPSHOT_STATE_SNAPSHOT_STATE_FAILED = 3;
+}
+
+message PodErrorEvent { // anyrun.v1.PodErrorEvent
+	string error_message = 1;
+}
+
+message GoogleProtobuf_Empty { // google.protobuf.Empty
+}
+
+message HydrationProgress { // anyrun.v1.HydrationProgress
+	uint64 transferred = 1;
+	uint64 total = 2;
+}
+
+message CloneStarted { // anyrun.v1.CloneStarted
+	ClonePurpose purpose = 1;
+}
+
+message CloneCompleted { // anyrun.v1.CloneCompleted
+	ClonePurpose purpose = 1;
+}
+
+message BuildStepStarted { // anyrun.v1.BuildStepStarted
+	uint32 stream_id = 1;
+	uint32 step = 2;
+	uint32 total_steps = 3;
+	string command = 4;
+}
+
+message BuildStatusLine { // anyrun.v1.BuildStatusLine
+	uint32 stream_id = 1;
+	string timestamp = 2;
+	string content = 3;
+}
+
+message InternalBuildMessage { // anyrun.v1.InternalBuildMessage
+	uint32 stream_id = 1;
+	string content = 2;
+}
+
+message InstallCommand { // anyrun.v1.InstallCommand
+	string name = 1;
+	string command = 2;
+	optional string user = 3;
+	bool is_system = 4;
+	bool failure_tolerant = 5;
+}
+
+message FeatureOutput { // anyrun.v1.FeatureOutput
+	string feature_id = 1;
+	string output = 2;
+}
+
+message FeatureExitCode { // anyrun.v1.FeatureExitCode
+	string feature_id = 1;
+	int64 exit_code = 2;
+}
+
+message ImagePullStarted { // anyrun.v1.ImagePullStarted
+	string image_name = 1;
+	string pull_id = 2;
+}
+
+message ProgressDetail { // anyrun.v1.ProgressDetail
+	uint64 current = 1;
+	uint64 total = 2;
+}
+
+message ImagePullLayerUpdate { // anyrun.v1.ImagePullLayerUpdate
+	string image_name = 1;
+	string pull_id = 2;
+	string layer_id = 3;
+	bool pulling_fs_layer = 4;
+	bool waiting = 5;
+	bool verifying_checksum = 6;
+	bool download_complete = 7;
+	bool pull_complete = 8;
+	ProgressDetail downloading = 9;
+	ProgressDetail extracting = 10;
+	string other = 11;
+}
+
+message ImagePullStatusUpdate { // anyrun.v1.ImagePullStatusUpdate
+	string image_name = 1;
+	string pull_id = 2;
+	string status = 3;
+}
+
+message ImagePullCompleted { // anyrun.v1.ImagePullCompleted
+	string image_name = 1;
+	string pull_id = 2;
+}
+
+message PodIdentity { // anyrun.v1.PodIdentity
+	string tenant_id = 1;
+	string pod_id = 2;
+}
+
+message WaitingForWorkerStatus { // anyrun.v1.WaitingForWorkerStatus
+	int32 retry_count = 1;
+	int32 max_retries = 2;
+	PrivateWorkerWaitReason wait_reason = 3;
+}
+
+message SpanStarted { // anyrun.v1.SpanStarted
+	string span_id = 1;
+	string name = 2;
+	optional string parent_span_id = 3;
+	optional string href = 5;
+}
+
+message SpanEnded { // anyrun.v1.SpanEnded
+	string span_id = 1;
+}
+
+message LifecycleProcessRestarted { // anyrun.v1.LifecycleProcessRestarted
+	uint32 attempt = 1;
+	int32 previous_exit_code = 2;
+	RestartReason reason = 3;
+	string command_name = 4;
+}
+
+message LifecycleProcessExited { // anyrun.v1.LifecycleProcessExited
+	int32 exit_code = 1;
+	string command_name = 2;
+}
+
+message PodEvent { // anyrun.v1.PodEvent
+	uint64 creation_timestamp = 49;
+	PodErrorEvent error = 26;
+	string debug_event = 1;
+	GoogleProtobuf_Empty hydration_started = 43;
+	HydrationProgress hydration_progress = 44;
+	GoogleProtobuf_Empty hydration_completed = 45;
+	GoogleProtobuf_Empty clone_started = 31;
+	GoogleProtobuf_Empty clone_completed = 32;
+	CloneStarted clone_started_v2 = 51;
+	CloneCompleted clone_completed_v2 = 52;
+	GoogleProtobuf_Empty checkout_started = 33;
+	GoogleProtobuf_Empty checkout_completed = 34;
+	string build_started = 2;
+	string build_status_message = 3;
+	BuildStepStarted build_step_started = 27;
+	BuildStatusLine build_status_line = 28;
+	InternalBuildMessage internal_build_message = 29;
+	int32 build_exit_code = 30;
+	string prepare_stdout = 14;
+	string prepare_stderr = 15;
+	int64 prepare_exit_code = 16;
+	InstallCommand install_command = 50;
+	string install_stdout = 17;
+	string install_stderr = 18;
+	int64 install_exit_code = 19;
+	string verify_stdout = 46;
+	string verify_stderr = 47;
+	int64 verify_exit_code = 48;
+	string start_stdout = 6;
+	string start_stderr = 7;
+	int64 start_exit_code = 8;
+	FeatureOutput extension_install_stdout = 20;
+	FeatureOutput extension_install_stderr = 21;
+	FeatureExitCode extension_install_exit_code = 22;
+	GoogleProtobuf_Empty snapshot_started = 35;
+	GoogleProtobuf_Empty snapshot_completed = 36;
+	GoogleProtobuf_Empty creation_completed = 9;
+	string post_start_stdout = 10;
+	string post_start_stderr = 11;
+	int64 post_start_exit_code = 12;
+	FeatureOutput extension_start_stdout = 23;
+	FeatureOutput extension_start_stderr = 24;
+	FeatureExitCode extension_start_exit_code = 25;
+	GoogleProtobuf_Empty startup_completed = 13;
+	ImagePullStarted image_pull_started = 37;
+	ImagePullLayerUpdate image_pull_layer_update = 38;
+	ImagePullStatusUpdate image_pull_status_update = 39;
+	ImagePullCompleted image_pull_completed = 40;
+	PodIdentity blocked_repo_state = 41;
+	GoogleProtobuf_Empty acquired_repo_state = 42;
+	GoogleProtobuf_Empty private_worker_ready = 53;
+	WaitingForWorkerStatus waiting_for_worker = 54;
+	SpanStarted span_started = 55;
+	SpanEnded span_ended = 56;
+	LifecycleProcessRestarted lifecycle_process_restarted = 57;
+	LifecycleProcessExited lifecycle_process_exited = 58;
+}
+
+message PodCreatingStatus { // anyrun.v1.PodCreatingStatus
+	PodCreatingPhase phase = 1;
+}
+
+message PodRunningStatus { // anyrun.v1.PodRunningStatus
+	optional uint64 missed_heartbeat_deadline = 1;
+}
+
+message InstallCommandFailure { // anyrun.v1.InstallCommandFailure
+	bool is_system = 1;
+}
+
+message DockerBuildFailure { // anyrun.v1.DockerBuildFailure
+	int64 exit_code = 1;
+}
+
+message GitCloneFailure { // anyrun.v1.GitCloneFailure
+	int64 exit_code = 1;
+	GitCloneFailureCategory category = 2;
+	bool retryable = 3;
+	optional string remote_host = 4;
+	optional int32 http_status = 5;
+}
+
+message GitCheckoutFailure { // anyrun.v1.GitCheckoutFailure
+	int64 exit_code = 1;
+}
+
+message ContainerWaitFailure { // anyrun.v1.ContainerWaitFailure
+	int64 exit_code = 1;
+	string message = 2;
+}
+
+message PodFailureDetails { // anyrun.v1.PodFailureDetails
+	InstallCommandFailure install_command_failure = 1;
+	DockerBuildFailure docker_build_failure = 2;
+	GitCloneFailure git_clone_failure = 3;
+	GitCheckoutFailure git_checkout_failure = 4;
+	ContainerWaitFailure container_wait_failure = 5;
+}
+
+message PodFailedStatus { // anyrun.v1.PodFailedStatus
+	string reason = 1;
+	optional PodFailureDetails failure_details = 2;
+}
+
+message PodTerminatedStatus { // anyrun.v1.PodTerminatedStatus
+	string reason = 1;
+	optional uint32 exit_code = 2;
+}
+
+message PodStatus { // anyrun.v1.PodStatus
+	PodCreatingStatus creating = 1;
+	PodRunningStatus running = 2;
+	PodFailedStatus failed = 3;
+	PodTerminatedStatus terminated = 4;
+}

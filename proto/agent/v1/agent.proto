@@ -1,0 +1,5371 @@
+syntax = "proto3";
+package agent.v1;
+option go_package = "cursor/gen/agent/v1;agentv1";
+
+enum AgentMode { // agent.v1.AgentMode
+	AGENT_MODE_AGENT_MODE_UNSPECIFIED = 0;
+	AGENT_MODE_AGENT_MODE_AGENT = 1;
+	AGENT_MODE_AGENT_MODE_ASK = 2;
+	AGENT_MODE_AGENT_MODE_PLAN = 3;
+	AGENT_MODE_AGENT_MODE_DEBUG = 4;
+	AGENT_MODE_AGENT_MODE_TRIAGE = 5;
+	AGENT_MODE_AGENT_MODE_PROJECT = 6;
+	AGENT_MODE_AGENT_MODE_MULTITASK = 7;
+}
+
+enum SubagentExecutionEnvironment { // agent.v1.SubagentExecutionEnvironment
+	SUBAGENT_EXECUTION_ENVIRONMENT_SUBAGENT_EXECUTION_ENVIRONMENT_UNSPECIFIED = 0;
+	SUBAGENT_EXECUTION_ENVIRONMENT_SUBAGENT_EXECUTION_ENVIRONMENT_LOCAL = 1;
+	SUBAGENT_EXECUTION_ENVIRONMENT_SUBAGENT_EXECUTION_ENVIRONMENT_CLOUD = 2;
+}
+
+enum CursorRuleSource { // agent.v1.CursorRuleSource
+	CURSOR_RULE_SOURCE_CURSOR_RULE_SOURCE_UNSPECIFIED = 0;
+	CURSOR_RULE_SOURCE_CURSOR_RULE_SOURCE_TEAM = 1;
+	CURSOR_RULE_SOURCE_CURSOR_RULE_SOURCE_USER = 2;
+}
+
+enum SelectedPluginCapabilityType { // agent.v1.SelectedPluginCapabilityType
+	SELECTED_PLUGIN_CAPABILITY_TYPE_SELECTED_PLUGIN_CAPABILITY_TYPE_UNSPECIFIED = 0;
+	SELECTED_PLUGIN_CAPABILITY_TYPE_SELECTED_PLUGIN_CAPABILITY_TYPE_COMMAND = 1;
+	SELECTED_PLUGIN_CAPABILITY_TYPE_SELECTED_PLUGIN_CAPABILITY_TYPE_SKILL = 2;
+	SELECTED_PLUGIN_CAPABILITY_TYPE_SELECTED_PLUGIN_CAPABILITY_TYPE_SUBAGENT = 3;
+}
+
+enum SimulatedMsgReason { // agent.v1.SimulatedMsgReason
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_UNSPECIFIED = 0;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_PLAN_EXECUTION = 1;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_COMMIT_REMINDER = 2;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_BACKGROUND_TASK_COMPLETION = 3;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_COMMIT = 4;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_COMMIT_AND_PUSH = 5;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_PUSH = 6;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_CREATE_PR = 7;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_FIX_MERGE_CONFLICTS = 8;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_USER_SENT_TO_SUBAGENT = 9;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_USER_INTERRUPTED_SUBAGENT = 10;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_USER_QUEUED_TO_SUBAGENT = 11;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_BABYSIT_PR_IN_CLOUD = 12;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_CI_PANEL_INVESTIGATE_FAILURE = 13;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_MULTITASK = 14;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_BUILD_IN_PARALLEL = 15;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_MULTITASK_SPLIT_PRS = 16;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_APPLY_LOCALLY = 17;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_CHECKOUT_BRANCH = 18;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_DIFF_TAB_UPDATE_BRANCH = 19;
+	SIMULATED_MSG_REASON_SIMULATED_MSG_REASON_PR_TAB_BUGBOT_FIX = 20;
+}
+
+enum PackageType { // agent.v1.PackageType
+	PACKAGE_TYPE_PACKAGE_TYPE_UNSPECIFIED = 0;
+	PACKAGE_TYPE_PACKAGE_TYPE_CURSOR_PROJECT = 1;
+	PACKAGE_TYPE_PACKAGE_TYPE_CURSOR_PERSONAL = 2;
+	PACKAGE_TYPE_PACKAGE_TYPE_CLAUDE_SKILL = 3;
+	PACKAGE_TYPE_PACKAGE_TYPE_CLAUDE_PLUGIN = 4;
+}
+
+enum CustomSubagentPermissionMode { // agent.v1.CustomSubagentPermissionMode
+	CUSTOM_SUBAGENT_PERMISSION_MODE_CUSTOM_SUBAGENT_PERMISSION_MODE_UNSPECIFIED = 0;
+	CUSTOM_SUBAGENT_PERMISSION_MODE_CUSTOM_SUBAGENT_PERMISSION_MODE_DEFAULT = 1;
+	CUSTOM_SUBAGENT_PERMISSION_MODE_CUSTOM_SUBAGENT_PERMISSION_MODE_READONLY = 2;
+	CUSTOM_SUBAGENT_PERMISSION_MODE_CUSTOM_SUBAGENT_PERMISSION_MODE_AGENT_ONLY = 3;
+}
+
+enum ShellBackgroundReason { // agent.v1.ShellBackgroundReason
+	SHELL_BACKGROUND_REASON_SHELL_BACKGROUND_REASON_UNSPECIFIED = 0;
+	SHELL_BACKGROUND_REASON_SHELL_BACKGROUND_REASON_TIMEOUT = 1;
+	SHELL_BACKGROUND_REASON_SHELL_BACKGROUND_REASON_USER_REQUEST = 2;
+}
+
+enum ShellAbortReason { // agent.v1.ShellAbortReason
+	SHELL_ABORT_REASON_SHELL_ABORT_REASON_UNSPECIFIED = 0;
+	SHELL_ABORT_REASON_SHELL_ABORT_REASON_USER_ABORT = 1;
+	SHELL_ABORT_REASON_SHELL_ABORT_REASON_TIMEOUT = 2;
+}
+
+enum TimeoutBehavior { // agent.v1.TimeoutBehavior
+	TIMEOUT_BEHAVIOR_TIMEOUT_BEHAVIOR_UNSPECIFIED = 0;
+	TIMEOUT_BEHAVIOR_TIMEOUT_BEHAVIOR_CANCEL = 1;
+	TIMEOUT_BEHAVIOR_TIMEOUT_BEHAVIOR_BACKGROUND = 2;
+}
+
+enum TodoStatus { // agent.v1.TodoStatus
+	TODO_STATUS_TODO_STATUS_UNSPECIFIED = 0;
+	TODO_STATUS_TODO_STATUS_PENDING = 1;
+	TODO_STATUS_TODO_STATUS_IN_PROGRESS = 2;
+	TODO_STATUS_TODO_STATUS_COMPLETED = 3;
+	TODO_STATUS_TODO_STATUS_CANCELLED = 4;
+}
+
+enum DiagnosticSeverity { // agent.v1.DiagnosticSeverity
+	DIAGNOSTIC_SEVERITY_DIAGNOSTIC_SEVERITY_UNSPECIFIED = 0;
+	DIAGNOSTIC_SEVERITY_DIAGNOSTIC_SEVERITY_ERROR = 1;
+	DIAGNOSTIC_SEVERITY_DIAGNOSTIC_SEVERITY_WARNING = 2;
+	DIAGNOSTIC_SEVERITY_DIAGNOSTIC_SEVERITY_INFORMATION = 3;
+	DIAGNOSTIC_SEVERITY_DIAGNOSTIC_SEVERITY_HINT = 4;
+}
+
+enum TaskMode { // agent.v1.TaskMode
+	TASK_MODE_TASK_MODE_UNSPECIFIED = 0;
+	TASK_MODE_TASK_MODE_AGENT = 1;
+	TASK_MODE_TASK_MODE_PLAN = 2;
+}
+
+enum RecordingMode { // agent.v1.RecordingMode
+	RECORDING_MODE_RECORDING_MODE_UNSPECIFIED = 0;
+	RECORDING_MODE_RECORDING_MODE_START_RECORDING = 1;
+	RECORDING_MODE_RECORDING_MODE_SAVE_RECORDING = 2;
+	RECORDING_MODE_RECORDING_MODE_DISCARD_RECORDING = 3;
+}
+
+enum RequestedFilePathRejectedReason { // agent.v1.RequestedFilePathRejectedReason
+	REQUESTED_FILE_PATH_REJECTED_REASON_REQUESTED_FILE_PATH_REJECTED_REASON_UNSPECIFIED = 0;
+	REQUESTED_FILE_PATH_REJECTED_REASON_REQUESTED_FILE_PATH_REJECTED_REASON_SLASHES_NOT_ALLOWED = 1;
+}
+
+enum MouseButton { // agent.v1.MouseButton
+	MOUSE_BUTTON_MOUSE_BUTTON_UNSPECIFIED = 0;
+	MOUSE_BUTTON_MOUSE_BUTTON_LEFT = 1;
+	MOUSE_BUTTON_MOUSE_BUTTON_RIGHT = 2;
+	MOUSE_BUTTON_MOUSE_BUTTON_MIDDLE = 3;
+	MOUSE_BUTTON_MOUSE_BUTTON_BACK = 4;
+	MOUSE_BUTTON_MOUSE_BUTTON_FORWARD = 5;
+}
+
+enum ScrollDirection { // agent.v1.ScrollDirection
+	SCROLL_DIRECTION_SCROLL_DIRECTION_UNSPECIFIED = 0;
+	SCROLL_DIRECTION_SCROLL_DIRECTION_UP = 1;
+	SCROLL_DIRECTION_SCROLL_DIRECTION_DOWN = 2;
+	SCROLL_DIRECTION_SCROLL_DIRECTION_LEFT = 3;
+	SCROLL_DIRECTION_SCROLL_DIRECTION_RIGHT = 4;
+}
+
+enum BugfixVerdict { // agent.v1.BugfixVerdict
+	BUGFIX_VERDICT_BUGFIX_VERDICT_UNSPECIFIED = 0;
+	BUGFIX_VERDICT_BUGFIX_VERDICT_FIXED = 1;
+	BUGFIX_VERDICT_BUGFIX_VERDICT_FALSE_POSITIVE = 2;
+	BUGFIX_VERDICT_BUGFIX_VERDICT_COULD_NOT_FIX = 3;
+	BUGFIX_VERDICT_BUGFIX_VERDICT_RESOLVED_BY_OTHER_FIX = 4;
+}
+
+enum SubagentBackgroundReason { // agent.v1.SubagentBackgroundReason
+	SUBAGENT_BACKGROUND_REASON_SUBAGENT_BACKGROUND_REASON_UNSPECIFIED = 0;
+	SUBAGENT_BACKGROUND_REASON_SUBAGENT_BACKGROUND_REASON_AGENT_REQUEST = 1;
+	SUBAGENT_BACKGROUND_REASON_SUBAGENT_BACKGROUND_REASON_USER_REQUEST = 2;
+	SUBAGENT_BACKGROUND_REASON_SUBAGENT_BACKGROUND_REASON_QUEUED_FOLLOW_UP = 3;
+}
+
+enum BackgroundTaskKind { // agent.v1.BackgroundTaskKind
+	BACKGROUND_TASK_KIND_BACKGROUND_TASK_KIND_UNSPECIFIED = 0;
+	BACKGROUND_TASK_KIND_BACKGROUND_TASK_KIND_SHELL = 1;
+	BACKGROUND_TASK_KIND_BACKGROUND_TASK_KIND_SUBAGENT = 2;
+}
+
+enum BackgroundTaskStatus { // agent.v1.BackgroundTaskStatus
+	BACKGROUND_TASK_STATUS_BACKGROUND_TASK_STATUS_UNSPECIFIED = 0;
+	BACKGROUND_TASK_STATUS_BACKGROUND_TASK_STATUS_SUCCESS = 1;
+	BACKGROUND_TASK_STATUS_BACKGROUND_TASK_STATUS_ERROR = 2;
+	BACKGROUND_TASK_STATUS_BACKGROUND_TASK_STATUS_ABORTED = 3;
+}
+
+enum BackgroundTaskCompletionReason { // agent.v1.BackgroundTaskCompletionReason
+	BACKGROUND_TASK_COMPLETION_REASON_BACKGROUND_TASK_COMPLETION_REASON_UNSPECIFIED = 0;
+	BACKGROUND_TASK_COMPLETION_REASON_BACKGROUND_TASK_COMPLETION_REASON_TASK_FINISHED = 1;
+	BACKGROUND_TASK_COMPLETION_REASON_BACKGROUND_TASK_COMPLETION_REASON_TASK_PROGRESS = 2;
+}
+
+enum ForceBackgroundShellStatus { // agent.v1.ForceBackgroundShellStatus
+	FORCE_BACKGROUND_SHELL_STATUS_FORCE_BACKGROUND_SHELL_STATUS_UNSPECIFIED = 0;
+	FORCE_BACKGROUND_SHELL_STATUS_FORCE_BACKGROUND_SHELL_STATUS_ACCEPTED = 1;
+	FORCE_BACKGROUND_SHELL_STATUS_FORCE_BACKGROUND_SHELL_STATUS_NOT_FOUND = 2;
+}
+
+enum ForceBackgroundSubagentStatus { // agent.v1.ForceBackgroundSubagentStatus
+	FORCE_BACKGROUND_SUBAGENT_STATUS_FORCE_BACKGROUND_SUBAGENT_STATUS_UNSPECIFIED = 0;
+	FORCE_BACKGROUND_SUBAGENT_STATUS_FORCE_BACKGROUND_SUBAGENT_STATUS_ACCEPTED = 1;
+	FORCE_BACKGROUND_SUBAGENT_STATUS_FORCE_BACKGROUND_SUBAGENT_STATUS_NOT_FOUND = 2;
+}
+
+enum SmartModeClassifierDecision { // agent.v1.SmartModeClassifierDecision
+	SMART_MODE_CLASSIFIER_DECISION_SMART_MODE_CLASSIFIER_DECISION_UNSPECIFIED = 0;
+	SMART_MODE_CLASSIFIER_DECISION_SMART_MODE_CLASSIFIER_DECISION_ALLOW = 1;
+	SMART_MODE_CLASSIFIER_DECISION_SMART_MODE_CLASSIFIER_DECISION_BLOCK = 2;
+}
+
+enum ThinkingStyle { // agent.v1.ThinkingStyle
+	THINKING_STYLE_THINKING_STYLE_UNSPECIFIED = 0;
+	THINKING_STYLE_THINKING_STYLE_DEFAULT = 1;
+	THINKING_STYLE_THINKING_STYLE_CODEX = 2;
+	THINKING_STYLE_THINKING_STYLE_GPT5 = 3;
+}
+
+enum EntryType { // agent.v1.EntryType
+	ENTRY_TYPE_ENTRY_TYPE_UNSPECIFIED = 0;
+	ENTRY_TYPE_ENTRY_TYPE_FILE = 1;
+	ENTRY_TYPE_ENTRY_TYPE_DIRECTORY = 2;
+	ENTRY_TYPE_ENTRY_TYPE_SYMLINK = 3;
+}
+
+enum BatchGetDiffErrorKind { // agent.v1.BatchGetDiffErrorKind
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_UNSPECIFIED = 0;
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_FETCH_FAILED = 1;
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_DIFF_FAILED = 2;
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_UNAUTHENTICATED = 3;
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_NOT_FOUND = 4;
+	BATCH_GET_DIFF_ERROR_KIND_BATCH_GET_DIFF_ERROR_KIND_INTERNAL = 5;
+}
+
+enum ArtifactUploadStatus { // agent.v1.ArtifactUploadStatus
+	ARTIFACT_UPLOAD_STATUS_ARTIFACT_UPLOAD_STATUS_UNSPECIFIED = 0;
+	ARTIFACT_UPLOAD_STATUS_ARTIFACT_UPLOAD_STATUS_NOT_STARTED = 1;
+	ARTIFACT_UPLOAD_STATUS_ARTIFACT_UPLOAD_STATUS_IN_PROGRESS = 2;
+	ARTIFACT_UPLOAD_STATUS_ARTIFACT_UPLOAD_STATUS_COMPLETED = 3;
+	ARTIFACT_UPLOAD_STATUS_ARTIFACT_UPLOAD_STATUS_FAILED = 4;
+}
+
+enum ArtifactPathErrorKind { // agent.v1.ArtifactPathErrorKind
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_UNSPECIFIED = 0;
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_MISSING = 1;
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_PERMISSION = 2;
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_NOT_A_FILE = 3;
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_INVALID_PATH = 4;
+	ARTIFACT_PATH_ERROR_KIND_ARTIFACT_PATH_ERROR_KIND_UNKNOWN = 5;
+}
+
+enum ArtifactUploadDispatchStatus { // agent.v1.ArtifactUploadDispatchStatus
+	ARTIFACT_UPLOAD_DISPATCH_STATUS_ARTIFACT_UPLOAD_DISPATCH_STATUS_UNSPECIFIED = 0;
+	ARTIFACT_UPLOAD_DISPATCH_STATUS_ARTIFACT_UPLOAD_DISPATCH_STATUS_ACCEPTED = 1;
+	ARTIFACT_UPLOAD_DISPATCH_STATUS_ARTIFACT_UPLOAD_DISPATCH_STATUS_REJECTED = 2;
+	ARTIFACT_UPLOAD_DISPATCH_STATUS_ARTIFACT_UPLOAD_DISPATCH_STATUS_SKIPPED_ALREADY_IN_PROGRESS = 3;
+}
+
+enum ArtifactRestoreStatus { // agent.v1.ArtifactRestoreStatus
+	ARTIFACT_RESTORE_STATUS_ARTIFACT_RESTORE_STATUS_UNSPECIFIED = 0;
+	ARTIFACT_RESTORE_STATUS_ARTIFACT_RESTORE_STATUS_RESTORED = 1;
+	ARTIFACT_RESTORE_STATUS_ARTIFACT_RESTORE_STATUS_SKIPPED_ALREADY_EXISTS = 2;
+	ARTIFACT_RESTORE_STATUS_ARTIFACT_RESTORE_STATUS_REJECTED = 3;
+}
+
+enum PrivateWorkerStatus { // agent.v1.PrivateWorkerStatus
+	PRIVATE_WORKER_STATUS_PRIVATE_WORKER_STATUS_UNSPECIFIED = 0;
+	PRIVATE_WORKER_STATUS_PRIVATE_WORKER_STATUS_DISCONNECTED = 1;
+	PRIVATE_WORKER_STATUS_PRIVATE_WORKER_STATUS_READY = 2;
+	PRIVATE_WORKER_STATUS_PRIVATE_WORKER_STATUS_CLAIMED = 3;
+}
+
+enum TmuxSessionKind { // agent.v1.TmuxSessionKind
+	TMUX_SESSION_KIND_TMUX_SESSION_KIND_UNSPECIFIED = 0;
+	TMUX_SESSION_KIND_TMUX_SESSION_KIND_USER_MANUAL = 1;
+	TMUX_SESSION_KIND_TMUX_SESSION_KIND_AGENT_BACKGROUND = 2;
+	TMUX_SESSION_KIND_TMUX_SESSION_KIND_AGENT_INTERACTIVE = 3;
+}
+
+message PromptTokenBreakdownCategory { // agent.v1.PromptTokenBreakdownCategory
+	string id = 1;
+	string label = 2;
+	uint32 estimated_tokens = 3;
+	optional uint32 character_count = 4;
+}
+
+message PromptTokenBreakdownSnapshot { // agent.v1.PromptTokenBreakdownSnapshot
+	uint32 total_used_tokens = 1;
+	uint32 max_tokens = 2;
+	repeated PromptTokenBreakdownCategory categories = 3;
+}
+
+message PromptContextSourceRef { // agent.v1.PromptContextSourceRef
+	string source_type = 1;
+	uint32 message_index = 3;
+	string content_path = 4;
+	uint32 start_offset = 5;
+	uint32 end_offset = 6;
+}
+
+message PromptContextNode { // agent.v1.PromptContextNode
+	string id = 1;
+	optional string parent_id = 2;
+	string kind = 3;
+	string label = 4;
+	string category_id = 5;
+	uint32 estimated_tokens = 6;
+	uint32 character_count = 7;
+	bool content_available = 9;
+	optional PromptContextSourceRef source = 11;
+	optional string inline_content = 12;
+}
+
+message PromptContextUsageTree { // agent.v1.PromptContextUsageTree
+	uint32 schema_version = 1;
+	repeated PromptContextNode nodes = 2;
+}
+
+message ConversationTokenDetails { // agent.v1.ConversationTokenDetails
+	uint32 used_tokens = 1;
+	uint32 max_tokens = 2;
+	optional PromptTokenBreakdownSnapshot breakdown = 3;
+	optional PromptContextUsageTree prompt_context_usage_tree = 4;
+}
+
+message FileStateStructure { // agent.v1.FileStateStructure
+	optional bytes content = 1;
+	optional bytes initial_content = 2;
+}
+
+message StepTiming { // agent.v1.StepTiming
+	uint64 duration_ms = 1;
+	uint64 timestamp_ms = 2;
+}
+
+message SubagentTypeUnspecified { // agent.v1.SubagentTypeUnspecified
+}
+
+message SubagentTypeComputerUse { // agent.v1.SubagentTypeComputerUse
+}
+
+message SubagentTypeCustom { // agent.v1.SubagentTypeCustom
+	string name = 1;
+}
+
+message SubagentTypeExplore { // agent.v1.SubagentTypeExplore
+}
+
+message SubagentTypeMediaReview { // agent.v1.SubagentTypeMediaReview
+}
+
+message SubagentTypeBash { // agent.v1.SubagentTypeBash
+}
+
+message SubagentTypeBrowserUse { // agent.v1.SubagentTypeBrowserUse
+}
+
+message SubagentTypeShell { // agent.v1.SubagentTypeShell
+}
+
+message SubagentTypeVmSetupHelper { // agent.v1.SubagentTypeVmSetupHelper
+}
+
+message SubagentTypeDebug { // agent.v1.SubagentTypeDebug
+}
+
+message SubagentTypeCursorGuide { // agent.v1.SubagentTypeCursorGuide
+}
+
+message SubagentTypeWatchVideo { // agent.v1.SubagentTypeWatchVideo
+}
+
+message SubagentType { // agent.v1.SubagentType
+	SubagentTypeUnspecified unspecified = 1;
+	SubagentTypeComputerUse computer_use = 2;
+	SubagentTypeCustom custom = 3;
+	SubagentTypeExplore explore = 4;
+	SubagentTypeMediaReview media_review = 5;
+	SubagentTypeBash bash = 6;
+	SubagentTypeBrowserUse browser_use = 7;
+	SubagentTypeShell shell = 8;
+	SubagentTypeVmSetupHelper vm_setup_helper = 9;
+	SubagentTypeDebug debug = 10;
+	SubagentTypeCursorGuide cursor_guide = 11;
+	SubagentTypeWatchVideo watch_video = 12;
+}
+
+message CloudSubagentReference { // agent.v1.CloudSubagentReference
+	string bc_id = 1;
+	optional string transcript_path = 2;
+}
+
+message SubagentPersistedState { // agent.v1.SubagentPersistedState
+	ConversationStateStructure conversation_state = 1;
+	uint64 created_timestamp_ms = 2;
+	uint64 last_used_timestamp_ms = 3;
+	SubagentType subagent_type = 4;
+	optional string model_id = 5;
+	SubagentExecutionEnvironment environment = 6;
+	optional CloudSubagentReference cloud_subagent = 7;
+}
+
+message PlanRegistryEntry { // agent.v1.PlanRegistryEntry
+	string id = 1;
+	string path = 2;
+}
+
+message TrackedGitRepo { // agent.v1.TrackedGitRepo
+	string repo_path = 1;
+	string branch_name = 2;
+}
+
+message CommunicateUpdateHistoryEntry { // agent.v1.CommunicateUpdateHistoryEntry
+	string step = 1;
+	uint32 message_index = 3;
+}
+
+message CommunicateUpdateTurnState { // agent.v1.CommunicateUpdateTurnState
+	repeated CommunicateUpdateHistoryEntry history = 1;
+	optional string final_summary = 2;
+	optional string completed_subtitle = 3;
+}
+
+message ConversationStateStructure { // agent.v1.ConversationStateStructure
+	repeated bytes root_prompt_messages_json = 1;
+	repeated bytes turns = 8;
+	repeated bytes todos = 3;
+	repeated string pending_tool_calls = 4;
+	ConversationTokenDetails token_details = 5;
+	optional bytes summary = 6;
+	optional bytes plan = 7;
+	repeated string previous_workspace_uris = 9;
+	optional AgentMode mode = 10;
+	optional bytes summary_archive = 11;
+	map<string, bytes> file_states = 12;
+	map<string, FileStateStructure> file_states_v2 = 15;
+	repeated bytes summary_archives = 13;
+	repeated StepTiming turn_timings = 14;
+	map<string, SubagentPersistedState> subagent_states = 16;
+	uint32 self_summary_count = 17;
+	repeated string read_paths = 18;
+	optional string active_branch_name = 19;
+	map<string, PlanRegistryEntry> plans = 20;
+	repeated TrackedGitRepo tracked_git_repo_branches = 21;
+	optional string agent_type = 22;
+	repeated CommunicateUpdateHistoryEntry communicate_update_history = 23;
+	map<string, string> subagent_threads = 24;
+	optional string communicate_update_final_summary = 25;
+	optional string communicate_update_completed_subtitle = 28;
+	map<string, CommunicateUpdateTurnState> communicate_update_states_by_parent_tool_call_id = 29;
+	optional uint64 conversation_started_timestamp_ms = 26;
+	optional string conversation_started_time_zone = 27;
+}
+
+message SelectedImage_BlobIdWithData { // agent.v1.SelectedImage.BlobIdWithData
+	bytes blob_id = 1;
+	bytes data = 2;
+}
+
+message SelectedImage_Dimension { // agent.v1.SelectedImage.Dimension
+	int32 width = 1;
+	int32 height = 2;
+}
+
+message SelectedImage { // agent.v1.SelectedImage
+	bytes blob_id = 1;
+	bytes data = 8;
+	SelectedImage_BlobIdWithData blob_id_with_data = 9;
+	string uuid = 2;
+	string path = 3;
+	SelectedImage_Dimension dimension = 4;
+	string mime_type = 7;
+}
+
+message InvocationContext_SlackThread { // agent.v1.InvocationContext.SlackThread
+	string thread = 1;
+	optional string channel_name = 2;
+	optional string channel_purpose = 3;
+	optional string channel_topic = 4;
+}
+
+message InvocationContext_GithubPR { // agent.v1.InvocationContext.GithubPR
+	string title = 1;
+	string description = 2;
+	string comments = 3;
+	optional string ci_failures = 4;
+}
+
+message InvocationContext_IdeState_File_CursorPosition { // agent.v1.InvocationContext.IdeState.File.CursorPosition
+	int32 line = 1;
+	string text = 2;
+}
+
+message InvocationContext_IdeState_File { // agent.v1.InvocationContext.IdeState.File
+	string path = 1;
+	optional string relative_path = 2;
+	optional InvocationContext_IdeState_File_CursorPosition cursor_position = 3;
+	int32 total_lines = 4;
+	optional string active_command = 5;
+}
+
+message InvocationContext_IdeState_ViewedPullRequest { // agent.v1.InvocationContext.IdeState.ViewedPullRequest
+	int32 number = 1;
+	string url = 2;
+	optional string title = 3;
+	optional string folder_path = 4;
+	optional string summary_json = 5;
+	optional string description = 6;
+}
+
+message InvocationContext_IdeState { // agent.v1.InvocationContext.IdeState
+	repeated InvocationContext_IdeState_File visible_files = 1;
+	repeated InvocationContext_IdeState_File recently_viewed_files = 2;
+	repeated InvocationContext_IdeState_ViewedPullRequest currently_viewed_prs = 3;
+}
+
+message InvocationContext_MicrosoftTeamsThread { // agent.v1.InvocationContext.MicrosoftTeamsThread
+	string thread = 1;
+	optional string channel_name = 2;
+	optional string team_name = 3;
+	optional string channel_description = 4;
+	optional string team_description = 5;
+}
+
+message InvocationContext { // agent.v1.InvocationContext
+	InvocationContext_SlackThread slack_thread = 1;
+	InvocationContext_GithubPR github_pr = 2;
+	InvocationContext_IdeState ide_state = 3;
+	InvocationContext_MicrosoftTeamsThread microsoft_teams_thread = 4;
+	bytes blob_id = 10;
+}
+
+message ExtraContextEntry { // agent.v1.ExtraContextEntry
+	string data = 1;
+	bytes blob_id = 2;
+}
+
+message SelectedFile { // agent.v1.SelectedFile
+	string content = 1;
+	string path = 2;
+	optional string relative_path = 3;
+}
+
+message Position { // agent.v1.Position
+	uint32 line = 1;
+	uint32 column = 2;
+}
+
+message Range { // agent.v1.Range
+	Position start = 1;
+	Position end = 2;
+}
+
+message SelectedCodeSelection { // agent.v1.SelectedCodeSelection
+	string content = 1;
+	string path = 2;
+	optional string relative_path = 3;
+	Range range = 4;
+}
+
+message SelectedTerminal { // agent.v1.SelectedTerminal
+	string content = 1;
+	optional string title = 2;
+	optional string path = 3;
+}
+
+message SelectedTerminalSelection { // agent.v1.SelectedTerminalSelection
+	string content = 1;
+	optional string title = 2;
+	optional string path = 3;
+	Range range = 4;
+}
+
+message TerminalMetadata_Command { // agent.v1.TerminalMetadata.Command
+	string command = 1;
+	optional int32 exit_code = 2;
+	optional int64 timestamp_ms = 3;
+	optional int64 duration_ms = 4;
+}
+
+message TerminalMetadata { // agent.v1.TerminalMetadata
+	optional string cwd = 1;
+	repeated TerminalMetadata_Command last_commands = 2;
+	optional int64 last_modified_ms = 3;
+	optional TerminalMetadata_Command current_command = 4;
+}
+
+message LsDirectoryTreeNode_File { // agent.v1.LsDirectoryTreeNode.File
+	string name = 1;
+	optional TerminalMetadata terminal_metadata = 2;
+}
+
+message LsDirectoryTreeNode { // agent.v1.LsDirectoryTreeNode
+	string abs_path = 1;
+	repeated LsDirectoryTreeNode children_dirs = 2;
+	repeated LsDirectoryTreeNode_File children_files = 3;
+	bool children_were_processed = 4;
+	map<string, int32> full_subtree_extension_counts = 5;
+	int32 num_files = 6;
+}
+
+message SelectedFolder { // agent.v1.SelectedFolder
+	string path = 1;
+	optional string relative_path = 2;
+	LsDirectoryTreeNode directory_tree = 3;
+}
+
+message SelectedExternalLink { // agent.v1.SelectedExternalLink
+	string url = 1;
+	string uuid = 2;
+	optional string pdf_content = 3;
+	optional bool is_pdf = 4;
+	optional string filename = 5;
+	optional bytes blob_id = 6;
+}
+
+message CursorRuleTypeGlobal { // agent.v1.CursorRuleTypeGlobal
+}
+
+message CursorRuleTypeFileGlobs { // agent.v1.CursorRuleTypeFileGlobs
+	repeated string globs = 1;
+}
+
+message CursorRuleTypeAgentFetched { // agent.v1.CursorRuleTypeAgentFetched
+	string description = 1;
+}
+
+message CursorRuleTypeManuallyAttached { // agent.v1.CursorRuleTypeManuallyAttached
+}
+
+message CursorRuleType { // agent.v1.CursorRuleType
+	CursorRuleTypeGlobal global = 1;
+	CursorRuleTypeFileGlobs file_globbed = 2;
+	CursorRuleTypeAgentFetched agent_fetched = 3;
+	CursorRuleTypeManuallyAttached manually_attached = 4;
+}
+
+message CursorRule { // agent.v1.CursorRule
+	string full_path = 1;
+	string content = 2;
+	CursorRuleType type = 3;
+	CursorRuleSource source = 4;
+	optional string git_remote_origin = 5;
+	optional string parse_error = 6;
+	repeated string environments = 7;
+	repeated string disabled_environments = 8;
+	optional string plugin = 9;
+	optional string marketplace = 10;
+	optional string plugin_id = 11;
+	optional string marketplace_id = 12;
+}
+
+message SelectedCursorRule { // agent.v1.SelectedCursorRule
+	CursorRule rule = 1;
+}
+
+message SelectedGitDiff { // agent.v1.SelectedGitDiff
+	string content = 1;
+	int32 full_content_length_char_count = 2;
+}
+
+message SelectedGitDiffFromBranchToMain { // agent.v1.SelectedGitDiffFromBranchToMain
+	string content = 1;
+	int32 full_content_length_char_count = 2;
+}
+
+message SelectedPluginCapabilityRef { // agent.v1.SelectedPluginCapabilityRef
+	string plugin_id = 1;
+	SelectedPluginCapabilityType capability_type = 2;
+	string source_path = 3;
+	string snapshot_token = 4;
+	optional string resolved_commit_sha = 5;
+}
+
+message SelectedCursorCommand { // agent.v1.SelectedCursorCommand
+	string name = 1;
+	string content = 2;
+	optional SelectedPluginCapabilityRef plugin_capability = 3;
+}
+
+message SelectedDocumentation { // agent.v1.SelectedDocumentation
+	string doc_id = 1;
+	string name = 2;
+}
+
+message SelectedUIElement { // agent.v1.SelectedUIElement
+	string element = 1;
+	string xpath = 2;
+	string text_content = 3;
+	string extra = 4;
+	optional string component = 5;
+	optional string component_props_json = 6;
+}
+
+message CallFrame { // agent.v1.CallFrame
+	optional string function_name = 1;
+	optional string url = 2;
+	optional int32 line_number = 3;
+	optional int32 column_number = 4;
+}
+
+message StackTrace { // agent.v1.StackTrace
+	repeated CallFrame call_frames = 1;
+	optional string raw_stack_trace = 2;
+}
+
+message SelectedConsoleLog { // agent.v1.SelectedConsoleLog
+	string message = 1;
+	double timestamp = 2;
+	string level = 3;
+	string client_name = 4;
+	string session_id = 5;
+	optional StackTrace stack_trace = 6;
+	optional string object_data_json = 7;
+}
+
+message SelectedGitCommit { // agent.v1.SelectedGitCommit
+	string sha = 1;
+	string message = 2;
+	optional string description = 3;
+	string diff = 4;
+}
+
+message SelectedPastChat { // agent.v1.SelectedPastChat
+	string agent_id = 1;
+	string name = 2;
+}
+
+message SelectedGitPRDiffSelection { // agent.v1.SelectedGitPRDiffSelection
+	string pr_url = 1;
+	string file_path = 2;
+	int32 start_line = 3;
+	int32 end_line = 4;
+	optional string diff_content = 5;
+	optional bytes blob_id = 6;
+}
+
+message SelectedPullRequest { // agent.v1.SelectedPullRequest
+	int32 number = 1;
+	string url = 2;
+	optional string title = 3;
+	string folder_path = 4;
+	optional string summary_json = 5;
+	optional string description = 6;
+	optional bytes blob_id = 7;
+}
+
+message SelectedSubagent { // agent.v1.SelectedSubagent
+	string name = 1;
+}
+
+message SelectedVideo_BlobIdWithData { // agent.v1.SelectedVideo.BlobIdWithData
+	bytes blob_id = 1;
+	bytes data = 2;
+}
+
+message SelectedVideo_SignedUrl { // agent.v1.SelectedVideo.SignedUrl
+	string url = 1;
+	string key = 2;
+	int64 expires_at_unix_ms = 3;
+	int64 refresh_after_unix_ms = 4;
+	string conversation_id = 5;
+}
+
+message SelectedVideo { // agent.v1.SelectedVideo
+	bytes blob_id = 1;
+	bytes data = 8;
+	SelectedVideo_BlobIdWithData blob_id_with_data = 9;
+	SelectedVideo_SignedUrl signed_url = 11;
+	string uuid = 2;
+	string path = 3;
+	optional float fps = 4;
+	string mime_type = 7;
+	string filename = 10;
+	bool materialize_to_filesystem = 12;
+}
+
+message SelectedBrowser { // agent.v1.SelectedBrowser
+	string browser_id = 1;
+	string url = 2;
+	optional string page_title = 3;
+}
+
+message SelectedDocument_BlobIdWithData { // agent.v1.SelectedDocument.BlobIdWithData
+	bytes blob_id = 1;
+	bytes data = 2;
+}
+
+message SelectedDocument { // agent.v1.SelectedDocument
+	bytes blob_id = 1;
+	bytes data = 8;
+	SelectedDocument_BlobIdWithData blob_id_with_data = 9;
+	string uuid = 2;
+	string filename = 3;
+	string mime_type = 4;
+	string path = 7;
+}
+
+message AgentSkill { // agent.v1.AgentSkill
+	string full_path = 1;
+	string content = 2;
+	string description = 3;
+	optional string parse_error = 4;
+	repeated string environments = 5;
+	repeated string disabled_environments = 6;
+	optional string git_remote_origin = 7;
+	bool disable_model_invocation = 8;
+	optional string plugin = 9;
+	optional string marketplace = 10;
+	optional string plugin_id = 11;
+	optional string marketplace_id = 12;
+	repeated string globs = 13;
+}
+
+message RecentAgent { // agent.v1.RecentAgent
+	string name = 1;
+	string path = 2;
+	optional string overview = 3;
+}
+
+message RecentAgentsContext { // agent.v1.RecentAgentsContext
+	repeated RecentAgent recent_agents = 1;
+}
+
+message SelectedAgenticGitFileWithStatus { // agent.v1.SelectedAgenticGitFileWithStatus
+	string path = 1;
+	optional string status = 2;
+}
+
+message SelectedAgenticGitActionCommitParams { // agent.v1.SelectedAgenticGitActionCommitParams
+	repeated string files_to_commit = 1;
+	repeated string files_to_exclude_from_commit = 2;
+	bool should_stage_all_changes = 3;
+	optional bool create_pr_draft = 4;
+	repeated SelectedAgenticGitFileWithStatus files_to_commit_with_status = 5;
+	repeated SelectedAgenticGitFileWithStatus files_to_exclude_from_commit_with_status = 6;
+}
+
+message SelectedAgenticGitActionPushParams { // agent.v1.SelectedAgenticGitActionPushParams
+	repeated string files_to_push = 1;
+	optional bool create_pr_draft = 2;
+}
+
+message SelectedAgenticGitActionFixMergeConflictsParams { // agent.v1.SelectedAgenticGitActionFixMergeConflictsParams
+	optional string base_branch = 1;
+}
+
+message SelectedAgenticGitActionBabysitPrInCloudParams { // agent.v1.SelectedAgenticGitActionBabysitPrInCloudParams
+	optional string base_branch = 1;
+}
+
+message SelectedAgenticGitActionPullLocallyParams { // agent.v1.SelectedAgenticGitActionPullLocallyParams
+	string remote_branch = 1;
+}
+
+message SelectedAgenticGitActionUpdateBranchParams { // agent.v1.SelectedAgenticGitActionUpdateBranchParams
+	optional string base_branch = 1;
+}
+
+message SelectedGitBranchContext { // agent.v1.SelectedGitBranchContext
+	optional string current_branch = 1;
+	optional string base_branch = 2;
+	optional string agent_branch_prefix = 3;
+}
+
+message SelectedAgenticGitAction { // agent.v1.SelectedAgenticGitAction
+	SelectedAgenticGitActionCommitParams commit_params = 2;
+	SelectedAgenticGitActionCommitParams commit_and_push_params = 6;
+	SelectedAgenticGitActionPushParams push_params = 3;
+	SelectedAgenticGitActionPushParams create_pr_params = 7;
+	SelectedAgenticGitActionCommitParams create_pr_with_changes_params = 8;
+	SelectedAgenticGitActionFixMergeConflictsParams fix_merge_conflicts_params = 4;
+	SelectedAgenticGitActionBabysitPrInCloudParams babysit_pr_in_cloud_params = 11;
+	SelectedAgenticGitActionPullLocallyParams apply_locally_params = 14;
+	SelectedAgenticGitActionPullLocallyParams checkout_branch_params = 15;
+	SelectedAgenticGitActionCommitParams create_branch_and_commit_params = 12;
+	SelectedAgenticGitActionCommitParams create_branch_commit_and_push_params = 13;
+	SelectedAgenticGitActionUpdateBranchParams update_branch_params = 16;
+	optional SelectedGitBranchContext branch_context = 5;
+	optional string path_to_template_file = 9;
+	optional string path_to_template_dir = 10;
+}
+
+message SelectedContext { // agent.v1.SelectedContext
+	repeated SelectedImage selected_images = 1;
+	optional InvocationContext invocation_context = 2;
+	repeated string extra_context = 3;
+	repeated ExtraContextEntry extra_context_entries = 16;
+	repeated SelectedFile files = 4;
+	repeated SelectedCodeSelection code_selections = 5;
+	repeated SelectedTerminal terminals = 6;
+	repeated SelectedTerminalSelection terminal_selections = 7;
+	repeated SelectedFolder folders = 8;
+	repeated SelectedExternalLink external_links = 9;
+	repeated SelectedCursorRule cursor_rules = 10;
+	optional SelectedGitDiff git_diff = 18;
+	optional SelectedGitDiffFromBranchToMain git_diff_from_branch_to_main = 11;
+	repeated SelectedCursorCommand cursor_commands = 12;
+	repeated SelectedDocumentation documentations = 13;
+	repeated SelectedUIElement ui_elements = 14;
+	repeated SelectedConsoleLog console_logs = 15;
+	repeated SelectedGitCommit git_commits = 17;
+	repeated SelectedPastChat past_chats = 19;
+	repeated SelectedGitPRDiffSelection git_pr_diff_selections = 20;
+	repeated SelectedPullRequest selected_pull_requests = 21;
+	repeated SelectedSubagent selected_subagents = 22;
+	repeated SelectedVideo selected_videos = 23;
+	repeated SelectedBrowser selected_browsers = 24;
+	repeated SelectedDocument selected_documents = 25;
+	repeated AgentSkill selected_skills = 26;
+	optional RecentAgentsContext recent_agents_context = 27;
+	optional SelectedAgenticGitAction selected_agentic_git_action = 34;
+}
+
+message TriggeringUserInfo { // agent.v1.TriggeringUserInfo
+	optional string auth_id = 1;
+	optional int32 user_id = 2;
+}
+
+message ExecutePlanInfo { // agent.v1.ExecutePlanInfo
+	string plan_id = 1;
+	string plan_title = 2;
+}
+
+message UserMessage_SimulatedMessageMetadata { // agent.v1.UserMessage.SimulatedMessageMetadata
+	optional string title = 1;
+	optional string task_id = 2;
+}
+
+message HookAdditionalContext { // agent.v1.HookAdditionalContext
+	string hook_event_name = 1;
+	string content = 2;
+}
+
+message UserMessage { // agent.v1.UserMessage
+	string text = 1;
+	string message_id = 2;
+	optional SelectedContext selected_context = 3;
+	AgentMode mode = 4;
+	optional bool is_simulated_msg = 5;
+	optional string best_of_n_group_id = 6;
+	optional bool try_use_best_of_n_promotion = 7;
+	optional string rich_text = 8;
+	optional SimulatedMsgReason simulated_msg_reason = 9;
+	bytes conversation_state_blob_id = 10;
+	optional string subagent_system_reminder = 11;
+	optional TriggeringUserInfo triggering_user_info = 13;
+	optional ExecutePlanInfo execute_plan_info = 14;
+	optional UserMessage_SimulatedMessageMetadata simulated_message_metadata = 15;
+	optional string prompt_reference_id = 16;
+	optional string thread_id = 17;
+	optional bytes text_blob_id = 18;
+	optional bytes rich_text_blob_id = 19;
+	repeated HookAdditionalContext hook_additional_contexts = 21;
+}
+
+message RequestContextEnv { // agent.v1.RequestContextEnv
+	string os_version = 1;
+	repeated string workspace_paths = 2;
+	string shell = 3;
+	bool sandbox_enabled = 5;
+	string terminals_folder = 7;
+	string agent_shared_notes_folder = 8;
+	string agent_conversation_notes_folder = 9;
+	string time_zone = 10;
+	string project_folder = 11;
+	string agent_transcripts_folder = 12;
+	optional string artifacts_folder = 13;
+	optional bool sandbox_supported = 14;
+	optional bool sandbox_network_has_defaults = 16;
+	repeated string sandbox_network_explicit_allowlist = 17;
+	optional bool secret_redaction_enabled = 18;
+	optional bool computer_use_supported = 19;
+	optional bool is_working_dir_home_dir = 20;
+	optional string process_working_directory = 21;
+	optional bool smart_mode_classifier_auto_mode_enabled = 22;
+	optional string dev_force_next_smart_mode_classifier_block_token = 23;
+	optional string dev_delay_next_smart_mode_classifier_token = 24;
+}
+
+message RepositoryIndexingInfo { // agent.v1.RepositoryIndexingInfo
+	string relative_workspace_path = 1;
+	repeated string remote_urls = 2;
+	repeated string remote_names = 3;
+	string repo_name = 4;
+	string repo_owner = 5;
+	bool is_tracked = 6;
+	bool is_local = 7;
+	optional double orthogonal_transform_seed = 8;
+	string workspace_uri = 9;
+	string path_encryption_key = 10;
+}
+
+enum GoogleProtobuf_NullValue { // google.protobuf.NullValue
+	GOOGLE_PROTOBUF_NULL_VALUE_NULL_VALUE = 0;
+}
+
+message GoogleProtobuf_Struct { // google.protobuf.Struct
+	map<string, GoogleProtobuf_Value> fields = 1;
+}
+
+message GoogleProtobuf_ListValue { // google.protobuf.ListValue
+	repeated GoogleProtobuf_Value values = 1;
+}
+
+message GoogleProtobuf_Value { // google.protobuf.Value
+	GoogleProtobuf_NullValue null_value = 1;
+	double number_value = 2;
+	string string_value = 3;
+	bool bool_value = 4;
+	GoogleProtobuf_Struct struct_value = 5;
+	GoogleProtobuf_ListValue list_value = 6;
+}
+
+message McpToolDefinition { // agent.v1.McpToolDefinition
+	string name = 1;
+	string provider_identifier = 4;
+	string tool_name = 5;
+	string description = 2;
+	GoogleProtobuf_Value input_schema = 3;
+}
+
+message GitRepoInfo { // agent.v1.GitRepoInfo
+	string path = 1;
+	string status = 2;
+	string branch_name = 3;
+	optional string remote_url = 4;
+	optional bool previous_branch_is_ancestor = 5;
+}
+
+message McpInstructions { // agent.v1.McpInstructions
+	string server_name = 1;
+	string instructions = 2;
+	string server_identifier = 3;
+}
+
+message DebugModeConfig { // agent.v1.DebugModeConfig
+	string log_path = 1;
+	string server_endpoint = 2;
+	string session_id = 3;
+}
+
+message SkillDescriptor { // agent.v1.SkillDescriptor
+	string name = 1;
+	string description = 2;
+	string folder_path = 3;
+	bool enabled = 4;
+	optional string parse_error = 5;
+	string readme_file_path = 6;
+	PackageType package_type = 7;
+}
+
+message SkillOptions { // agent.v1.SkillOptions
+	repeated SkillDescriptor skill_descriptors = 1;
+}
+
+message CustomSubagent { // agent.v1.CustomSubagent
+	string full_path = 1;
+	string name = 2;
+	string description = 3;
+	repeated string tools = 4;
+	string model = 5;
+	string prompt = 6;
+	CustomSubagentPermissionMode permission_mode = 7;
+	bool is_background = 8;
+	optional string plugin = 9;
+	optional string marketplace = 10;
+	optional string plugin_id = 11;
+	optional string marketplace_id = 12;
+	bool force_default_model = 13;
+	optional string source = 14;
+}
+
+message McpToolDescriptor { // agent.v1.McpToolDescriptor
+	string tool_name = 1;
+	optional string definition_path = 2;
+	optional string description = 3;
+	optional GoogleProtobuf_Value input_schema = 4;
+}
+
+message McpDescriptor { // agent.v1.McpDescriptor
+	string server_name = 1;
+	string server_identifier = 2;
+	optional string folder_path = 3;
+	optional string server_use_instructions = 4;
+	repeated McpToolDescriptor tools = 5;
+	optional string plugin = 7;
+	optional string marketplace = 8;
+	optional string plugin_db_id = 9;
+	optional string marketplace_id = 10;
+}
+
+message McpFileSystemOptions { // agent.v1.McpFileSystemOptions
+	bool enabled = 1;
+	string workspace_project_dir = 2;
+	repeated McpDescriptor mcp_descriptors = 3;
+}
+
+message HooksConfigInfo { // agent.v1.HooksConfigInfo
+	repeated string configured_steps = 1;
+}
+
+message PrecomputedHumanChangeRenderedDiff { // agent.v1.PrecomputedHumanChangeRenderedDiff
+	int32 start_line_number = 1;
+	int32 end_line_number_exclusive = 2;
+	repeated string before_context_lines = 3;
+	repeated string removed_lines = 4;
+	repeated string added_lines = 5;
+	repeated string after_context_lines = 6;
+}
+
+message PrecomputedHumanChange { // agent.v1.PrecomputedHumanChange
+	string path = 1;
+	repeated PrecomputedHumanChangeRenderedDiff rendered_diffs = 2;
+	bool is_new_file = 3;
+	bool is_deleted_file = 4;
+}
+
+message RecentlyAddedPlugin_CapabilityDescriptor { // agent.v1.RecentlyAddedPlugin.CapabilityDescriptor
+	string name = 1;
+	string description = 2;
+}
+
+message RecentlyAddedPlugin { // agent.v1.RecentlyAddedPlugin
+	string display_name = 1;
+	string description = 2;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor skills = 3;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor subagents = 4;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor hooks = 5;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor rules = 6;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor commands = 7;
+	repeated string mcp_servers = 8;
+}
+
+message McpMetaToolOptions { // agent.v1.McpMetaToolOptions
+	bool enabled = 1;
+	repeated McpDescriptor mcp_descriptors = 2;
+}
+
+message MatchedInstalledPlugin { // agent.v1.MatchedInstalledPlugin
+	string display_name = 1;
+	string description = 2;
+	string matched_keyword = 3;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor skills = 4;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor subagents = 5;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor hooks = 6;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor rules = 7;
+	repeated RecentlyAddedPlugin_CapabilityDescriptor commands = 8;
+	repeated string mcp_servers = 9;
+}
+
+message PermissionsAutoRunInstructions { // agent.v1.PermissionsAutoRunInstructions
+	repeated string allow_instructions = 1;
+	repeated string block_instructions = 2;
+}
+
+message RequestContext { // agent.v1.RequestContext
+	repeated CursorRule rules = 2;
+	RequestContextEnv env = 4;
+	repeated RepositoryIndexingInfo repository_info = 6;
+	repeated McpToolDefinition tools = 7;
+	optional string conversation_notes_listing = 8;
+	optional string shared_notes_listing = 9;
+	repeated GitRepoInfo git_repos = 11;
+	repeated LsDirectoryTreeNode project_layouts = 13;
+	repeated McpInstructions mcp_instructions = 14;
+	optional DebugModeConfig debug_mode_config = 15;
+	optional string cloud_rule = 16;
+	optional bool web_search_enabled = 17;
+	optional SkillOptions skill_options = 18;
+	optional bool repository_info_should_query_prod = 19;
+	map<string, string> file_contents = 20;
+	optional string user_intent_summary = 21;
+	repeated CustomSubagent custom_subagents = 22;
+	optional McpFileSystemOptions mcp_file_system_options = 23;
+	optional bool web_fetch_enabled = 24;
+	optional string hooks_additional_context = 25;
+	optional string commit_attribution_message = 26;
+	optional string pr_attribution_message = 27;
+	optional HooksConfigInfo hooks_config = 28;
+	repeated AgentSkill agent_skills = 29;
+	repeated PrecomputedHumanChange precomputed_human_changes = 30;
+	optional RecentlyAddedPlugin recently_added_plugin = 31;
+	optional bool supports_mcp_auth = 32;
+	optional bool git_repo_info_complete = 33;
+	optional McpMetaToolOptions mcp_meta_tool_options = 34;
+	optional bool read_lints_enabled = 35;
+	optional bool mcp_info_complete = 36;
+	repeated CursorRule non_file_rules = 37;
+	optional MatchedInstalledPlugin matched_installed_plugin = 38;
+	optional bool rules_info_complete = 39;
+	optional bool env_info_complete = 40;
+	optional bool repository_info_complete = 41;
+	optional bool custom_subagents_info_complete = 42;
+	optional bool agent_skills_info_complete = 43;
+	optional bool mcp_file_system_info_complete = 44;
+	optional bool git_status_info_complete = 45;
+	optional PermissionsAutoRunInstructions user_permissions_auto_run = 46;
+	optional PermissionsAutoRunInstructions project_permissions_auto_run = 47;
+	optional PermissionsAutoRunInstructions admin_permissions_auto_run = 48;
+}
+
+message OutputLocation { // agent.v1.OutputLocation
+	string file_path = 1;
+	int64 size_bytes = 2;
+	int64 line_count = 3;
+}
+
+message ShellSuccess { // agent.v1.ShellSuccess
+	string command = 1;
+	string working_directory = 2;
+	int32 exit_code = 3;
+	string signal = 4;
+	string stdout = 5;
+	string stderr = 6;
+	int32 execution_time = 7;
+	optional OutputLocation output_location = 8;
+	optional uint32 shell_id = 9;
+	optional string interleaved_output = 10;
+	optional uint32 pid = 11;
+	optional int32 ms_to_wait = 12;
+	optional int32 local_execution_time_ms = 13;
+	optional ShellBackgroundReason background_reason = 14;
+}
+
+message ShellFailure { // agent.v1.ShellFailure
+	string command = 1;
+	string working_directory = 2;
+	int32 exit_code = 3;
+	string signal = 4;
+	string stdout = 5;
+	string stderr = 6;
+	int32 execution_time = 7;
+	optional OutputLocation output_location = 8;
+	optional string interleaved_output = 9;
+	optional ShellAbortReason abort_reason = 10;
+	bool aborted = 11;
+	optional int32 local_execution_time_ms = 12;
+}
+
+message ShellTimeout { // agent.v1.ShellTimeout
+	string command = 1;
+	string working_directory = 2;
+	int32 timeout_ms = 3;
+}
+
+message ShellRejected { // agent.v1.ShellRejected
+	string command = 1;
+	string working_directory = 2;
+	string reason = 3;
+	bool is_readonly = 4;
+}
+
+message ShellSpawnError { // agent.v1.ShellSpawnError
+	string command = 1;
+	string working_directory = 2;
+	string error = 3;
+}
+
+message ShellPermissionDenied { // agent.v1.ShellPermissionDenied
+	string command = 1;
+	string working_directory = 2;
+	string error = 3;
+	bool is_readonly = 4;
+}
+
+enum SandboxPolicy_Type { // agent.v1.SandboxPolicy.Type
+	SANDBOX_POLICY_TYPE_TYPE_UNSPECIFIED = 0;
+	SANDBOX_POLICY_TYPE_TYPE_INSECURE_NONE = 1;
+	SANDBOX_POLICY_TYPE_TYPE_WORKSPACE_READWRITE = 2;
+	SANDBOX_POLICY_TYPE_TYPE_WORKSPACE_READONLY = 3;
+}
+
+enum NetworkPolicy_DefaultAction { // agent.v1.NetworkPolicy.DefaultAction
+	NETWORK_POLICY_DEFAULT_ACTION_DEFAULT_ACTION_UNSPECIFIED = 0;
+	NETWORK_POLICY_DEFAULT_ACTION_DEFAULT_ACTION_ALLOW = 1;
+	NETWORK_POLICY_DEFAULT_ACTION_DEFAULT_ACTION_DENY = 2;
+}
+
+message NetworkPolicyLoggingConfig { // agent.v1.NetworkPolicyLoggingConfig
+	optional string decision_log_path = 1;
+	optional string log_format = 2;
+}
+
+message NetworkPolicy { // agent.v1.NetworkPolicy
+	optional uint32 version = 1;
+	optional NetworkPolicy_DefaultAction default_action = 2;
+	repeated string deny = 3;
+	repeated string allow = 4;
+	optional NetworkPolicyLoggingConfig logging = 5;
+}
+
+message SandboxPolicy { // agent.v1.SandboxPolicy
+	SandboxPolicy_Type type = 1;
+	optional bool network_access = 2;
+	repeated string additional_readwrite_paths = 3;
+	repeated string additional_readonly_paths = 4;
+	optional string debug_output_dir = 5;
+	optional bool disable_tmp_write = 7;
+	optional bool allowlist_escalated = 8;
+	optional bool enable_shared_build_cache = 9;
+	optional NetworkPolicy network_policy = 10;
+	optional bool network_policy_strict = 11;
+	optional bool capture_denies = 12;
+	optional bool skip_statsig_defaults = 13;
+}
+
+message ShellResult { // agent.v1.ShellResult
+	ShellSuccess success = 1;
+	ShellFailure failure = 2;
+	ShellTimeout timeout = 3;
+	ShellRejected rejected = 4;
+	ShellSpawnError spawn_error = 5;
+	ShellPermissionDenied permission_denied = 7;
+	optional SandboxPolicy sandbox_policy = 101;
+	optional bool is_background = 102;
+	optional string terminals_folder = 103;
+	optional uint32 pid = 104;
+}
+
+message AssistantMessage { // agent.v1.AssistantMessage
+	string text = 1;
+}
+
+message ShellCommandParsingResult_ExecutableCommandArg { // agent.v1.ShellCommandParsingResult.ExecutableCommandArg
+	string type = 1;
+	string value = 2;
+}
+
+message ShellCommandParsingResult_ExecutableCommand { // agent.v1.ShellCommandParsingResult.ExecutableCommand
+	string name = 1;
+	repeated ShellCommandParsingResult_ExecutableCommandArg args = 2;
+	string full_text = 3;
+}
+
+message ShellCommandParsingResult_Redirect { // agent.v1.ShellCommandParsingResult.Redirect
+	string operator = 1;
+	repeated uint32 destination_fds = 2;
+	string target_node_type = 3;
+	optional string target_text = 4;
+}
+
+message ShellCommandParsingResult { // agent.v1.ShellCommandParsingResult
+	bool parsing_failed = 1;
+	repeated ShellCommandParsingResult_ExecutableCommand executable_commands = 2;
+	bool has_redirects = 3;
+	bool has_command_substitution = 4;
+	optional bool all_redirects_are_dev_null = 5;
+	repeated ShellCommandParsingResult_Redirect redirects = 6;
+}
+
+message CommandClassifierResult_ClassifiedCommand { // agent.v1.CommandClassifierResult.ClassifiedCommand
+	string name = 1;
+	repeated string arguments = 2;
+	optional string suggested_allowlist_entry = 3;
+	repeated string subcommand_tokens = 4;
+}
+
+enum CommandClassifierResult_SuggestedSandboxMode { // agent.v1.CommandClassifierResult.SuggestedSandboxMode
+	COMMAND_CLASSIFIER_RESULT_SUGGESTED_SANDBOX_MODE_SUGGESTED_SANDBOX_MODE_UNSPECIFIED = 0;
+	COMMAND_CLASSIFIER_RESULT_SUGGESTED_SANDBOX_MODE_SUGGESTED_SANDBOX_MODE_SANDBOX = 1;
+	COMMAND_CLASSIFIER_RESULT_SUGGESTED_SANDBOX_MODE_SUGGESTED_SANDBOX_MODE_NO_SANDBOX = 2;
+	COMMAND_CLASSIFIER_RESULT_SUGGESTED_SANDBOX_MODE_SUGGESTED_SANDBOX_MODE_UNDETERMINED = 3;
+}
+
+message CommandClassifierResult { // agent.v1.CommandClassifierResult
+	repeated CommandClassifierResult_ClassifiedCommand commands = 1;
+	CommandClassifierResult_SuggestedSandboxMode suggested_sandbox_mode = 2;
+	bool classification_failed = 3;
+}
+
+message ShellOutputNotificationConfig { // agent.v1.ShellOutputNotificationConfig
+	string pattern = 1;
+	string reason = 2;
+	optional double debounce = 3;
+	optional int32 notification_limit = 4;
+}
+
+message SmartModeApproval { // agent.v1.SmartModeApproval
+	string request_id = 1;
+	string reason = 2;
+}
+
+enum ShellHookApprovalRequirement_Kind { // agent.v1.ShellHookApprovalRequirement.Kind
+	SHELL_HOOK_APPROVAL_REQUIREMENT_KIND_KIND_UNSPECIFIED = 0;
+	SHELL_HOOK_APPROVAL_REQUIREMENT_KIND_KIND_FORCE_PROMPT = 1;
+}
+
+message ShellHookApprovalRequirement { // agent.v1.ShellHookApprovalRequirement
+	ShellHookApprovalRequirement_Kind kind = 1;
+	optional string reason = 2;
+}
+
+message ShellArgs { // agent.v1.ShellArgs
+	string command = 1;
+	string working_directory = 2;
+	int32 timeout = 3;
+	string tool_call_id = 4;
+	repeated string simple_commands = 5;
+	bool has_input_redirect = 6;
+	bool has_output_redirect = 7;
+	ShellCommandParsingResult parsing_result = 8;
+	optional SandboxPolicy requested_sandbox_policy = 9;
+	optional uint64 file_output_threshold_bytes = 10;
+	bool is_background = 11;
+	bool skip_approval = 12;
+	TimeoutBehavior timeout_behavior = 13;
+	optional int32 hard_timeout = 14;
+	optional string description = 15;
+	optional CommandClassifierResult classifier_result = 16;
+	bool close_stdin = 17;
+	optional ShellOutputNotificationConfig output_notification = 18;
+	optional SmartModeApproval smart_mode_approval = 19;
+	optional ShellHookApprovalRequirement hook_approval_requirement = 20;
+	optional string conversation_id = 21;
+}
+
+message ShellToolCall { // agent.v1.ShellToolCall
+	ShellArgs args = 1;
+	ShellResult result = 2;
+	optional string description = 3;
+}
+
+message DeleteArgs { // agent.v1.DeleteArgs
+	string path = 1;
+	string tool_call_id = 2;
+}
+
+message DeleteSuccess { // agent.v1.DeleteSuccess
+	string path = 1;
+	string deleted_file = 2;
+	int64 file_size = 3;
+	string prev_content = 4;
+}
+
+message DeleteFileNotFound { // agent.v1.DeleteFileNotFound
+	string path = 1;
+}
+
+message DeleteNotFile { // agent.v1.DeleteNotFile
+	string path = 1;
+	string actual_type = 2;
+}
+
+message DeletePermissionDenied { // agent.v1.DeletePermissionDenied
+	string path = 1;
+	string client_visible_error = 2;
+	bool is_readonly = 3;
+}
+
+message DeleteFileBusy { // agent.v1.DeleteFileBusy
+	string path = 1;
+}
+
+message DeleteRejected { // agent.v1.DeleteRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message DeleteError { // agent.v1.DeleteError
+	string path = 1;
+	string error = 2;
+}
+
+message DeleteResult { // agent.v1.DeleteResult
+	DeleteSuccess success = 1;
+	DeleteFileNotFound file_not_found = 2;
+	DeleteNotFile not_file = 3;
+	DeletePermissionDenied permission_denied = 4;
+	DeleteFileBusy file_busy = 5;
+	DeleteRejected rejected = 6;
+	DeleteError error = 7;
+}
+
+message DeleteToolCall { // agent.v1.DeleteToolCall
+	DeleteArgs args = 1;
+	DeleteResult result = 2;
+}
+
+message GlobToolArgs { // agent.v1.GlobToolArgs
+	optional string target_directory = 1;
+	string glob_pattern = 2;
+}
+
+message GlobToolSuccess { // agent.v1.GlobToolSuccess
+	string pattern = 1;
+	string path = 2;
+	repeated string files = 3;
+	int32 total_files = 4;
+	bool client_truncated = 5;
+	bool ripgrep_truncated = 6;
+}
+
+message GlobToolError { // agent.v1.GlobToolError
+	string error = 1;
+}
+
+message GlobToolResult { // agent.v1.GlobToolResult
+	GlobToolSuccess success = 1;
+	GlobToolError error = 2;
+}
+
+message GlobToolCall { // agent.v1.GlobToolCall
+	GlobToolArgs args = 1;
+	GlobToolResult result = 2;
+}
+
+message GrepArgs { // agent.v1.GrepArgs
+	string pattern = 1;
+	optional string path = 2;
+	optional string glob = 3;
+	optional string output_mode = 4;
+	optional int32 context_before = 5;
+	optional int32 context_after = 6;
+	optional int32 context = 7;
+	optional bool case_insensitive = 8;
+	optional string type = 9;
+	optional int32 head_limit = 10;
+	optional bool multiline = 11;
+	optional string sort = 12;
+	optional bool sort_ascending = 13;
+	string tool_call_id = 14;
+	optional SandboxPolicy sandbox_policy = 15;
+	optional int32 offset = 16;
+}
+
+message GrepFileCount { // agent.v1.GrepFileCount
+	string file = 1;
+	int32 count = 2;
+}
+
+message GrepCountResult { // agent.v1.GrepCountResult
+	repeated GrepFileCount counts = 1;
+	int32 total_files = 2;
+	int32 total_matches = 3;
+	bool client_truncated = 4;
+	bool ripgrep_truncated = 5;
+	optional int32 head_limit_applied = 6;
+	optional int32 offset_applied = 7;
+}
+
+message GrepFilesResult { // agent.v1.GrepFilesResult
+	repeated string files = 1;
+	int32 total_files = 2;
+	bool client_truncated = 3;
+	bool ripgrep_truncated = 4;
+	optional int32 head_limit_applied = 5;
+	optional int32 offset_applied = 6;
+}
+
+message GrepContentMatch { // agent.v1.GrepContentMatch
+	int32 line_number = 1;
+	string content = 2;
+	bool content_truncated = 3;
+	bool is_context_line = 4;
+}
+
+message GrepFileMatch { // agent.v1.GrepFileMatch
+	string file = 1;
+	repeated GrepContentMatch matches = 2;
+}
+
+message GrepContentResult { // agent.v1.GrepContentResult
+	repeated GrepFileMatch matches = 1;
+	int32 total_lines = 2;
+	int32 total_matched_lines = 3;
+	bool client_truncated = 4;
+	bool ripgrep_truncated = 5;
+	optional int32 head_limit_applied = 6;
+	optional int32 offset_applied = 7;
+}
+
+message GrepUnionResult { // agent.v1.GrepUnionResult
+	GrepCountResult count = 1;
+	GrepFilesResult files = 2;
+	GrepContentResult content = 3;
+}
+
+message GrepSuccess { // agent.v1.GrepSuccess
+	string pattern = 1;
+	string path = 2;
+	string output_mode = 3;
+	map<string, GrepUnionResult> workspace_results = 4;
+	optional GrepUnionResult active_editor_result = 5;
+}
+
+message GrepError { // agent.v1.GrepError
+	string error = 1;
+}
+
+message GrepResult { // agent.v1.GrepResult
+	GrepSuccess success = 1;
+	GrepError error = 2;
+}
+
+message GrepToolCall { // agent.v1.GrepToolCall
+	GrepArgs args = 1;
+	GrepResult result = 2;
+}
+
+message ReadToolArgs { // agent.v1.ReadToolArgs
+	string path = 1;
+	optional int32 offset = 2;
+	optional int32 limit = 3;
+	optional bool include_line_numbers = 5;
+}
+
+message ReadRange { // agent.v1.ReadRange
+	uint32 start_line = 1;
+	uint32 end_line = 2;
+}
+
+message ReadToolSuccess { // agent.v1.ReadToolSuccess
+	string content = 1;
+	bytes data = 6;
+	bytes data_blob_id = 9;
+	bytes content_blob_id = 10;
+	bool is_empty = 2;
+	bool exceeded_limit = 3;
+	uint32 total_lines = 4;
+	uint32 file_size = 5;
+	string path = 7;
+	optional ReadRange read_range = 8;
+	optional bool include_line_numbers = 11;
+	repeated string related_cursor_rule_paths = 12;
+	repeated CursorRule related_cursor_rules = 13;
+}
+
+message ReadToolError { // agent.v1.ReadToolError
+	string error_message = 1;
+}
+
+message ReadToolResult { // agent.v1.ReadToolResult
+	ReadToolSuccess success = 1;
+	ReadToolError error = 2;
+}
+
+message ReadToolCall { // agent.v1.ReadToolCall
+	ReadToolArgs args = 1;
+	ReadToolResult result = 2;
+}
+
+message TodoItem { // agent.v1.TodoItem
+	string id = 1;
+	string content = 2;
+	TodoStatus status = 3;
+	int64 created_at = 4;
+	int64 updated_at = 5;
+	repeated string dependencies = 6;
+}
+
+message UpdateTodosArgs { // agent.v1.UpdateTodosArgs
+	repeated TodoItem todos = 1;
+	bool merge = 2;
+}
+
+message UpdateTodosSuccess { // agent.v1.UpdateTodosSuccess
+	repeated TodoItem todos = 1;
+	int32 total_count = 2;
+	bool was_merge = 3;
+}
+
+message UpdateTodosError { // agent.v1.UpdateTodosError
+	string error = 1;
+}
+
+message UpdateTodosResult { // agent.v1.UpdateTodosResult
+	UpdateTodosSuccess success = 1;
+	UpdateTodosError error = 2;
+}
+
+message UpdateTodosToolCall { // agent.v1.UpdateTodosToolCall
+	UpdateTodosArgs args = 1;
+	UpdateTodosResult result = 2;
+}
+
+message ReadTodosArgs { // agent.v1.ReadTodosArgs
+	repeated TodoStatus status_filter = 1;
+	repeated string id_filter = 2;
+}
+
+message ReadTodosSuccess { // agent.v1.ReadTodosSuccess
+	repeated TodoItem todos = 1;
+	int32 total_count = 2;
+}
+
+message ReadTodosError { // agent.v1.ReadTodosError
+	string error = 1;
+}
+
+message ReadTodosResult { // agent.v1.ReadTodosResult
+	ReadTodosSuccess success = 1;
+	ReadTodosError error = 2;
+}
+
+message ReadTodosToolCall { // agent.v1.ReadTodosToolCall
+	ReadTodosArgs args = 1;
+	ReadTodosResult result = 2;
+}
+
+message EditArgs { // agent.v1.EditArgs
+	string path = 1;
+	optional string stream_content = 6;
+}
+
+message EditSuccess { // agent.v1.EditSuccess
+	string path = 1;
+	optional int32 lines_added = 3;
+	optional int32 lines_removed = 4;
+	optional string diff_string = 5;
+	optional string before_full_file_content = 6;
+	string after_full_file_content = 7;
+	optional string message = 8;
+}
+
+message EditFileNotFound { // agent.v1.EditFileNotFound
+	string path = 1;
+}
+
+message EditReadPermissionDenied { // agent.v1.EditReadPermissionDenied
+	string path = 1;
+}
+
+message EditWritePermissionDenied { // agent.v1.EditWritePermissionDenied
+	string path = 1;
+	string error = 2;
+	bool is_readonly = 3;
+}
+
+message EditRejected { // agent.v1.EditRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message EditError { // agent.v1.EditError
+	string path = 1;
+	string error = 2;
+	optional string model_visible_error = 5;
+}
+
+message EditResult { // agent.v1.EditResult
+	EditSuccess success = 1;
+	EditFileNotFound file_not_found = 2;
+	EditReadPermissionDenied read_permission_denied = 3;
+	EditWritePermissionDenied write_permission_denied = 4;
+	EditRejected rejected = 6;
+	EditError error = 7;
+}
+
+message EditToolCall { // agent.v1.EditToolCall
+	EditArgs args = 1;
+	EditResult result = 2;
+}
+
+message LsArgs { // agent.v1.LsArgs
+	string path = 1;
+	repeated string ignore = 2;
+	string tool_call_id = 3;
+	optional SandboxPolicy sandbox_policy = 4;
+	optional uint32 timeout_ms = 5;
+}
+
+message LsSuccess { // agent.v1.LsSuccess
+	LsDirectoryTreeNode directory_tree_root = 1;
+}
+
+message LsError { // agent.v1.LsError
+	string path = 1;
+	string error = 2;
+}
+
+message LsRejected { // agent.v1.LsRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message LsTimeout { // agent.v1.LsTimeout
+	LsDirectoryTreeNode directory_tree_root = 1;
+}
+
+message LsResult { // agent.v1.LsResult
+	LsSuccess success = 1;
+	LsError error = 2;
+	LsRejected rejected = 3;
+	LsTimeout timeout = 4;
+}
+
+message LsToolCall { // agent.v1.LsToolCall
+	LsArgs args = 1;
+	LsResult result = 2;
+}
+
+message ReadLintsToolArgs { // agent.v1.ReadLintsToolArgs
+	repeated string paths = 1;
+}
+
+message DiagnosticRange { // agent.v1.DiagnosticRange
+	Position start = 1;
+	Position end = 2;
+}
+
+message DiagnosticItem { // agent.v1.DiagnosticItem
+	DiagnosticSeverity severity = 1;
+	DiagnosticRange range = 2;
+	string message = 3;
+	string source = 4;
+	string code = 5;
+	bool is_stale = 6;
+}
+
+message FileDiagnostics { // agent.v1.FileDiagnostics
+	string path = 1;
+	repeated DiagnosticItem diagnostics = 2;
+	int32 diagnostics_count = 3;
+}
+
+message ReadLintsToolSuccess { // agent.v1.ReadLintsToolSuccess
+	repeated FileDiagnostics file_diagnostics = 1;
+	int32 total_files = 2;
+	int32 total_diagnostics = 3;
+}
+
+message ReadLintsToolError { // agent.v1.ReadLintsToolError
+	string error_message = 1;
+}
+
+message ReadLintsToolResult { // agent.v1.ReadLintsToolResult
+	ReadLintsToolSuccess success = 1;
+	ReadLintsToolError error = 2;
+}
+
+message ReadLintsToolCall { // agent.v1.ReadLintsToolCall
+	ReadLintsToolArgs args = 1;
+	ReadLintsToolResult result = 2;
+}
+
+message McpArgs { // agent.v1.McpArgs
+	string name = 1;
+	map<string, GoogleProtobuf_Value> args = 2;
+	string tool_call_id = 3;
+	string provider_identifier = 4;
+	string tool_name = 5;
+	optional SmartModeApproval smart_mode_approval = 6;
+	bool smart_mode_approval_only = 7;
+	bool skip_approval = 8;
+}
+
+message McpTextContent { // agent.v1.McpTextContent
+	string text = 1;
+	optional OutputLocation output_location = 2;
+}
+
+message McpImageContent { // agent.v1.McpImageContent
+	bytes data = 1;
+	string mime_type = 2;
+}
+
+message McpToolResultContentItem { // agent.v1.McpToolResultContentItem
+	McpTextContent text = 1;
+	McpImageContent image = 2;
+}
+
+message McpSuccess { // agent.v1.McpSuccess
+	repeated McpToolResultContentItem content = 1;
+	bool is_error = 2;
+	GoogleProtobuf_Struct structured_content = 3;
+}
+
+message McpToolError { // agent.v1.McpToolError
+	string error = 1;
+	string read_tool_def_reminder = 2;
+}
+
+message McpRejected { // agent.v1.McpRejected
+	string reason = 1;
+	bool is_readonly = 2;
+}
+
+message McpPermissionDenied { // agent.v1.McpPermissionDenied
+	string error = 1;
+	bool is_readonly = 2;
+}
+
+message McpToolResult { // agent.v1.McpToolResult
+	McpSuccess success = 1;
+	McpToolError error = 2;
+	McpRejected rejected = 3;
+	McpPermissionDenied permission_denied = 4;
+}
+
+message McpToolCall { // agent.v1.McpToolCall
+	McpArgs args = 1;
+	McpToolResult result = 2;
+}
+
+message SemSearchToolArgs { // agent.v1.SemSearchToolArgs
+	string query = 1;
+	repeated string target_directories = 2;
+	string explanation = 3;
+}
+
+message AiserverV1_CursorPosition { // aiserver.v1.CursorPosition
+	int32 line = 1;
+	int32 column = 2;
+}
+
+message AiserverV1_CursorRange { // aiserver.v1.CursorRange
+	AiserverV1_CursorPosition start_position = 1;
+	AiserverV1_CursorPosition end_position = 2;
+}
+
+message AiserverV1_CodeBlock_Signatures { // aiserver.v1.CodeBlock.Signatures
+	repeated AiserverV1_CursorRange ranges = 1;
+}
+
+message AiserverV1_DetailedLine { // aiserver.v1.DetailedLine
+	string text = 1;
+	float line_number = 2;
+	bool is_signature = 3;
+}
+
+message AiserverV1_GitCommit { // aiserver.v1.GitCommit
+	string commit = 1;
+	string author = 2;
+	string date = 3;
+	string message = 4;
+}
+
+message AiserverV1_FileGit { // aiserver.v1.FileGit
+	repeated AiserverV1_GitCommit commits = 1;
+}
+
+message AiserverV1_CodeBlock { // aiserver.v1.CodeBlock
+	string relative_workspace_path = 1;
+	optional string file_contents = 2;
+	optional int32 file_contents_length = 9;
+	AiserverV1_CursorRange range = 3;
+	string contents = 4;
+	AiserverV1_CodeBlock_Signatures signatures = 5;
+	optional string override_contents = 6;
+	optional string original_contents = 7;
+	repeated AiserverV1_DetailedLine detailed_lines = 8;
+	AiserverV1_FileGit file_git_context = 10;
+}
+
+message AiserverV1_CodeResult { // aiserver.v1.CodeResult
+	AiserverV1_CodeBlock code_block = 1;
+	float score = 2;
+}
+
+message SemSearchToolSuccess { // agent.v1.SemSearchToolSuccess
+	string results = 1;
+	repeated AiserverV1_CodeResult code_results = 2;
+}
+
+message SemSearchToolError { // agent.v1.SemSearchToolError
+	string error_message = 1;
+}
+
+message SemSearchToolResult { // agent.v1.SemSearchToolResult
+	SemSearchToolSuccess success = 1;
+	SemSearchToolError error = 2;
+}
+
+message SemSearchToolCall { // agent.v1.SemSearchToolCall
+	SemSearchToolArgs args = 1;
+	SemSearchToolResult result = 2;
+}
+
+message Phase { // agent.v1.Phase
+	string name = 1;
+	repeated TodoItem todos = 2;
+}
+
+message CreatePlanArgs { // agent.v1.CreatePlanArgs
+	string plan = 1;
+	repeated TodoItem todos = 2;
+	string overview = 3;
+	string name = 4;
+	bool is_project = 5;
+	repeated Phase phases = 6;
+}
+
+message CreatePlanSuccess { // agent.v1.CreatePlanSuccess
+}
+
+message CreatePlanError { // agent.v1.CreatePlanError
+	string error = 1;
+}
+
+message CreatePlanResult { // agent.v1.CreatePlanResult
+	CreatePlanSuccess success = 1;
+	CreatePlanError error = 2;
+	string plan_uri = 3;
+}
+
+message CreatePlanToolCall { // agent.v1.CreatePlanToolCall
+	CreatePlanArgs args = 1;
+	CreatePlanResult result = 2;
+}
+
+message WebSearchArgs { // agent.v1.WebSearchArgs
+	string search_term = 1;
+	string tool_call_id = 2;
+}
+
+message WebSearchReference { // agent.v1.WebSearchReference
+	string title = 1;
+	string url = 2;
+	string chunk = 3;
+}
+
+message WebSearchSuccess { // agent.v1.WebSearchSuccess
+	repeated WebSearchReference references = 1;
+}
+
+message WebSearchError { // agent.v1.WebSearchError
+	string error = 1;
+}
+
+message WebSearchRejected { // agent.v1.WebSearchRejected
+	string reason = 1;
+}
+
+message WebSearchResult { // agent.v1.WebSearchResult
+	WebSearchSuccess success = 1;
+	WebSearchError error = 2;
+	WebSearchRejected rejected = 3;
+}
+
+message WebSearchToolCall { // agent.v1.WebSearchToolCall
+	WebSearchArgs args = 1;
+	WebSearchResult result = 2;
+}
+
+message TaskArgs { // agent.v1.TaskArgs
+	string description = 1;
+	string prompt = 2;
+	SubagentType subagent_type = 3;
+	optional string model = 4;
+	optional string resume = 5;
+	optional string agent_id = 6;
+	repeated string attachments = 7;
+	TaskMode mode = 8;
+	repeated string responding_to_message_ids = 9;
+	SubagentExecutionEnvironment environment = 10;
+}
+
+message TaskToolCall { // agent.v1.TaskToolCall
+	TaskArgs args = 1;
+	TaskResult result = 2;
+}
+
+message ListMcpResourcesExecArgs { // agent.v1.ListMcpResourcesExecArgs
+	optional string server = 1;
+}
+
+message ListMcpResourcesExecResult_McpResource { // agent.v1.ListMcpResourcesExecResult.McpResource
+	string uri = 1;
+	optional string name = 2;
+	optional string description = 3;
+	optional string mime_type = 4;
+	string server = 5;
+	map<string, string> annotations = 6;
+}
+
+message ListMcpResourcesSuccess { // agent.v1.ListMcpResourcesSuccess
+	repeated ListMcpResourcesExecResult_McpResource resources = 1;
+}
+
+message ListMcpResourcesError { // agent.v1.ListMcpResourcesError
+	string error = 1;
+}
+
+message ListMcpResourcesRejected { // agent.v1.ListMcpResourcesRejected
+	string reason = 1;
+}
+
+message ListMcpResourcesExecResult { // agent.v1.ListMcpResourcesExecResult
+	ListMcpResourcesSuccess success = 1;
+	ListMcpResourcesError error = 2;
+	ListMcpResourcesRejected rejected = 3;
+}
+
+message ListMcpResourcesToolCall { // agent.v1.ListMcpResourcesToolCall
+	ListMcpResourcesExecArgs args = 1;
+	ListMcpResourcesExecResult result = 2;
+}
+
+message ReadMcpResourceExecArgs { // agent.v1.ReadMcpResourceExecArgs
+	string server = 1;
+	string uri = 2;
+	optional string download_path = 3;
+	string tool_call_id = 4;
+	optional SmartModeApproval smart_mode_approval = 5;
+}
+
+message ReadMcpResourceSuccess { // agent.v1.ReadMcpResourceSuccess
+	string uri = 1;
+	optional string name = 2;
+	optional string description = 3;
+	optional string mime_type = 4;
+	string text = 5;
+	bytes blob = 6;
+	map<string, string> annotations = 7;
+	optional string download_path = 8;
+}
+
+message ReadMcpResourceError { // agent.v1.ReadMcpResourceError
+	string uri = 1;
+	string error = 2;
+}
+
+message ReadMcpResourceRejected { // agent.v1.ReadMcpResourceRejected
+	string uri = 1;
+	string reason = 2;
+}
+
+message ReadMcpResourceNotFound { // agent.v1.ReadMcpResourceNotFound
+	string uri = 1;
+}
+
+message ReadMcpResourceExecResult { // agent.v1.ReadMcpResourceExecResult
+	ReadMcpResourceSuccess success = 1;
+	ReadMcpResourceError error = 2;
+	ReadMcpResourceRejected rejected = 3;
+	ReadMcpResourceNotFound not_found = 4;
+}
+
+message ReadMcpResourceToolCall { // agent.v1.ReadMcpResourceToolCall
+	ReadMcpResourceExecArgs args = 1;
+	ReadMcpResourceExecResult result = 2;
+}
+
+message ApplyAgentDiffArgs { // agent.v1.ApplyAgentDiffArgs
+	string agent_id = 1;
+}
+
+enum AppliedAgentChange_ChangeType { // agent.v1.AppliedAgentChange.ChangeType
+	APPLIED_AGENT_CHANGE_CHANGE_TYPE_CHANGE_TYPE_UNSPECIFIED = 0;
+	APPLIED_AGENT_CHANGE_CHANGE_TYPE_CHANGE_TYPE_CREATED = 1;
+	APPLIED_AGENT_CHANGE_CHANGE_TYPE_CHANGE_TYPE_MODIFIED = 2;
+	APPLIED_AGENT_CHANGE_CHANGE_TYPE_CHANGE_TYPE_DELETED = 3;
+}
+
+message AppliedAgentChange { // agent.v1.AppliedAgentChange
+	string path = 1;
+	AppliedAgentChange_ChangeType change_type = 2;
+	optional string before_content = 3;
+	optional string after_content = 4;
+	optional string error = 5;
+	optional string message_for_model = 6;
+}
+
+message ApplyAgentDiffSuccess { // agent.v1.ApplyAgentDiffSuccess
+	repeated AppliedAgentChange applied_changes = 1;
+}
+
+message ApplyAgentDiffError { // agent.v1.ApplyAgentDiffError
+	string error = 1;
+	repeated AppliedAgentChange applied_changes = 2;
+}
+
+message ApplyAgentDiffResult { // agent.v1.ApplyAgentDiffResult
+	ApplyAgentDiffSuccess success = 1;
+	ApplyAgentDiffError error = 2;
+}
+
+message ApplyAgentDiffToolCall { // agent.v1.ApplyAgentDiffToolCall
+	ApplyAgentDiffArgs args = 1;
+	ApplyAgentDiffResult result = 2;
+}
+
+message AskQuestionArgs_Option { // agent.v1.AskQuestionArgs.Option
+	string id = 1;
+	string label = 2;
+}
+
+message AskQuestionArgs_Question { // agent.v1.AskQuestionArgs.Question
+	string id = 1;
+	string prompt = 2;
+	repeated AskQuestionArgs_Option options = 3;
+	bool allow_multiple = 4;
+}
+
+message AskQuestionArgs { // agent.v1.AskQuestionArgs
+	string title = 1;
+	repeated AskQuestionArgs_Question questions = 2;
+	bool run_async = 5;
+	string async_original_tool_call_id = 6;
+}
+
+message AskQuestionSuccess_Answer { // agent.v1.AskQuestionSuccess.Answer
+	string question_id = 1;
+	repeated string selected_option_ids = 2;
+	string freeform_text = 3;
+}
+
+message AskQuestionSuccess { // agent.v1.AskQuestionSuccess
+	repeated AskQuestionSuccess_Answer answers = 1;
+}
+
+message AskQuestionError { // agent.v1.AskQuestionError
+	string error_message = 1;
+}
+
+message AskQuestionRejected { // agent.v1.AskQuestionRejected
+	string reason = 1;
+}
+
+message AskQuestionAsync { // agent.v1.AskQuestionAsync
+}
+
+message AskQuestionResult { // agent.v1.AskQuestionResult
+	AskQuestionSuccess success = 1;
+	AskQuestionError error = 2;
+	AskQuestionRejected rejected = 3;
+	AskQuestionAsync async = 4;
+}
+
+message AskQuestionToolCall { // agent.v1.AskQuestionToolCall
+	AskQuestionArgs args = 1;
+	AskQuestionResult result = 2;
+}
+
+message FetchArgs { // agent.v1.FetchArgs
+	string url = 1;
+	string tool_call_id = 2;
+}
+
+message FetchSuccess { // agent.v1.FetchSuccess
+	string url = 1;
+	string content = 2;
+	int32 status_code = 3;
+	string content_type = 4;
+}
+
+message FetchError { // agent.v1.FetchError
+	string url = 1;
+	string error = 2;
+}
+
+message FetchResult { // agent.v1.FetchResult
+	FetchSuccess success = 1;
+	FetchError error = 2;
+}
+
+message FetchToolCall { // agent.v1.FetchToolCall
+	FetchArgs args = 1;
+	FetchResult result = 2;
+}
+
+message SwitchModeArgs { // agent.v1.SwitchModeArgs
+	string target_mode_id = 1;
+	optional string explanation = 2;
+	string tool_call_id = 3;
+}
+
+message SwitchModeSuccess { // agent.v1.SwitchModeSuccess
+	string from_mode_id = 1;
+	string to_mode_id = 2;
+}
+
+message SwitchModeError { // agent.v1.SwitchModeError
+	string error = 1;
+}
+
+message SwitchModeRejected { // agent.v1.SwitchModeRejected
+	string reason = 1;
+}
+
+message SwitchModeResult { // agent.v1.SwitchModeResult
+	SwitchModeSuccess success = 1;
+	SwitchModeError error = 2;
+	SwitchModeRejected rejected = 3;
+}
+
+message SwitchModeToolCall { // agent.v1.SwitchModeToolCall
+	SwitchModeArgs args = 1;
+	SwitchModeResult result = 2;
+}
+
+message GenerateImageArgs { // agent.v1.GenerateImageArgs
+	string description = 1;
+	optional string file_path = 2;
+	repeated string reference_image_paths = 5;
+}
+
+message GenerateImageSuccess { // agent.v1.GenerateImageSuccess
+	string file_path = 1;
+	string image_data = 2;
+}
+
+message GenerateImageError { // agent.v1.GenerateImageError
+	string error = 1;
+}
+
+message GenerateImageResult { // agent.v1.GenerateImageResult
+	GenerateImageSuccess success = 1;
+	GenerateImageError error = 2;
+}
+
+message GenerateImageToolCall { // agent.v1.GenerateImageToolCall
+	GenerateImageArgs args = 1;
+	GenerateImageResult result = 2;
+}
+
+message RecordScreenArgs { // agent.v1.RecordScreenArgs
+	RecordingMode mode = 1;
+	string tool_call_id = 2;
+	optional string save_as_filename = 3;
+}
+
+message RecordScreenStartSuccess { // agent.v1.RecordScreenStartSuccess
+	bool was_prior_recording_cancelled = 1;
+	bool was_save_as_filename_ignored = 2;
+}
+
+message RecordScreenSaveSuccess { // agent.v1.RecordScreenSaveSuccess
+	string path = 1;
+	int64 recording_duration_ms = 2;
+	optional RequestedFilePathRejectedReason requested_file_path_rejected_reason = 3;
+}
+
+message RecordScreenDiscardSuccess { // agent.v1.RecordScreenDiscardSuccess
+}
+
+message RecordScreenFailure { // agent.v1.RecordScreenFailure
+	string error = 1;
+}
+
+message RecordScreenResult { // agent.v1.RecordScreenResult
+	RecordScreenStartSuccess start_success = 1;
+	RecordScreenSaveSuccess save_success = 2;
+	RecordScreenDiscardSuccess discard_success = 3;
+	RecordScreenFailure failure = 4;
+}
+
+message RecordScreenToolCall { // agent.v1.RecordScreenToolCall
+	RecordScreenArgs args = 1;
+	RecordScreenResult result = 2;
+}
+
+message Coordinate { // agent.v1.Coordinate
+	int32 x = 1;
+	int32 y = 2;
+}
+
+message MouseMoveAction { // agent.v1.MouseMoveAction
+	Coordinate coordinate = 1;
+}
+
+message ClickAction { // agent.v1.ClickAction
+	optional Coordinate coordinate = 1;
+	MouseButton button = 2;
+	int32 count = 3;
+	optional string modifier_keys = 4;
+}
+
+message MouseDownAction { // agent.v1.MouseDownAction
+	MouseButton button = 1;
+}
+
+message MouseUpAction { // agent.v1.MouseUpAction
+	MouseButton button = 1;
+}
+
+message DragAction { // agent.v1.DragAction
+	repeated Coordinate path = 1;
+	MouseButton button = 2;
+}
+
+message ScrollAction { // agent.v1.ScrollAction
+	optional Coordinate coordinate = 1;
+	ScrollDirection direction = 2;
+	int32 amount = 3;
+	optional string modifier_keys = 4;
+}
+
+message TypeAction { // agent.v1.TypeAction
+	string text = 1;
+}
+
+message KeyAction { // agent.v1.KeyAction
+	string key = 1;
+	optional int32 hold_duration_ms = 2;
+}
+
+message WaitAction { // agent.v1.WaitAction
+	int32 duration_ms = 1;
+}
+
+message ScreenshotAction { // agent.v1.ScreenshotAction
+}
+
+message CursorPositionAction { // agent.v1.CursorPositionAction
+}
+
+message ComputerUseAction { // agent.v1.ComputerUseAction
+	MouseMoveAction mouse_move = 1;
+	ClickAction click = 2;
+	MouseDownAction mouse_down = 3;
+	MouseUpAction mouse_up = 4;
+	DragAction drag = 5;
+	ScrollAction scroll = 6;
+	TypeAction type = 7;
+	KeyAction key = 8;
+	WaitAction wait = 9;
+	ScreenshotAction screenshot = 10;
+	CursorPositionAction cursor_position = 11;
+}
+
+message ComputerUseArgs { // agent.v1.ComputerUseArgs
+	string tool_call_id = 1;
+	repeated ComputerUseAction actions = 2;
+}
+
+message ComputerUseSuccess { // agent.v1.ComputerUseSuccess
+	int32 action_count = 1;
+	int32 duration_ms = 2;
+	optional string screenshot = 3;
+	optional string log = 4;
+	optional string screenshot_path = 5;
+	optional Coordinate cursor_position = 6;
+}
+
+message ComputerUseError { // agent.v1.ComputerUseError
+	string error = 1;
+	int32 action_count = 2;
+	int32 duration_ms = 3;
+	optional string log = 4;
+	optional string screenshot = 5;
+	optional string screenshot_path = 6;
+}
+
+message ComputerUseResult { // agent.v1.ComputerUseResult
+	ComputerUseSuccess success = 1;
+	ComputerUseError error = 2;
+}
+
+message ComputerUseToolCall { // agent.v1.ComputerUseToolCall
+	ComputerUseArgs args = 1;
+	ComputerUseResult result = 2;
+}
+
+message WriteShellStdinArgs { // agent.v1.WriteShellStdinArgs
+	uint32 shell_id = 1;
+	string chars = 2;
+}
+
+message WriteShellStdinSuccess { // agent.v1.WriteShellStdinSuccess
+	uint32 shell_id = 1;
+	uint32 terminal_file_length_before_input_written = 2;
+}
+
+message WriteShellStdinError { // agent.v1.WriteShellStdinError
+	string error = 1;
+}
+
+message WriteShellStdinResult { // agent.v1.WriteShellStdinResult
+	WriteShellStdinSuccess success = 1;
+	WriteShellStdinError error = 2;
+}
+
+message WriteShellStdinToolCall { // agent.v1.WriteShellStdinToolCall
+	WriteShellStdinArgs args = 1;
+	WriteShellStdinResult result = 2;
+}
+
+message ReflectArgs { // agent.v1.ReflectArgs
+	string unexpected_action_outcomes = 1;
+	string relevant_instructions = 2;
+	string scenario_analysis = 3;
+	string critical_synthesis = 4;
+	string next_steps = 5;
+	string tool_call_id = 6;
+}
+
+message ReflectSuccess { // agent.v1.ReflectSuccess
+}
+
+message ReflectError { // agent.v1.ReflectError
+	string error = 1;
+}
+
+message ReflectResult { // agent.v1.ReflectResult
+	ReflectSuccess success = 1;
+	ReflectError error = 2;
+}
+
+message ReflectToolCall { // agent.v1.ReflectToolCall
+	ReflectArgs args = 1;
+	ReflectResult result = 2;
+}
+
+message SetupVmEnvironmentArgs { // agent.v1.SetupVmEnvironmentArgs
+	string install_command = 2;
+	string start_command = 3;
+	string dockerfile_contents = 4;
+}
+
+message SetupVmEnvironmentSuccess { // agent.v1.SetupVmEnvironmentSuccess
+}
+
+message SetupVmEnvironmentResult { // agent.v1.SetupVmEnvironmentResult
+	SetupVmEnvironmentSuccess success = 1;
+}
+
+message SetupVmEnvironmentToolCall { // agent.v1.SetupVmEnvironmentToolCall
+	SetupVmEnvironmentArgs args = 1;
+	SetupVmEnvironmentResult result = 2;
+}
+
+message TruncatedToolCallArgs { // agent.v1.TruncatedToolCallArgs
+}
+
+message TruncatedToolCallSuccess { // agent.v1.TruncatedToolCallSuccess
+}
+
+message TruncatedToolCallError { // agent.v1.TruncatedToolCallError
+	string error = 1;
+}
+
+message TruncatedToolCallResult { // agent.v1.TruncatedToolCallResult
+	TruncatedToolCallSuccess success = 1;
+	TruncatedToolCallError error = 2;
+}
+
+message TruncatedToolCall { // agent.v1.TruncatedToolCall
+	bytes original_step_blob_id = 1;
+	TruncatedToolCallArgs args = 2;
+	TruncatedToolCallResult result = 3;
+}
+
+message StartGrindExecutionArgs { // agent.v1.StartGrindExecutionArgs
+	optional string explanation = 1;
+	string tool_call_id = 2;
+}
+
+message StartGrindExecutionSuccess { // agent.v1.StartGrindExecutionSuccess
+}
+
+message StartGrindExecutionError { // agent.v1.StartGrindExecutionError
+	string error = 1;
+}
+
+message StartGrindExecutionResult { // agent.v1.StartGrindExecutionResult
+	StartGrindExecutionSuccess success = 1;
+	StartGrindExecutionError error = 2;
+}
+
+message StartGrindExecutionToolCall { // agent.v1.StartGrindExecutionToolCall
+	StartGrindExecutionArgs args = 1;
+	StartGrindExecutionResult result = 2;
+}
+
+message StartGrindPlanningArgs { // agent.v1.StartGrindPlanningArgs
+	optional string explanation = 1;
+	string tool_call_id = 2;
+}
+
+message StartGrindPlanningSuccess { // agent.v1.StartGrindPlanningSuccess
+}
+
+message StartGrindPlanningError { // agent.v1.StartGrindPlanningError
+	string error = 1;
+}
+
+message StartGrindPlanningResult { // agent.v1.StartGrindPlanningResult
+	StartGrindPlanningSuccess success = 1;
+	StartGrindPlanningError error = 2;
+}
+
+message StartGrindPlanningToolCall { // agent.v1.StartGrindPlanningToolCall
+	StartGrindPlanningArgs args = 1;
+	StartGrindPlanningResult result = 2;
+}
+
+message WebFetchArgs { // agent.v1.WebFetchArgs
+	string url = 1;
+	string tool_call_id = 2;
+}
+
+message WebFetchSuccess { // agent.v1.WebFetchSuccess
+	string url = 1;
+	string markdown = 2;
+	optional OutputLocation output_location = 3;
+}
+
+message WebFetchError { // agent.v1.WebFetchError
+	string url = 1;
+	string error = 2;
+}
+
+message WebFetchRejected { // agent.v1.WebFetchRejected
+	string reason = 1;
+}
+
+message WebFetchResult { // agent.v1.WebFetchResult
+	WebFetchSuccess success = 1;
+	WebFetchError error = 2;
+	WebFetchRejected rejected = 3;
+}
+
+message WebFetchToolCall { // agent.v1.WebFetchToolCall
+	WebFetchArgs args = 1;
+	WebFetchResult result = 2;
+}
+
+message BugfixResultItem { // agent.v1.BugfixResultItem
+	string bug_id = 1;
+	string bug_title = 2;
+	BugfixVerdict verdict = 3;
+	string explanation = 4;
+	optional string severity = 5;
+}
+
+message ReportBugfixResultsArgs { // agent.v1.ReportBugfixResultsArgs
+	string summary = 1;
+	repeated BugfixResultItem results = 2;
+}
+
+message ReportBugfixResultsSuccess { // agent.v1.ReportBugfixResultsSuccess
+	repeated BugfixResultItem results = 1;
+}
+
+message ReportBugfixResultsError { // agent.v1.ReportBugfixResultsError
+	string error = 1;
+}
+
+message ReportBugfixResultsResult { // agent.v1.ReportBugfixResultsResult
+	ReportBugfixResultsSuccess success = 1;
+	ReportBugfixResultsError error = 2;
+}
+
+message ReportBugfixResultsToolCall { // agent.v1.ReportBugfixResultsToolCall
+	ReportBugfixResultsArgs args = 1;
+	ReportBugfixResultsResult result = 2;
+}
+
+message AiAttributionArgs { // agent.v1.AiAttributionArgs
+	repeated string file_paths = 5;
+	optional int32 start_line = 2;
+	optional int32 end_line = 3;
+	repeated string commit_hashes = 6;
+	optional string output_mode = 7;
+	optional int32 max_commits = 9;
+	optional bool include_line_ranges = 10;
+}
+
+message AiAttributionSuccess { // agent.v1.AiAttributionSuccess
+	string attribution_text = 1;
+	optional OutputLocation output_location = 2;
+}
+
+message AiAttributionError { // agent.v1.AiAttributionError
+	string error = 1;
+}
+
+message AiAttributionResult { // agent.v1.AiAttributionResult
+	AiAttributionSuccess success = 1;
+	AiAttributionError error = 2;
+}
+
+message AiAttributionToolCall { // agent.v1.AiAttributionToolCall
+	AiAttributionArgs args = 1;
+	AiAttributionResult result = 2;
+}
+
+message CreatePrAction { // agent.v1.CreatePrAction
+	string title = 1;
+	string body = 2;
+	optional string base_branch = 3;
+	optional bool draft = 4;
+	string branch_name = 5;
+	repeated string add_labels = 6;
+	optional string repo_url = 7;
+}
+
+message UpdatePrAction { // agent.v1.UpdatePrAction
+	optional string pr_url = 1;
+	optional string title = 2;
+	optional string body = 3;
+	optional string base_branch = 4;
+	optional string branch_name = 5;
+	repeated string add_labels = 6;
+	repeated string remove_labels = 7;
+	optional string repo_url = 8;
+}
+
+message PrManagementArgs { // agent.v1.PrManagementArgs
+	string tool_call_id = 1;
+	CreatePrAction create_pr = 2;
+	UpdatePrAction update_pr = 3;
+}
+
+message PrManagementSuccess { // agent.v1.PrManagementSuccess
+	string pr_url = 1;
+	int32 pr_number = 2;
+	string message = 3;
+}
+
+message PrManagementError { // agent.v1.PrManagementError
+	string error = 1;
+}
+
+message PrManagementRejected { // agent.v1.PrManagementRejected
+	string reason = 1;
+}
+
+message PrManagementRegistered { // agent.v1.PrManagementRegistered
+	string message = 1;
+	string title = 2;
+	string body = 3;
+	optional string base_branch = 4;
+	optional bool draft = 5;
+	string branch_name = 6;
+}
+
+message PrManagementNeedsConfirmation { // agent.v1.PrManagementNeedsConfirmation
+	string message = 1;
+	string discovered_pr_url = 2;
+	int32 discovered_pr_number = 3;
+	string discovered_pr_title = 4;
+	string branch_name = 5;
+}
+
+message PrManagementResult { // agent.v1.PrManagementResult
+	PrManagementSuccess success = 1;
+	PrManagementError error = 2;
+	PrManagementRejected rejected = 3;
+	PrManagementRegistered registered = 4;
+	PrManagementNeedsConfirmation needs_confirmation = 5;
+}
+
+message PrManagementToolCall { // agent.v1.PrManagementToolCall
+	PrManagementArgs args = 1;
+	PrManagementResult result = 2;
+}
+
+message McpAuthArgs { // agent.v1.McpAuthArgs
+	string server_identifier = 1;
+	string tool_call_id = 2;
+}
+
+message McpAuthSuccess { // agent.v1.McpAuthSuccess
+	string server_identifier = 1;
+}
+
+message McpAuthError { // agent.v1.McpAuthError
+	string error = 1;
+}
+
+message McpAuthRejected { // agent.v1.McpAuthRejected
+	string reason = 1;
+}
+
+message McpAuthResult { // agent.v1.McpAuthResult
+	McpAuthSuccess success = 1;
+	McpAuthError error = 2;
+	McpAuthRejected rejected = 3;
+}
+
+message McpAuthToolCall { // agent.v1.McpAuthToolCall
+	McpAuthArgs args = 1;
+	McpAuthResult result = 2;
+}
+
+message AwaitArgs { // agent.v1.AwaitArgs
+	string task_id = 1;
+	optional uint32 block_until_ms = 2;
+	optional string regex = 3;
+}
+
+message AwaitTaskComplete { // agent.v1.AwaitTaskComplete
+	string task_id = 1;
+	uint64 runtime_ms = 2;
+	string output_file_path = 3;
+	uint64 output_length = 4;
+	bool regex_requested = 5;
+	optional string regex_match = 6;
+	optional sint32 exit_code = 7;
+}
+
+message AwaitTaskStillRunning { // agent.v1.AwaitTaskStillRunning
+	string task_id = 1;
+	uint64 runtime_ms = 2;
+	string output_file_path = 3;
+	uint64 output_length = 4;
+	bool regex_requested = 5;
+	optional string regex_match = 6;
+}
+
+message AwaitError { // agent.v1.AwaitError
+	string error = 1;
+}
+
+message AwaitSuccess { // agent.v1.AwaitSuccess
+	AwaitTaskComplete complete = 1;
+	AwaitTaskStillRunning still_running = 2;
+}
+
+message AwaitResult { // agent.v1.AwaitResult
+	AwaitTaskComplete complete = 1;
+	AwaitTaskStillRunning still_running = 2;
+	AwaitError error = 3;
+	AwaitSuccess success = 4;
+}
+
+message AwaitToolCall { // agent.v1.AwaitToolCall
+	AwaitArgs args = 1;
+	AwaitResult result = 2;
+}
+
+message BlameByFilePathArgs { // agent.v1.BlameByFilePathArgs
+	string file_path = 1;
+	optional int32 start_line = 2;
+	optional int32 end_line = 3;
+}
+
+message BlameByFilePathSuccess { // agent.v1.BlameByFilePathSuccess
+	string content = 1;
+}
+
+message BlameByFilePathError { // agent.v1.BlameByFilePathError
+	string error_message = 1;
+}
+
+message BlameByFilePathResult { // agent.v1.BlameByFilePathResult
+	BlameByFilePathSuccess success = 1;
+	BlameByFilePathError error = 2;
+}
+
+message BlameByFilePathToolCall { // agent.v1.BlameByFilePathToolCall
+	BlameByFilePathArgs args = 1;
+	BlameByFilePathResult result = 2;
+}
+
+message GetMcpToolsArgs { // agent.v1.GetMcpToolsArgs
+	optional string server = 1;
+	optional string tool_name = 2;
+	optional string pattern = 3;
+	string tool_call_id = 4;
+}
+
+message GetMcpToolsSuccess { // agent.v1.GetMcpToolsSuccess
+	string content = 1;
+	optional string output_file_path = 2;
+}
+
+message GetMcpToolsError { // agent.v1.GetMcpToolsError
+	string error = 1;
+}
+
+message GetMcpToolsAgentResult { // agent.v1.GetMcpToolsAgentResult
+	GetMcpToolsSuccess success = 1;
+	GetMcpToolsError error = 2;
+}
+
+message GetMcpToolsToolCall { // agent.v1.GetMcpToolsToolCall
+	GetMcpToolsArgs args = 1;
+	GetMcpToolsAgentResult result = 2;
+}
+
+message ReportBugArgs { // agent.v1.ReportBugArgs
+	string title = 1;
+	string file = 2;
+	int32 start_line = 3;
+	int32 end_line = 4;
+	string description = 5;
+	string severity = 6;
+	string category = 7;
+	string rationale = 8;
+}
+
+message ReportBugSuccess { // agent.v1.ReportBugSuccess
+	string output = 1;
+}
+
+message ReportBugError { // agent.v1.ReportBugError
+	string error_message = 1;
+}
+
+message ReportBugResult { // agent.v1.ReportBugResult
+	ReportBugSuccess success = 1;
+	ReportBugError error = 2;
+}
+
+message ReportBugToolCall { // agent.v1.ReportBugToolCall
+	ReportBugArgs args = 1;
+	ReportBugResult result = 2;
+}
+
+message SetActiveBranchArgs { // agent.v1.SetActiveBranchArgs
+	string path = 1;
+	string branch_name = 2;
+}
+
+message SetActiveBranchSuccess { // agent.v1.SetActiveBranchSuccess
+}
+
+message SetActiveBranchError { // agent.v1.SetActiveBranchError
+	string error = 1;
+}
+
+message SetActiveBranchResult { // agent.v1.SetActiveBranchResult
+	SetActiveBranchSuccess success = 1;
+	SetActiveBranchError error = 2;
+}
+
+message SetActiveBranchToolCall { // agent.v1.SetActiveBranchToolCall
+	SetActiveBranchArgs args = 1;
+	SetActiveBranchResult result = 2;
+}
+
+message CommunicateUpdateArgs { // agent.v1.CommunicateUpdateArgs
+	optional string current_step = 1;
+	optional string final_summary = 3;
+	optional string completed_subtitle = 4;
+}
+
+message CommunicateUpdateSuccess { // agent.v1.CommunicateUpdateSuccess
+	string current_step = 1;
+	uint32 message_index = 3;
+}
+
+message CommunicateUpdateError { // agent.v1.CommunicateUpdateError
+	string error = 1;
+}
+
+message CommunicateUpdateResult { // agent.v1.CommunicateUpdateResult
+	CommunicateUpdateSuccess success = 1;
+	CommunicateUpdateError error = 2;
+}
+
+message CommunicateUpdateToolCall { // agent.v1.CommunicateUpdateToolCall
+	CommunicateUpdateArgs args = 1;
+	CommunicateUpdateResult result = 2;
+}
+
+message SendFinalSummaryArgs { // agent.v1.SendFinalSummaryArgs
+	optional string final_summary = 1;
+}
+
+message SendFinalSummarySuccess { // agent.v1.SendFinalSummarySuccess
+	string final_summary = 1;
+}
+
+message SendFinalSummaryError { // agent.v1.SendFinalSummaryError
+	string error = 1;
+}
+
+message SendFinalSummaryResult { // agent.v1.SendFinalSummaryResult
+	SendFinalSummarySuccess success = 1;
+	SendFinalSummaryError error = 2;
+}
+
+message SendFinalSummaryToolCall { // agent.v1.SendFinalSummaryToolCall
+	SendFinalSummaryArgs args = 1;
+	SendFinalSummaryResult result = 2;
+}
+
+message UpdatePrCodeTourArgs { // agent.v1.UpdatePrCodeTourArgs
+	string feedback = 1;
+	string tool_call_id = 2;
+}
+
+message UpdatePrCodeTourSuccess { // agent.v1.UpdatePrCodeTourSuccess
+	string revision_id = 1;
+	string message = 2;
+}
+
+message UpdatePrCodeTourError { // agent.v1.UpdatePrCodeTourError
+	string error = 1;
+}
+
+message UpdatePrCodeTourResult { // agent.v1.UpdatePrCodeTourResult
+	UpdatePrCodeTourSuccess success = 1;
+	UpdatePrCodeTourError error = 2;
+}
+
+message UpdatePrCodeTourToolCall { // agent.v1.UpdatePrCodeTourToolCall
+	UpdatePrCodeTourArgs args = 1;
+	UpdatePrCodeTourResult result = 2;
+}
+
+message ReplaceEnvConfig { // agent.v1.ReplaceEnvConfig
+	string install_script = 1;
+	string dockerfile_contents = 2;
+}
+
+message ReplaceEnvArgs { // agent.v1.ReplaceEnvArgs
+	ReplaceEnvConfig config = 1;
+}
+
+message ReplaceEnvSuccess { // agent.v1.ReplaceEnvSuccess
+	string setup_logs = 1;
+}
+
+message ReplaceEnvFailure { // agent.v1.ReplaceEnvFailure
+	string error_message = 1;
+	string setup_logs = 2;
+}
+
+message ReplaceEnvResult { // agent.v1.ReplaceEnvResult
+	ReplaceEnvSuccess success = 1;
+	ReplaceEnvFailure failure = 2;
+}
+
+message ReplaceEnvToolCall { // agent.v1.ReplaceEnvToolCall
+	ReplaceEnvArgs args = 1;
+	ReplaceEnvResult result = 2;
+	string associated_pod_key = 3;
+}
+
+message EditPrLabelsArgs { // agent.v1.EditPrLabelsArgs
+	string tool_call_id = 1;
+	string pr_url = 2;
+	repeated string add_labels = 4;
+	repeated string remove_labels = 5;
+}
+
+message EditPrLabelsSuccess { // agent.v1.EditPrLabelsSuccess
+	string pr_url = 1;
+	int32 pr_number = 2;
+	string message = 3;
+}
+
+message EditPrLabelsError { // agent.v1.EditPrLabelsError
+	string error = 1;
+}
+
+message EditPrLabelsResult { // agent.v1.EditPrLabelsResult
+	EditPrLabelsSuccess success = 1;
+	EditPrLabelsError error = 2;
+}
+
+message EditPrLabelsToolCall { // agent.v1.EditPrLabelsToolCall
+	EditPrLabelsArgs args = 1;
+	EditPrLabelsResult result = 2;
+}
+
+message RecordCiInvestigationFinding { // agent.v1.RecordCiInvestigationFinding
+	string check_name = 1;
+	optional string details_url = 2;
+	string tldr = 3;
+	optional string root_cause = 4;
+	optional string failing_signal = 5;
+	optional string suggested_next_step = 6;
+	optional string diff_relation = 7;
+	optional string diff_relation_evidence = 8;
+	optional string flake_assessment = 9;
+	optional string flake_evidence = 10;
+	optional bool rerun_available = 11;
+	optional string rerun_evidence = 12;
+	optional string recommended_action = 13;
+	optional string recommended_action_evidence = 14;
+	optional string confidence = 15;
+}
+
+message RecordCiInvestigationOverall { // agent.v1.RecordCiInvestigationOverall
+	string summary = 1;
+	repeated string themes = 2;
+	optional string recommended_action = 3;
+	optional string recommended_action_evidence = 4;
+	repeated string check_keys = 5;
+}
+
+message RecordCiInvestigationFindingsArgs { // agent.v1.RecordCiInvestigationFindingsArgs
+	repeated RecordCiInvestigationFinding findings = 1;
+	optional RecordCiInvestigationOverall overall = 2;
+	string tool_call_id = 3;
+}
+
+message RecordCiInvestigationFindingsSuccess { // agent.v1.RecordCiInvestigationFindingsSuccess
+	string message = 1;
+}
+
+message RecordCiInvestigationFindingsError { // agent.v1.RecordCiInvestigationFindingsError
+	string error = 1;
+}
+
+message RecordCiInvestigationFindingsResult { // agent.v1.RecordCiInvestigationFindingsResult
+	RecordCiInvestigationFindingsSuccess success = 1;
+	RecordCiInvestigationFindingsError error = 2;
+}
+
+message RecordCiInvestigationFindingsToolCall { // agent.v1.RecordCiInvestigationFindingsToolCall
+	RecordCiInvestigationFindingsArgs args = 1;
+	RecordCiInvestigationFindingsResult result = 2;
+}
+
+message SendMessageText { // agent.v1.SendMessageText
+	string content = 1;
+}
+
+message SendMessageAttachment { // agent.v1.SendMessageAttachment
+	string url = 1;
+}
+
+message SendMessageArgs { // agent.v1.SendMessageArgs
+	SendMessageText text = 1;
+	SendMessageAttachment attachment = 2;
+}
+
+message SendMessageSuccess { // agent.v1.SendMessageSuccess
+	uint64 timestamp = 1;
+}
+
+message SendMessageError { // agent.v1.SendMessageError
+	string error = 1;
+}
+
+message SendMessageResult { // agent.v1.SendMessageResult
+	SendMessageSuccess success = 1;
+	SendMessageError error = 2;
+}
+
+message SendMessageToolCall { // agent.v1.SendMessageToolCall
+	SendMessageArgs args = 1;
+	SendMessageResult result = 2;
+}
+
+message SendToUserArgs { // agent.v1.SendToUserArgs
+	string message = 1;
+}
+
+message SendToUserSuccess { // agent.v1.SendToUserSuccess
+}
+
+message SendToUserError { // agent.v1.SendToUserError
+	string error = 1;
+}
+
+message SendToUserResult { // agent.v1.SendToUserResult
+	SendToUserSuccess success = 1;
+	SendToUserError error = 2;
+}
+
+message SendToUserToolCall { // agent.v1.SendToUserToolCall
+	SendToUserArgs args = 1;
+	SendToUserResult result = 2;
+}
+
+message ToolCall { // agent.v1.ToolCall
+	ShellToolCall shell_tool_call = 1;
+	DeleteToolCall delete_tool_call = 3;
+	GlobToolCall glob_tool_call = 4;
+	GrepToolCall grep_tool_call = 5;
+	ReadToolCall read_tool_call = 8;
+	UpdateTodosToolCall update_todos_tool_call = 9;
+	ReadTodosToolCall read_todos_tool_call = 10;
+	EditToolCall edit_tool_call = 12;
+	LsToolCall ls_tool_call = 13;
+	ReadLintsToolCall read_lints_tool_call = 14;
+	McpToolCall mcp_tool_call = 15;
+	SemSearchToolCall sem_search_tool_call = 16;
+	CreatePlanToolCall create_plan_tool_call = 17;
+	WebSearchToolCall web_search_tool_call = 18;
+	TaskToolCall task_tool_call = 19;
+	ListMcpResourcesToolCall list_mcp_resources_tool_call = 20;
+	ReadMcpResourceToolCall read_mcp_resource_tool_call = 21;
+	ApplyAgentDiffToolCall apply_agent_diff_tool_call = 22;
+	AskQuestionToolCall ask_question_tool_call = 23;
+	FetchToolCall fetch_tool_call = 24;
+	SwitchModeToolCall switch_mode_tool_call = 25;
+	GenerateImageToolCall generate_image_tool_call = 28;
+	RecordScreenToolCall record_screen_tool_call = 29;
+	ComputerUseToolCall computer_use_tool_call = 30;
+	WriteShellStdinToolCall write_shell_stdin_tool_call = 31;
+	ReflectToolCall reflect_tool_call = 32;
+	SetupVmEnvironmentToolCall setup_vm_environment_tool_call = 33;
+	TruncatedToolCall truncated_tool_call = 34;
+	StartGrindExecutionToolCall start_grind_execution_tool_call = 35;
+	StartGrindPlanningToolCall start_grind_planning_tool_call = 36;
+	WebFetchToolCall web_fetch_tool_call = 37;
+	ReportBugfixResultsToolCall report_bugfix_results_tool_call = 38;
+	AiAttributionToolCall ai_attribution_tool_call = 39;
+	PrManagementToolCall pr_management_tool_call = 40;
+	McpAuthToolCall mcp_auth_tool_call = 41;
+	AwaitToolCall await_tool_call = 42;
+	BlameByFilePathToolCall blame_by_file_path_tool_call = 43;
+	GetMcpToolsToolCall get_mcp_tools_tool_call = 44;
+	ReportBugToolCall report_bug_tool_call = 45;
+	SetActiveBranchToolCall set_active_branch_tool_call = 46;
+	CommunicateUpdateToolCall communicate_update_tool_call = 48;
+	SendFinalSummaryToolCall send_final_summary_tool_call = 49;
+	UpdatePrCodeTourToolCall update_pr_code_tour_tool_call = 50;
+	ReplaceEnvToolCall replace_env_tool_call = 51;
+	EditPrLabelsToolCall edit_pr_labels_tool_call = 52;
+	RecordCiInvestigationFindingsToolCall record_ci_investigation_findings_tool_call = 53;
+	SendMessageToolCall send_message_tool_call = 55;
+	SendToUserToolCall send_to_user_tool_call = 58;
+	repeated HookAdditionalContext hook_additional_contexts = 54;
+}
+
+message ThinkingMessage { // agent.v1.ThinkingMessage
+	string text = 1;
+	uint32 duration_ms = 2;
+}
+
+message ConversationStep { // agent.v1.ConversationStep
+	AssistantMessage assistant_message = 1;
+	ToolCall tool_call = 2;
+	ThinkingMessage thinking_message = 3;
+}
+
+message TaskSuccess { // agent.v1.TaskSuccess
+	repeated ConversationStep conversation_steps = 1;
+	optional string agent_id = 2;
+	bool is_background = 3;
+	optional uint64 duration_ms = 4;
+	optional string result_suffix = 5;
+	SubagentBackgroundReason background_reason = 6;
+	optional string transcript_path = 7;
+}
+
+message TaskError { // agent.v1.TaskError
+	string error = 1;
+}
+
+message TaskResult { // agent.v1.TaskResult
+	TaskSuccess success = 1;
+	TaskError error = 2;
+}
+
+message InterruptedPendingToolCallResolution { // agent.v1.InterruptedPendingToolCallResolution
+	string tool_call_id = 1;
+	ShellResult shell_result = 2;
+	TaskResult task_result = 3;
+}
+
+message InterruptedPendingToolCallResolutions { // agent.v1.InterruptedPendingToolCallResolutions
+	repeated InterruptedPendingToolCallResolution resolutions = 1;
+}
+
+message ConversationHistoryTextContent { // agent.v1.ConversationHistoryTextContent
+	string text = 1;
+}
+
+message ConversationHistoryImageContent { // agent.v1.ConversationHistoryImageContent
+	string data = 1;
+	optional string mime_type = 2;
+}
+
+message ConversationHistoryUserContent { // agent.v1.ConversationHistoryUserContent
+	ConversationHistoryTextContent text = 1;
+	ConversationHistoryImageContent image = 2;
+}
+
+message ConversationHistoryUserMessage { // agent.v1.ConversationHistoryUserMessage
+	repeated ConversationHistoryUserContent content = 1;
+}
+
+message ConversationHistoryReasoningContent { // agent.v1.ConversationHistoryReasoningContent
+	string text = 1;
+	optional string signature = 2;
+}
+
+message ConversationHistoryRedactedReasoningContent { // agent.v1.ConversationHistoryRedactedReasoningContent
+	string data = 1;
+}
+
+message ConversationHistoryToolCall { // agent.v1.ConversationHistoryToolCall
+	string tool_call_id = 1;
+	string tool_name = 2;
+	string args_json = 3;
+}
+
+message ConversationHistoryAssistantContent { // agent.v1.ConversationHistoryAssistantContent
+	ConversationHistoryTextContent text = 1;
+	ConversationHistoryReasoningContent reasoning = 2;
+	ConversationHistoryRedactedReasoningContent redacted_reasoning = 3;
+	ConversationHistoryToolCall tool_call = 4;
+}
+
+message ConversationHistoryAssistantMessage { // agent.v1.ConversationHistoryAssistantMessage
+	repeated ConversationHistoryAssistantContent content = 1;
+}
+
+message ConversationHistoryToolResultContent { // agent.v1.ConversationHistoryToolResultContent
+	ConversationHistoryTextContent text = 1;
+	ConversationHistoryImageContent image = 2;
+}
+
+message ConversationHistoryToolMessage { // agent.v1.ConversationHistoryToolMessage
+	string tool_call_id = 1;
+	string tool_name = 2;
+	repeated ConversationHistoryToolResultContent content = 3;
+	optional bool is_error = 4;
+	repeated HookAdditionalContext hook_additional_contexts = 5;
+}
+
+message ConversationHistoryMessage { // agent.v1.ConversationHistoryMessage
+	ConversationHistoryUserMessage user = 1;
+	ConversationHistoryAssistantMessage assistant = 2;
+	ConversationHistoryToolMessage tool = 3;
+}
+
+message ConversationHistory { // agent.v1.ConversationHistory
+	repeated ConversationHistoryMessage messages = 1;
+	optional bool replace_user_info = 2;
+}
+
+message UserMessageAction { // agent.v1.UserMessageAction
+	UserMessage user_message = 1;
+	RequestContext request_context = 2;
+	optional bool send_to_interaction_listener = 3;
+	repeated UserMessage prepend_user_messages = 4;
+	optional InterruptedPendingToolCallResolutions interrupted_pending_tool_call_resolutions = 6;
+	optional ConversationHistory conversation_history = 7;
+}
+
+message ResumeAction { // agent.v1.ResumeAction
+	RequestContext request_context = 2;
+}
+
+message CancelAction { // agent.v1.CancelAction
+	string reason = 1;
+	optional InterruptedPendingToolCallResolutions interrupted_pending_tool_call_resolutions = 3;
+}
+
+message SummarizeAction { // agent.v1.SummarizeAction
+}
+
+message ShellCommand { // agent.v1.ShellCommand
+	string command = 1;
+}
+
+message ShellCommandAction { // agent.v1.ShellCommandAction
+	ShellCommand shell_command = 1;
+	string exec_id = 2;
+}
+
+message StartPlanAction { // agent.v1.StartPlanAction
+	UserMessage user_message = 1;
+	RequestContext request_context = 2;
+	bool is_spec = 3;
+}
+
+message ConversationPlan { // agent.v1.ConversationPlan
+	string plan = 1;
+}
+
+message ExecutePlanAction { // agent.v1.ExecutePlanAction
+	RequestContext request_context = 1;
+	optional ConversationPlan plan = 2;
+	optional string plan_file_uri = 3;
+	optional string plan_file_content = 4;
+	AgentMode execution_mode = 5;
+	optional string kickoff_message_id = 6;
+	optional string plan_id = 7;
+	optional string plan_file_path = 8;
+}
+
+message AsyncAskQuestionCompletionAction { // agent.v1.AsyncAskQuestionCompletionAction
+	string original_tool_call_id = 1;
+	AskQuestionArgs original_args = 2;
+	AskQuestionResult result = 3;
+}
+
+message CancelSubagentAction { // agent.v1.CancelSubagentAction
+	string subagent_id = 1;
+}
+
+message BackgroundTaskCompletion { // agent.v1.BackgroundTaskCompletion
+	string task_id = 1;
+	BackgroundTaskKind kind = 2;
+	BackgroundTaskStatus status = 3;
+	string title = 4;
+	optional string detail = 5;
+	optional string output_path = 6;
+	optional string thread_id = 7;
+	BackgroundTaskCompletionReason reason = 8;
+	optional string subagent_id = 9;
+	optional string tool_call_id = 10;
+}
+
+message BackgroundTaskCompletionAction { // agent.v1.BackgroundTaskCompletionAction
+	repeated BackgroundTaskCompletion completions = 1;
+}
+
+message BackgroundShellAction { // agent.v1.BackgroundShellAction
+	string tool_call_id = 1;
+}
+
+message BackgroundSubagentAction { // agent.v1.BackgroundSubagentAction
+	string tool_call_id = 1;
+}
+
+message ConversationAction { // agent.v1.ConversationAction
+	UserMessageAction user_message_action = 1;
+	ResumeAction resume_action = 2;
+	CancelAction cancel_action = 3;
+	SummarizeAction summarize_action = 4;
+	ShellCommandAction shell_command_action = 5;
+	StartPlanAction start_plan_action = 6;
+	ExecutePlanAction execute_plan_action = 7;
+	AsyncAskQuestionCompletionAction async_ask_question_completion_action = 8;
+	CancelSubagentAction cancel_subagent_action = 10;
+	BackgroundTaskCompletionAction background_task_completion_action = 12;
+	BackgroundShellAction background_shell_action = 13;
+	BackgroundSubagentAction background_subagent_action = 14;
+	optional string triggering_auth_id = 11;
+	optional TriggeringUserInfo triggering_user_info = 15;
+}
+
+message ThinkingDetails { // agent.v1.ThinkingDetails
+}
+
+message ApiKeyCredentials { // agent.v1.ApiKeyCredentials
+	string api_key = 1;
+	optional string base_url = 2;
+}
+
+message AzureCredentials { // agent.v1.AzureCredentials
+	string api_key = 1;
+	string base_url = 2;
+	string deployment = 3;
+}
+
+message BedrockCredentials { // agent.v1.BedrockCredentials
+	string access_key = 1;
+	string secret_key = 2;
+	string region = 3;
+	optional string session_token = 4;
+}
+
+message ModelDetails { // agent.v1.ModelDetails
+	string model_id = 1;
+	string display_model_id = 3;
+	string display_name = 4;
+	string display_name_short = 5;
+	repeated string aliases = 6;
+	optional ThinkingDetails thinking_details = 2;
+	optional bool max_mode = 7;
+	ApiKeyCredentials api_key_credentials = 8;
+	AzureCredentials azure_credentials = 9;
+	BedrockCredentials bedrock_credentials = 10;
+}
+
+message RequestedModel_ModelParameterValue { // agent.v1.RequestedModel.ModelParameterValue
+	string id = 1;
+	string value = 2;
+}
+
+message RequestedModel { // agent.v1.RequestedModel
+	string model_id = 1;
+	bool max_mode = 2;
+	repeated RequestedModel_ModelParameterValue parameters = 3;
+	ApiKeyCredentials api_key_credentials = 4;
+	AzureCredentials azure_credentials = 5;
+	BedrockCredentials bedrock_credentials = 6;
+	bool built_in_model = 7;
+	bool is_variant_string_representation = 8;
+}
+
+message McpTools { // agent.v1.McpTools
+	repeated McpToolDefinition mcp_tools = 1;
+}
+
+message PreFetchedBlob { // agent.v1.PreFetchedBlob
+	bytes id = 1;
+	bytes value = 2;
+}
+
+message SubagentModelOverride { // agent.v1.SubagentModelOverride
+	string subagent_type = 1;
+	RequestedModel model = 2;
+	bool inherit = 3;
+	bool disabled = 4;
+}
+
+message AgentRunRequest { // agent.v1.AgentRunRequest
+	ConversationStateStructure conversation_state = 1;
+	ConversationAction action = 2;
+	ModelDetails model_details = 3;
+	optional RequestedModel requested_model = 9;
+	McpTools mcp_tools = 4;
+	optional string conversation_id = 5;
+	optional McpFileSystemOptions mcp_file_system_options = 6;
+	optional SkillOptions skill_options = 7;
+	optional string custom_system_prompt = 8;
+	optional bool suggest_next_prompt = 10;
+	optional string subagent_type_name = 11;
+	optional bool exclude_workspace_context = 12;
+	optional string harness = 13;
+	repeated RequestedModel selected_subagent_models = 14;
+	repeated ModelDetails selected_subagent_model_details = 15;
+	optional string conversation_group_id = 16;
+	repeated PreFetchedBlob pre_fetched_blobs = 17;
+	optional string dev_raw_model_slug = 18;
+	optional bool client_supports_inline_images = 19;
+	repeated SubagentModelOverride subagent_model_overrides = 20;
+	optional bool can_create_cloud_subagents = 21;
+	optional bool suppress_subagent_progress_update_tool = 22;
+	optional bool client_supports_send_to_user = 23;
+}
+
+message WriteSuccess { // agent.v1.WriteSuccess
+	string path = 1;
+	int32 lines_created = 2;
+	int32 file_size = 3;
+	optional string file_content_after_write = 4;
+}
+
+message WritePermissionDenied { // agent.v1.WritePermissionDenied
+	string path = 1;
+	string directory = 2;
+	string operation = 3;
+	string error = 4;
+	bool is_readonly = 5;
+}
+
+message WriteNoSpace { // agent.v1.WriteNoSpace
+	string path = 1;
+}
+
+message WriteError { // agent.v1.WriteError
+	string path = 1;
+	string error = 2;
+}
+
+message WriteRejected { // agent.v1.WriteRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message WriteResult { // agent.v1.WriteResult
+	WriteSuccess success = 1;
+	WritePermissionDenied permission_denied = 3;
+	WriteNoSpace no_space = 4;
+	WriteError error = 5;
+	WriteRejected rejected = 6;
+}
+
+message ReadSuccess { // agent.v1.ReadSuccess
+	string path = 1;
+	string content = 2;
+	bytes data = 5;
+	int32 total_lines = 3;
+	int64 file_size = 4;
+	bool truncated = 6;
+	optional bytes output_blob_id = 7;
+	bool range_applied = 8;
+}
+
+message ReadError { // agent.v1.ReadError
+	string path = 1;
+	string error = 2;
+}
+
+message ReadRejected { // agent.v1.ReadRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message ReadFileNotFound { // agent.v1.ReadFileNotFound
+	string path = 1;
+}
+
+message ReadPermissionDenied { // agent.v1.ReadPermissionDenied
+	string path = 1;
+}
+
+message ReadInvalidFile { // agent.v1.ReadInvalidFile
+	string path = 1;
+	string reason = 2;
+}
+
+message ReadResult { // agent.v1.ReadResult
+	ReadSuccess success = 1;
+	ReadError error = 2;
+	ReadRejected rejected = 3;
+	ReadFileNotFound file_not_found = 4;
+	ReadPermissionDenied permission_denied = 5;
+	ReadInvalidFile invalid_file = 6;
+}
+
+message Diagnostic { // agent.v1.Diagnostic
+	DiagnosticSeverity severity = 1;
+	Range range = 2;
+	string message = 3;
+	string source = 4;
+	string code = 5;
+	bool is_stale = 6;
+}
+
+message DiagnosticsSuccess { // agent.v1.DiagnosticsSuccess
+	string path = 1;
+	repeated Diagnostic diagnostics = 2;
+	int32 total_diagnostics = 3;
+}
+
+message DiagnosticsError { // agent.v1.DiagnosticsError
+	string path = 1;
+	string error = 2;
+}
+
+message DiagnosticsRejected { // agent.v1.DiagnosticsRejected
+	string path = 1;
+	string reason = 2;
+}
+
+message DiagnosticsFileNotFound { // agent.v1.DiagnosticsFileNotFound
+	string path = 1;
+}
+
+message DiagnosticsPermissionDenied { // agent.v1.DiagnosticsPermissionDenied
+	string path = 1;
+}
+
+message DiagnosticsResult { // agent.v1.DiagnosticsResult
+	DiagnosticsSuccess success = 1;
+	DiagnosticsError error = 2;
+	DiagnosticsRejected rejected = 3;
+	DiagnosticsFileNotFound file_not_found = 4;
+	DiagnosticsPermissionDenied permission_denied = 5;
+}
+
+message RequestContextSuccess { // agent.v1.RequestContextSuccess
+	RequestContext request_context = 1;
+}
+
+message RequestContextError { // agent.v1.RequestContextError
+	string error = 1;
+}
+
+message RequestContextRejected { // agent.v1.RequestContextRejected
+	string reason = 1;
+}
+
+message RequestContextResult { // agent.v1.RequestContextResult
+	RequestContextSuccess success = 1;
+	RequestContextError error = 2;
+	RequestContextRejected rejected = 3;
+}
+
+message McpError { // agent.v1.McpError
+	string error = 1;
+}
+
+message McpToolNotFound { // agent.v1.McpToolNotFound
+	string name = 1;
+	repeated string available_tools = 2;
+}
+
+message McpServerNotFound { // agent.v1.McpServerNotFound
+	string name = 1;
+	repeated string available_servers = 2;
+}
+
+message McpApproved { // agent.v1.McpApproved
+}
+
+message McpResult { // agent.v1.McpResult
+	McpSuccess success = 1;
+	McpError error = 2;
+	McpRejected rejected = 3;
+	McpPermissionDenied permission_denied = 4;
+	McpToolNotFound tool_not_found = 5;
+	McpServerNotFound server_not_found = 6;
+	McpApproved approved = 7;
+}
+
+message ShellStreamStdout { // agent.v1.ShellStreamStdout
+	string data = 1;
+}
+
+message ShellStreamStderr { // agent.v1.ShellStreamStderr
+	string data = 1;
+}
+
+message ShellStreamExit { // agent.v1.ShellStreamExit
+	uint32 code = 1;
+	string cwd = 2;
+	optional OutputLocation output_location = 3;
+	bool aborted = 4;
+	optional ShellAbortReason abort_reason = 5;
+	optional int32 local_execution_time_ms = 6;
+}
+
+message ShellStreamStart { // agent.v1.ShellStreamStart
+	optional SandboxPolicy sandbox_policy = 1;
+}
+
+message ShellStreamBackgrounded { // agent.v1.ShellStreamBackgrounded
+	uint32 shell_id = 1;
+	string command = 2;
+	string working_directory = 3;
+	optional uint32 pid = 4;
+	optional int32 ms_to_wait = 5;
+	optional ShellBackgroundReason reason = 6;
+}
+
+message ShellStreamHookContext { // agent.v1.ShellStreamHookContext
+	repeated HookAdditionalContext hook_additional_contexts = 1;
+}
+
+message ShellStream { // agent.v1.ShellStream
+	ShellStreamStdout stdout = 1;
+	ShellStreamStderr stderr = 2;
+	ShellStreamExit exit = 3;
+	ShellStreamStart start = 4;
+	ShellRejected rejected = 5;
+	ShellPermissionDenied permission_denied = 6;
+	ShellStreamBackgrounded backgrounded = 7;
+	ShellStreamHookContext hook_context = 8;
+}
+
+message BackgroundShellSpawnSuccess { // agent.v1.BackgroundShellSpawnSuccess
+	uint32 shell_id = 1;
+	string command = 2;
+	string working_directory = 3;
+	optional uint32 pid = 4;
+}
+
+message BackgroundShellSpawnError { // agent.v1.BackgroundShellSpawnError
+	string command = 1;
+	string working_directory = 2;
+	string error = 3;
+}
+
+message BackgroundShellSpawnResult { // agent.v1.BackgroundShellSpawnResult
+	BackgroundShellSpawnSuccess success = 1;
+	BackgroundShellSpawnError error = 2;
+	ShellRejected rejected = 3;
+	ShellPermissionDenied permission_denied = 4;
+}
+
+message McpStateServer { // agent.v1.McpStateServer
+	string server_name = 1;
+	string server_identifier = 2;
+	optional string plugin = 3;
+	optional string marketplace = 4;
+	repeated McpToolDefinition tools = 5;
+	repeated McpInstructions instructions = 6;
+	optional string status = 7;
+}
+
+message McpStateSuccess { // agent.v1.McpStateSuccess
+	repeated McpStateServer servers = 1;
+}
+
+message McpStateError { // agent.v1.McpStateError
+	string error = 1;
+}
+
+message McpStateRejected { // agent.v1.McpStateRejected
+	string reason = 1;
+}
+
+message McpStateExecResult { // agent.v1.McpStateExecResult
+	McpStateSuccess success = 1;
+	McpStateError error = 2;
+	McpStateRejected rejected = 3;
+}
+
+message PreCompactRequestResponse { // agent.v1.PreCompactRequestResponse
+	optional string user_message = 1;
+}
+
+message SubagentStartRequestResponse { // agent.v1.SubagentStartRequestResponse
+	optional string permission = 1;
+	optional string user_message = 2;
+	optional string additional_context = 3;
+}
+
+message SubagentStopRequestResponse { // agent.v1.SubagentStopRequestResponse
+	optional string followup_message = 1;
+	optional string additional_context = 2;
+}
+
+message PreToolUseRequestResponse { // agent.v1.PreToolUseRequestResponse
+	optional string permission = 1;
+	optional string user_message = 2;
+	optional string agent_message = 3;
+	optional string updated_input = 4;
+	optional string additional_context = 5;
+}
+
+message PostToolUseRequestResponse { // agent.v1.PostToolUseRequestResponse
+	optional string additional_context = 1;
+}
+
+message PostToolUseFailureRequestResponse { // agent.v1.PostToolUseFailureRequestResponse
+	optional string additional_context = 1;
+}
+
+message ExecuteHookResponse { // agent.v1.ExecuteHookResponse
+	PreCompactRequestResponse pre_compact = 1;
+	SubagentStartRequestResponse subagent_start = 2;
+	SubagentStopRequestResponse subagent_stop = 3;
+	PreToolUseRequestResponse pre_tool_use = 4;
+	PostToolUseRequestResponse post_tool_use = 5;
+	PostToolUseFailureRequestResponse post_tool_use_failure = 6;
+}
+
+message ExecuteHookResult { // agent.v1.ExecuteHookResult
+	ExecuteHookResponse response = 1;
+}
+
+message SubagentSuccess { // agent.v1.SubagentSuccess
+	string agent_id = 1;
+	optional string final_message = 2;
+	int32 tool_call_count = 3;
+	SubagentBackgroundReason background_reason = 4;
+	optional string transcript_path = 5;
+}
+
+message SubagentError { // agent.v1.SubagentError
+	optional string agent_id = 1;
+	string error = 2;
+}
+
+message SubagentResult { // agent.v1.SubagentResult
+	SubagentSuccess success = 1;
+	SubagentError error = 2;
+}
+
+message ForceBackgroundShellResult { // agent.v1.ForceBackgroundShellResult
+	ForceBackgroundShellStatus status = 1;
+	optional ShellResult shell_result = 2;
+}
+
+message ForceBackgroundSubagentResult { // agent.v1.ForceBackgroundSubagentResult
+	ForceBackgroundSubagentStatus status = 1;
+}
+
+message SubagentAwaitComplete { // agent.v1.SubagentAwaitComplete
+	string agent_id = 1;
+	optional string transcript_path = 2;
+	int32 tool_call_count = 3;
+	optional string final_message = 4;
+}
+
+message SubagentAwaitStillRunning { // agent.v1.SubagentAwaitStillRunning
+	string agent_id = 1;
+	optional string transcript_path = 2;
+}
+
+message SubagentAwaitNotFound { // agent.v1.SubagentAwaitNotFound
+	string agent_id = 1;
+}
+
+message SubagentAwaitError { // agent.v1.SubagentAwaitError
+	optional string agent_id = 1;
+	string error = 2;
+}
+
+message SubagentAwaitResult { // agent.v1.SubagentAwaitResult
+	SubagentAwaitComplete complete = 1;
+	SubagentAwaitStillRunning still_running = 2;
+	SubagentAwaitNotFound not_found = 3;
+	SubagentAwaitError error = 4;
+}
+
+message SmartModeClassifierSuccess { // agent.v1.SmartModeClassifierSuccess
+	SmartModeClassifierDecision decision = 1;
+	optional string block_reason = 2;
+}
+
+message SmartModeClassifierError { // agent.v1.SmartModeClassifierError
+	string error = 1;
+}
+
+message SmartModeClassifierResult { // agent.v1.SmartModeClassifierResult
+	SmartModeClassifierSuccess success = 1;
+	SmartModeClassifierError error = 2;
+}
+
+message CanvasDiagnosticsSuccess { // agent.v1.CanvasDiagnosticsSuccess
+	string path = 1;
+	repeated Diagnostic diagnostics = 2;
+}
+
+message CanvasDiagnosticsError { // agent.v1.CanvasDiagnosticsError
+	string path = 1;
+	string error = 2;
+}
+
+message CanvasDiagnosticsResult { // agent.v1.CanvasDiagnosticsResult
+	CanvasDiagnosticsSuccess success = 1;
+	CanvasDiagnosticsError error = 2;
+}
+
+message ShellAllowlistPrecheckResult { // agent.v1.ShellAllowlistPrecheckResult
+	bool allowlisted = 1;
+}
+
+message McpAllowlistPrecheckResult { // agent.v1.McpAllowlistPrecheckResult
+	bool allowlisted = 1;
+}
+
+message WebFetchAllowlistPrecheckResult { // agent.v1.WebFetchAllowlistPrecheckResult
+	bool allowlisted = 1;
+}
+
+message AiserverV1_FileDiff_Chunk { // aiserver.v1.FileDiff.Chunk
+	string content = 1;
+	repeated string lines = 2;
+	int32 old_start = 3;
+	int32 old_lines = 4;
+	int32 new_start = 5;
+	int32 new_lines = 6;
+}
+
+message AiserverV1_FileDiff { // aiserver.v1.FileDiff
+	int32 added = 4;
+	int32 removed = 5;
+	string from = 1;
+	string to = 2;
+	repeated AiserverV1_FileDiff_Chunk chunks = 3;
+	optional string before_file_contents = 6;
+	optional string after_file_contents = 7;
+	optional bool is_generated = 8;
+}
+
+enum AiserverV1_GitDiff_DiffType { // aiserver.v1.GitDiff.DiffType
+	AISERVER_V1_GIT_DIFF_DIFF_TYPE_DIFF_TYPE_UNSPECIFIED = 0;
+	AISERVER_V1_GIT_DIFF_DIFF_TYPE_DIFF_TYPE_DIFF_TO_HEAD = 1;
+	AISERVER_V1_GIT_DIFF_DIFF_TYPE_DIFF_TYPE_DIFF_FROM_BRANCH_TO_MAIN = 2;
+}
+
+message AiserverV1_GitDiff { // aiserver.v1.GitDiff
+	repeated AiserverV1_FileDiff diffs = 1;
+	AiserverV1_GitDiff_DiffType diff_type = 2;
+}
+
+message AiserverV1_GetDiffResponse_SubmoduleDiff { // aiserver.v1.GetDiffResponse.SubmoduleDiff
+	string relative_path = 1;
+	AiserverV1_GitDiff diff = 2;
+	bool errored = 3;
+}
+
+message AiserverV1_GetDiffResponse { // aiserver.v1.GetDiffResponse
+	AiserverV1_GitDiff diff = 1;
+	repeated AiserverV1_GetDiffResponse_SubmoduleDiff submodule_diffs = 2;
+	optional string patch_id = 3;
+	optional string head_sha = 4;
+	optional bool has_uncommitted_changes = 5;
+}
+
+message ExecClientMessage { // agent.v1.ExecClientMessage
+	uint32 id = 1;
+	string exec_id = 15;
+	optional int32 local_execution_time_ms = 39;
+	repeated HookAdditionalContext hook_additional_contexts = 45;
+	ShellResult shell_result = 2;
+	WriteResult write_result = 3;
+	DeleteResult delete_result = 4;
+	GrepResult grep_result = 5;
+	ReadResult read_result = 7;
+	ReadResult redacted_read_result = 29;
+	LsResult ls_result = 8;
+	DiagnosticsResult diagnostics_result = 9;
+	RequestContextResult request_context_result = 10;
+	McpResult mcp_result = 11;
+	ShellStream shell_stream = 14;
+	BackgroundShellSpawnResult background_shell_spawn_result = 16;
+	ListMcpResourcesExecResult list_mcp_resources_exec_result = 17;
+	ReadMcpResourceExecResult read_mcp_resource_exec_result = 18;
+	McpStateExecResult mcp_state_exec_result = 36;
+	FetchResult fetch_result = 20;
+	RecordScreenResult record_screen_result = 21;
+	ComputerUseResult computer_use_result = 22;
+	WriteShellStdinResult write_shell_stdin_result = 23;
+	ExecuteHookResult execute_hook_result = 27;
+	SubagentResult subagent_result = 28;
+	ForceBackgroundShellResult force_background_shell_result = 30;
+	ForceBackgroundSubagentResult force_background_subagent_result = 31;
+	SubagentAwaitResult subagent_await_result = 37;
+	SmartModeClassifierResult smart_mode_classifier_result = 38;
+	CanvasDiagnosticsResult canvas_diagnostics_result = 40;
+	ShellAllowlistPrecheckResult shell_allowlist_precheck_result = 41;
+	McpAllowlistPrecheckResult mcp_allowlist_precheck_result = 42;
+	WebFetchAllowlistPrecheckResult web_fetch_allowlist_precheck_result = 43;
+	AiserverV1_GetDiffResponse git_diff_response = 44;
+}
+
+message ExecClientStreamClose { // agent.v1.ExecClientStreamClose
+	uint32 id = 1;
+}
+
+message ExecClientThrow { // agent.v1.ExecClientThrow
+	uint32 id = 1;
+	string error = 2;
+	optional string stack_trace = 3;
+	optional string error_code = 4;
+}
+
+message ExecClientHeartbeat { // agent.v1.ExecClientHeartbeat
+	uint32 id = 1;
+}
+
+message ExecClientControlMessage { // agent.v1.ExecClientControlMessage
+	ExecClientStreamClose stream_close = 1;
+	ExecClientThrow throw = 2;
+	ExecClientHeartbeat heartbeat = 3;
+}
+
+message GetBlobResult { // agent.v1.GetBlobResult
+	optional bytes blob_data = 1;
+}
+
+message Error { // agent.v1.Error
+	string message = 1;
+}
+
+message SetBlobResult { // agent.v1.SetBlobResult
+	optional Error error = 1;
+}
+
+message KvClientMessage { // agent.v1.KvClientMessage
+	uint32 id = 1;
+	GetBlobResult get_blob_result = 2;
+	SetBlobResult set_blob_result = 3;
+}
+
+message WebSearchRequestResponse_Approved { // agent.v1.WebSearchRequestResponse.Approved
+}
+
+message WebSearchRequestResponse_Rejected { // agent.v1.WebSearchRequestResponse.Rejected
+	string reason = 1;
+}
+
+message WebSearchRequestResponse { // agent.v1.WebSearchRequestResponse
+	WebSearchRequestResponse_Approved approved = 1;
+	WebSearchRequestResponse_Rejected rejected = 2;
+}
+
+message AskQuestionInteractionResponse { // agent.v1.AskQuestionInteractionResponse
+	AskQuestionResult result = 1;
+}
+
+message SwitchModeRequestResponse_Approved { // agent.v1.SwitchModeRequestResponse.Approved
+}
+
+message SwitchModeRequestResponse_Rejected { // agent.v1.SwitchModeRequestResponse.Rejected
+	string reason = 1;
+}
+
+message SwitchModeRequestResponse { // agent.v1.SwitchModeRequestResponse
+	SwitchModeRequestResponse_Approved approved = 1;
+	SwitchModeRequestResponse_Rejected rejected = 2;
+}
+
+message CreatePlanRequestResponse { // agent.v1.CreatePlanRequestResponse
+	CreatePlanResult result = 1;
+}
+
+message WebFetchRequestResponse_Approved { // agent.v1.WebFetchRequestResponse.Approved
+}
+
+message WebFetchRequestResponse_Rejected { // agent.v1.WebFetchRequestResponse.Rejected
+	string reason = 1;
+}
+
+message WebFetchRequestResponse { // agent.v1.WebFetchRequestResponse
+	WebFetchRequestResponse_Approved approved = 1;
+	WebFetchRequestResponse_Rejected rejected = 2;
+}
+
+message McpAuthRequestResponse_Approved { // agent.v1.McpAuthRequestResponse.Approved
+}
+
+message McpAuthRequestResponse_Rejected { // agent.v1.McpAuthRequestResponse.Rejected
+	string reason = 1;
+}
+
+message McpAuthRequestResponse { // agent.v1.McpAuthRequestResponse
+	McpAuthRequestResponse_Approved approved = 1;
+	McpAuthRequestResponse_Rejected rejected = 2;
+}
+
+message GenerateImageRequestResponse_Approved { // agent.v1.GenerateImageRequestResponse.Approved
+	string description = 1;
+}
+
+message GenerateImageRequestResponse_Rejected { // agent.v1.GenerateImageRequestResponse.Rejected
+	string reason = 1;
+}
+
+message GenerateImageRequestResponse { // agent.v1.GenerateImageRequestResponse
+	GenerateImageRequestResponse_Approved approved = 1;
+	GenerateImageRequestResponse_Rejected rejected = 2;
+}
+
+message InteractionResponse { // agent.v1.InteractionResponse
+	uint32 id = 1;
+	WebSearchRequestResponse web_search_request_response = 2;
+	AskQuestionInteractionResponse ask_question_interaction_response = 3;
+	SwitchModeRequestResponse switch_mode_request_response = 4;
+	CreatePlanRequestResponse create_plan_request_response = 7;
+	SetupVmEnvironmentResult setup_vm_environment_result = 8;
+	WebFetchRequestResponse web_fetch_request_response = 9;
+	PrManagementResult pr_management_result = 10;
+	McpAuthRequestResponse mcp_auth_request_response = 11;
+	GenerateImageRequestResponse generate_image_request_response = 12;
+	ReplaceEnvResult replace_env_result = 13;
+}
+
+message ClientHeartbeat { // agent.v1.ClientHeartbeat
+}
+
+message PrewarmRequest { // agent.v1.PrewarmRequest
+	ModelDetails model_details = 1;
+	optional RequestedModel requested_model = 9;
+	optional string conversation_id = 2;
+	ConversationStateStructure conversation_state = 3;
+	McpTools mcp_tools = 4;
+	optional McpFileSystemOptions mcp_file_system_options = 5;
+	optional string best_of_n_group_id = 6;
+	optional bool try_use_best_of_n_promotion = 7;
+	optional string custom_system_prompt = 8;
+	optional bool suggest_next_prompt = 10;
+	optional string subagent_type_name = 11;
+	optional bool exclude_workspace_context = 12;
+	optional string harness = 13;
+	repeated RequestedModel selected_subagent_models = 14;
+	repeated ModelDetails selected_subagent_model_details = 15;
+	optional string conversation_group_id = 16;
+	repeated PreFetchedBlob pre_fetched_blobs = 17;
+	optional bool client_supports_inline_images = 18;
+	repeated SubagentModelOverride subagent_model_overrides = 19;
+	optional bool can_create_cloud_subagents = 20;
+	optional bool suppress_subagent_progress_update_tool = 21;
+	optional bool client_supports_send_to_user = 22;
+}
+
+message AgentClientMessage { // agent.v1.AgentClientMessage
+	AgentRunRequest run_request = 1;
+	ExecClientMessage exec_client_message = 2;
+	ExecClientControlMessage exec_client_control_message = 5;
+	KvClientMessage kv_client_message = 3;
+	ConversationAction conversation_action = 4;
+	InteractionResponse interaction_response = 6;
+	ClientHeartbeat client_heartbeat = 7;
+	PrewarmRequest prewarm_request = 8;
+}
+
+message TextDeltaUpdate { // agent.v1.TextDeltaUpdate
+	string text = 1;
+}
+
+message PartialToolCallUpdate { // agent.v1.PartialToolCallUpdate
+	string call_id = 1;
+	ToolCall tool_call = 2;
+	string args_text_delta = 3;
+	string model_call_id = 4;
+}
+
+message ShellToolCallStdoutDelta { // agent.v1.ShellToolCallStdoutDelta
+	string content = 1;
+}
+
+message ShellToolCallStderrDelta { // agent.v1.ShellToolCallStderrDelta
+	string content = 1;
+}
+
+message ShellToolCallDelta { // agent.v1.ShellToolCallDelta
+	ShellToolCallStdoutDelta stdout = 1;
+	ShellToolCallStderrDelta stderr = 2;
+}
+
+message TaskToolCallDelta { // agent.v1.TaskToolCallDelta
+	InteractionUpdate interaction_update = 1;
+}
+
+message EditToolCallDelta { // agent.v1.EditToolCallDelta
+	string stream_content_delta = 1;
+}
+
+message ReplaceEnvToolCallDelta { // agent.v1.ReplaceEnvToolCallDelta
+	string associated_pod_key = 1;
+}
+
+message ToolCallDelta { // agent.v1.ToolCallDelta
+	ShellToolCallDelta shell_tool_call_delta = 1;
+	TaskToolCallDelta task_tool_call_delta = 2;
+	EditToolCallDelta edit_tool_call_delta = 3;
+	ReplaceEnvToolCallDelta replace_env_tool_call_delta = 4;
+}
+
+message ToolCallDeltaUpdate { // agent.v1.ToolCallDeltaUpdate
+	string call_id = 1;
+	ToolCallDelta tool_call_delta = 2;
+	string model_call_id = 3;
+}
+
+message ToolCallStartedUpdate { // agent.v1.ToolCallStartedUpdate
+	string call_id = 1;
+	ToolCall tool_call = 2;
+	string model_call_id = 3;
+}
+
+message ToolCallCompletedUpdate { // agent.v1.ToolCallCompletedUpdate
+	string call_id = 1;
+	ToolCall tool_call = 2;
+	string model_call_id = 3;
+}
+
+message ThinkingDeltaUpdate { // agent.v1.ThinkingDeltaUpdate
+	string text = 1;
+	optional ThinkingStyle thinking_style = 2;
+}
+
+message ThinkingCompletedUpdate { // agent.v1.ThinkingCompletedUpdate
+	int32 thinking_duration_ms = 1;
+}
+
+message UserMessageAppendedUpdate { // agent.v1.UserMessageAppendedUpdate
+	UserMessage user_message = 1;
+}
+
+message TokenDeltaUpdate { // agent.v1.TokenDeltaUpdate
+	int32 tokens = 1;
+}
+
+message SummaryUpdate { // agent.v1.SummaryUpdate
+	string summary = 1;
+}
+
+message SummaryStartedUpdate { // agent.v1.SummaryStartedUpdate
+}
+
+message SummaryCompletedUpdate { // agent.v1.SummaryCompletedUpdate
+	optional string hook_message = 1;
+}
+
+message ShellOutputDeltaUpdate { // agent.v1.ShellOutputDeltaUpdate
+	ShellStreamStdout stdout = 1;
+	ShellStreamStderr stderr = 2;
+	ShellStreamExit exit = 3;
+	ShellStreamStart start = 4;
+}
+
+message HeartbeatUpdate { // agent.v1.HeartbeatUpdate
+}
+
+message TurnEndedUpdate { // agent.v1.TurnEndedUpdate
+	optional int64 input_tokens = 1;
+	optional int64 output_tokens = 2;
+	optional int64 cache_read_tokens = 3;
+	optional int64 cache_write_tokens = 4;
+}
+
+message StepStartedUpdate { // agent.v1.StepStartedUpdate
+	uint64 step_id = 1;
+}
+
+message StepCompletedUpdate { // agent.v1.StepCompletedUpdate
+	uint64 step_id = 1;
+	int64 step_duration_ms = 2;
+}
+
+message PromptSuggestionUpdate { // agent.v1.PromptSuggestionUpdate
+	string suggestion = 1;
+}
+
+message PostRequestPromptUpdate { // agent.v1.PostRequestPromptUpdate
+	string title = 1;
+	string message = 2;
+	string button_label = 3;
+	string button_url = 4;
+}
+
+message ActiveBranchChange { // agent.v1.ActiveBranchChange
+	string path = 1;
+	string branch_name = 2;
+}
+
+message FeedbackRequestCategory { // agent.v1.FeedbackRequestCategory
+	string id = 1;
+	string label = 2;
+}
+
+message FeedbackRequestCategoryGroup { // agent.v1.FeedbackRequestCategoryGroup
+	string id = 1;
+	string prompt = 2;
+	repeated FeedbackRequestCategory categories = 3;
+}
+
+message FeedbackRequestUpdate { // agent.v1.FeedbackRequestUpdate
+	string request_id = 1;
+	optional string canonical_model_name = 2;
+	repeated FeedbackRequestCategory categories = 3;
+	repeated FeedbackRequestCategoryGroup category_groups = 4;
+	bool show_form_immediately = 5;
+	optional string title = 6;
+	optional string negative_title = 7;
+	optional string comment_placeholder = 8;
+}
+
+message InteractionUpdate { // agent.v1.InteractionUpdate
+	TextDeltaUpdate text_delta = 1;
+	PartialToolCallUpdate partial_tool_call = 7;
+	ToolCallDeltaUpdate tool_call_delta = 15;
+	ToolCallStartedUpdate tool_call_started = 2;
+	ToolCallCompletedUpdate tool_call_completed = 3;
+	ThinkingDeltaUpdate thinking_delta = 4;
+	ThinkingCompletedUpdate thinking_completed = 5;
+	UserMessageAppendedUpdate user_message_appended = 6;
+	TokenDeltaUpdate token_delta = 8;
+	SummaryUpdate summary = 9;
+	SummaryStartedUpdate summary_started = 10;
+	SummaryCompletedUpdate summary_completed = 11;
+	ShellOutputDeltaUpdate shell_output_delta = 12;
+	HeartbeatUpdate heartbeat = 13;
+	TurnEndedUpdate turn_ended = 14;
+	StepStartedUpdate step_started = 16;
+	StepCompletedUpdate step_completed = 17;
+	PromptSuggestionUpdate prompt_suggestion = 18;
+	PostRequestPromptUpdate post_request_prompt = 19;
+	ActiveBranchChange active_branch_change = 20;
+	FeedbackRequestUpdate feedback_request = 21;
+}
+
+message WriteArgs { // agent.v1.WriteArgs
+	string path = 1;
+	string file_text = 2;
+	string tool_call_id = 3;
+	bool return_file_content_after_write = 4;
+	bytes file_bytes = 5;
+	optional string encoding_hint = 6;
+}
+
+message ReadArgs { // agent.v1.ReadArgs
+	string path = 1;
+	string tool_call_id = 2;
+	optional int32 offset = 4;
+	optional uint32 limit = 5;
+	optional string encoding_hint = 6;
+}
+
+message DiagnosticsArgs { // agent.v1.DiagnosticsArgs
+	string path = 1;
+	string tool_call_id = 2;
+}
+
+message RequestContextArgs { // agent.v1.RequestContextArgs
+	optional string notes_session_id = 2;
+	optional string workspace_id = 3;
+	optional string read_only_pinned_tree_sha = 4;
+	optional string read_only_plugin_cache_root = 5;
+}
+
+message BackgroundShellSpawnArgs { // agent.v1.BackgroundShellSpawnArgs
+	string command = 1;
+	string working_directory = 2;
+	string tool_call_id = 3;
+	ShellCommandParsingResult parsing_result = 4;
+	optional SandboxPolicy sandbox_policy = 5;
+	bool enable_write_shell_stdin_tool = 6;
+	optional string description = 7;
+	optional CommandClassifierResult classifier_result = 8;
+	optional ShellOutputNotificationConfig output_notification = 9;
+	optional SmartModeApproval smart_mode_approval = 10;
+	optional ShellHookApprovalRequirement hook_approval_requirement = 11;
+	bool skip_approval = 12;
+	optional string conversation_id = 13;
+}
+
+message McpStateExecArgs { // agent.v1.McpStateExecArgs
+}
+
+message PreCompactRequestQuery { // agent.v1.PreCompactRequestQuery
+	string trigger = 1;
+	double context_usage_percent = 2;
+	int64 context_tokens = 3;
+	int64 context_window_size = 4;
+	int32 message_count = 5;
+	int32 messages_to_compact = 6;
+	bool is_first_compaction = 7;
+	optional string conversation_id = 8;
+	optional string generation_id = 9;
+	optional string model = 10;
+	optional string model_id = 11;
+	repeated RequestedModel_ModelParameterValue model_params = 12;
+}
+
+message SubagentStartRequestQuery { // agent.v1.SubagentStartRequestQuery
+	string subagent_id = 1;
+	string subagent_type = 2;
+	string task = 3;
+	string parent_conversation_id = 4;
+	optional string tool_call_id = 5;
+	optional string subagent_model = 6;
+	bool is_parallel_worker = 7;
+	optional string git_branch = 8;
+	optional string conversation_id = 9;
+	optional string generation_id = 10;
+	optional string model = 11;
+	optional string model_id = 12;
+	repeated RequestedModel_ModelParameterValue model_params = 13;
+}
+
+message SubagentStopRequestQuery { // agent.v1.SubagentStopRequestQuery
+	string subagent_id = 1;
+	string subagent_type = 2;
+	string status = 3;
+	int64 duration_ms = 4;
+	optional string summary = 5;
+	string parent_conversation_id = 6;
+	int32 message_count = 7;
+	int32 tool_call_count = 8;
+	optional string error_message = 9;
+	repeated string modified_files = 10;
+	optional string git_branch = 11;
+	optional string conversation_id = 12;
+	optional string generation_id = 13;
+	optional string model = 14;
+	int32 loop_count = 15;
+	optional string task = 16;
+	optional string description = 17;
+	optional string model_id = 18;
+	repeated RequestedModel_ModelParameterValue model_params = 19;
+}
+
+message PreToolUseRequestQuery { // agent.v1.PreToolUseRequestQuery
+	string tool_name = 1;
+	GoogleProtobuf_Struct tool_input = 2;
+	string tool_use_id = 3;
+	optional string cwd = 4;
+	optional string conversation_id = 5;
+	optional string generation_id = 6;
+	optional string model = 7;
+	optional string model_id = 8;
+	repeated RequestedModel_ModelParameterValue model_params = 9;
+}
+
+message PostToolUseRequestQuery { // agent.v1.PostToolUseRequestQuery
+	string tool_name = 1;
+	GoogleProtobuf_Struct tool_input = 2;
+	string tool_output = 3;
+	int64 duration_ms = 4;
+	string tool_use_id = 5;
+	optional string cwd = 6;
+	optional string conversation_id = 7;
+	optional string generation_id = 8;
+	optional string model = 9;
+	optional string model_id = 10;
+	repeated RequestedModel_ModelParameterValue model_params = 11;
+}
+
+message PostToolUseFailureRequestQuery { // agent.v1.PostToolUseFailureRequestQuery
+	string tool_name = 1;
+	GoogleProtobuf_Struct tool_input = 2;
+	string error_message = 3;
+	string failure_type = 4;
+	int64 duration_ms = 5;
+	string tool_use_id = 6;
+	bool is_interrupt = 7;
+	optional string conversation_id = 8;
+	optional string generation_id = 9;
+	optional string model = 10;
+	optional string model_id = 11;
+	repeated RequestedModel_ModelParameterValue model_params = 12;
+}
+
+message ExecuteHookRequest { // agent.v1.ExecuteHookRequest
+	PreCompactRequestQuery pre_compact = 1;
+	SubagentStartRequestQuery subagent_start = 2;
+	SubagentStopRequestQuery subagent_stop = 3;
+	PreToolUseRequestQuery pre_tool_use = 4;
+	PostToolUseRequestQuery post_tool_use = 5;
+	PostToolUseFailureRequestQuery post_tool_use_failure = 6;
+}
+
+message ExecuteHookArgs { // agent.v1.ExecuteHookArgs
+	ExecuteHookRequest request = 1;
+}
+
+message ClientContinuationConfig { // agent.v1.ClientContinuationConfig
+	int32 idle_threshold = 1;
+	int32 max_loops = 2;
+	string nudge_message = 3;
+	string escape_message_template = 4;
+	bool collect_background_children = 5;
+	string children_completed_message_template = 6;
+	int32 continuation_round_delay_ms = 7;
+}
+
+message SubagentArgs { // agent.v1.SubagentArgs
+	string tool_call_id = 1;
+	string subagent_type = 2;
+	string model_id = 3;
+	string prompt = 4;
+	bool readonly = 5;
+	optional string resume_agent_id = 6;
+	optional bool run_in_background = 7;
+	ClientContinuationConfig continuation_config = 8;
+	optional string parent_conversation_id = 9;
+	ApiKeyCredentials api_key_credentials = 10;
+	AzureCredentials azure_credentials = 11;
+	BedrockCredentials bedrock_credentials = 12;
+	optional bool interrupt = 13;
+	TaskMode mode = 14;
+	optional string fork_agent_id = 15;
+	optional string root_parent_conversation_id = 16;
+	optional SelectedContext selected_context = 17;
+	optional bool direct_meta_parent_child_subagent = 18;
+	SubagentExecutionEnvironment environment = 19;
+	optional string cloud_base_branch = 20;
+}
+
+message ForceBackgroundShellArgs { // agent.v1.ForceBackgroundShellArgs
+	string tool_call_id = 1;
+}
+
+message ForceBackgroundSubagentArgs { // agent.v1.ForceBackgroundSubagentArgs
+	string tool_call_id = 1;
+}
+
+message SubagentAwaitArgs { // agent.v1.SubagentAwaitArgs
+	string agent_id = 1;
+	uint32 timeout_ms = 2;
+}
+
+message SmartModeRiskTarget { // agent.v1.SmartModeRiskTarget
+	string action = 1;
+	GoogleProtobuf_Struct arguments = 2;
+}
+
+message SmartModeClassifierConversationMessage { // agent.v1.SmartModeClassifierConversationMessage
+	string role = 1;
+	string content = 2;
+}
+
+message SmartModeClassifierArgs { // agent.v1.SmartModeClassifierArgs
+	string tool_call_id = 1;
+	optional string parent_conversation_id = 2;
+	SmartModeRiskTarget target = 3;
+	repeated SmartModeClassifierConversationMessage conversation_context = 4;
+}
+
+message CanvasDiagnosticsArgs { // agent.v1.CanvasDiagnosticsArgs
+	string path = 1;
+	string tool_call_id = 2;
+}
+
+message ShellAllowlistPrecheckArgs { // agent.v1.ShellAllowlistPrecheckArgs
+	string command = 1;
+	string working_directory = 2;
+	ShellCommandParsingResult parsing_result = 3;
+	optional CommandClassifierResult classifier_result = 4;
+	optional string tool_call_id = 5;
+}
+
+message McpAllowlistPrecheckArgs { // agent.v1.McpAllowlistPrecheckArgs
+	string provider_identifier = 1;
+	string tool_name = 2;
+	optional string tool_call_id = 3;
+}
+
+message WebFetchAllowlistPrecheckArgs { // agent.v1.WebFetchAllowlistPrecheckArgs
+	string url = 1;
+	optional string tool_call_id = 2;
+}
+
+enum AiserverV1_GetDiffRequest_OutputFormat { // aiserver.v1.GetDiffRequest.OutputFormat
+	AISERVER_V1_GET_DIFF_REQUEST_OUTPUT_FORMAT_OUTPUT_FORMAT_UNSPECIFIED = 0;
+	AISERVER_V1_GET_DIFF_REQUEST_OUTPUT_FORMAT_OUTPUT_FORMAT_NAME_STATUS = 1;
+	AISERVER_V1_GET_DIFF_REQUEST_OUTPUT_FORMAT_OUTPUT_FORMAT_NAME_STATUS_AND_NUMSTAT = 2;
+	AISERVER_V1_GET_DIFF_REQUEST_OUTPUT_FORMAT_OUTPUT_FORMAT_FILE_DIFFS = 3;
+	AISERVER_V1_GET_DIFF_REQUEST_OUTPUT_FORMAT_OUTPUT_FORMAT_DIFFS_WITH_BEFORE_AND_AFTER = 4;
+}
+
+message AiserverV1_GetDiffRequest { // aiserver.v1.GetDiffRequest
+	string cwd = 1;
+	string ref = 2;
+	string base_ref = 3;
+	bool merge_base = 4;
+	repeated string target_paths = 5;
+	optional int32 unified_context_lines = 6;
+	int32 max_untracked_files = 7;
+	int32 submodule_recurse_depth = 9;
+	bool include_space_changes = 10;
+	bool committed_only = 11;
+	bool compute_patch_id = 12;
+	optional bool return_head_sha = 13;
+	optional AiserverV1_GetDiffRequest_OutputFormat output_format = 8;
+}
+
+message SpanContext { // agent.v1.SpanContext
+	string trace_id = 1;
+	string span_id = 2;
+	optional uint32 trace_flags = 3;
+	optional string trace_state = 4;
+}
+
+message ExecServerMessage { // agent.v1.ExecServerMessage
+	uint32 id = 1;
+	string exec_id = 15;
+	ShellArgs shell_args = 2;
+	WriteArgs write_args = 3;
+	DeleteArgs delete_args = 4;
+	GrepArgs grep_args = 5;
+	ReadArgs read_args = 7;
+	ReadArgs redacted_read_args = 29;
+	LsArgs ls_args = 8;
+	DiagnosticsArgs diagnostics_args = 9;
+	RequestContextArgs request_context_args = 10;
+	McpArgs mcp_args = 11;
+	ShellArgs shell_stream_args = 14;
+	BackgroundShellSpawnArgs background_shell_spawn_args = 16;
+	ListMcpResourcesExecArgs list_mcp_resources_exec_args = 17;
+	ReadMcpResourceExecArgs read_mcp_resource_exec_args = 18;
+	McpStateExecArgs mcp_state_exec_args = 36;
+	FetchArgs fetch_args = 20;
+	RecordScreenArgs record_screen_args = 21;
+	ComputerUseArgs computer_use_args = 22;
+	WriteShellStdinArgs write_shell_stdin_args = 23;
+	ExecuteHookArgs execute_hook_args = 27;
+	SubagentArgs subagent_args = 28;
+	ForceBackgroundShellArgs force_background_shell_args = 30;
+	ForceBackgroundSubagentArgs force_background_subagent_args = 31;
+	SubagentAwaitArgs subagent_await_args = 37;
+	SmartModeClassifierArgs smart_mode_classifier_args = 38;
+	CanvasDiagnosticsArgs canvas_diagnostics_args = 40;
+	ShellAllowlistPrecheckArgs shell_allowlist_precheck_args = 41;
+	McpAllowlistPrecheckArgs mcp_allowlist_precheck_args = 42;
+	WebFetchAllowlistPrecheckArgs web_fetch_allowlist_precheck_args = 43;
+	AiserverV1_GetDiffRequest git_diff_request = 44;
+	optional SpanContext span_context = 19;
+}
+
+message ExecServerAbort { // agent.v1.ExecServerAbort
+	uint32 id = 1;
+}
+
+message ExecServerControlMessage { // agent.v1.ExecServerControlMessage
+	ExecServerAbort abort = 1;
+}
+
+message GetBlobArgs { // agent.v1.GetBlobArgs
+	bytes blob_id = 1;
+}
+
+message SetBlobArgs { // agent.v1.SetBlobArgs
+	bytes blob_id = 1;
+	bytes blob_data = 2;
+}
+
+message KvServerMessage { // agent.v1.KvServerMessage
+	uint32 id = 1;
+	GetBlobArgs get_blob_args = 2;
+	SetBlobArgs set_blob_args = 3;
+	optional SpanContext span_context = 4;
+}
+
+message WebSearchRequestQuery { // agent.v1.WebSearchRequestQuery
+	WebSearchArgs args = 1;
+}
+
+message AskQuestionInteractionQuery { // agent.v1.AskQuestionInteractionQuery
+	AskQuestionArgs args = 1;
+	string tool_call_id = 2;
+}
+
+message SwitchModeRequestQuery { // agent.v1.SwitchModeRequestQuery
+	SwitchModeArgs args = 1;
+}
+
+message CreatePlanRequestQuery { // agent.v1.CreatePlanRequestQuery
+	CreatePlanArgs args = 1;
+	string tool_call_id = 2;
+}
+
+message WebFetchRequestQuery { // agent.v1.WebFetchRequestQuery
+	WebFetchArgs args = 1;
+	bool skip_approval = 2;
+	SmartModeApproval smart_mode_approval = 3;
+}
+
+message PrManagementRequestQuery { // agent.v1.PrManagementRequestQuery
+	PrManagementArgs args = 1;
+}
+
+message McpAuthRequestQuery { // agent.v1.McpAuthRequestQuery
+	McpAuthArgs args = 1;
+}
+
+message GenerateImageRequestQuery { // agent.v1.GenerateImageRequestQuery
+	GenerateImageArgs args = 1;
+	string tool_call_id = 2;
+}
+
+message InteractionQuery { // agent.v1.InteractionQuery
+	uint32 id = 1;
+	WebSearchRequestQuery web_search_request_query = 2;
+	AskQuestionInteractionQuery ask_question_interaction_query = 3;
+	SwitchModeRequestQuery switch_mode_request_query = 4;
+	CreatePlanRequestQuery create_plan_request_query = 7;
+	SetupVmEnvironmentArgs setup_vm_environment_args = 8;
+	WebFetchRequestQuery web_fetch_request_query = 9;
+	PrManagementRequestQuery pr_management_request_query = 10;
+	McpAuthRequestQuery mcp_auth_request_query = 11;
+	GenerateImageRequestQuery generate_image_request_query = 12;
+	ReplaceEnvArgs replace_env_args = 13;
+}
+
+message AgentServerMessage { // agent.v1.AgentServerMessage
+	InteractionUpdate interaction_update = 1;
+	ExecServerMessage exec_server_message = 2;
+	ExecServerControlMessage exec_server_control_message = 5;
+	ConversationStateStructure conversation_checkpoint_update = 3;
+	KvServerMessage kv_server_message = 4;
+	InteractionQuery interaction_query = 7;
+}
+
+message NameAgentRequest { // agent.v1.NameAgentRequest
+	string user_message = 1;
+}
+
+message NameAgentResponse { // agent.v1.NameAgentResponse
+	string name = 1;
+}
+
+message UpdateConversationMetadataRequest { // agent.v1.UpdateConversationMetadataRequest
+	string conversation_id = 1;
+	optional string name = 2;
+}
+
+message UpdateConversationMetadataResponse { // agent.v1.UpdateConversationMetadataResponse
+}
+
+message CreateTranscriptOverviewRequest { // agent.v1.CreateTranscriptOverviewRequest
+	string formatted_conversation = 1;
+}
+
+message CreateTranscriptOverviewResponse { // agent.v1.CreateTranscriptOverviewResponse
+	string overview = 1;
+}
+
+message GetUsableModelsRequest { // agent.v1.GetUsableModelsRequest
+	repeated string custom_model_ids = 1;
+}
+
+message GetUsableModelsResponse { // agent.v1.GetUsableModelsResponse
+	repeated ModelDetails models = 1;
+}
+
+message GetDefaultModelForCliRequest { // agent.v1.GetDefaultModelForCliRequest
+}
+
+message GetDefaultModelForCliResponse { // agent.v1.GetDefaultModelForCliResponse
+	ModelDetails model = 1;
+}
+
+message GetAllowedModelIntentsRequest { // agent.v1.GetAllowedModelIntentsRequest
+}
+
+message GetAllowedModelIntentsResponse { // agent.v1.GetAllowedModelIntentsResponse
+	repeated string model_intents = 1;
+}
+
+message BlobEntry { // agent.v1.BlobEntry
+	bytes id = 1;
+	bytes value = 2;
+}
+
+message UploadConversationBlobsRequest { // agent.v1.UploadConversationBlobsRequest
+	string conversation_id = 1;
+	repeated BlobEntry blobs = 2;
+	int32 chunk_index = 3;
+	int32 total_chunks = 4;
+}
+
+message UploadConversationBlobsResponse { // agent.v1.UploadConversationBlobsResponse
+}
+
+message GetSignedUrlForAttachedMediaRequest { // agent.v1.GetSignedUrlForAttachedMediaRequest
+	string conversation_id = 3;
+	optional string key = 1;
+	optional string mime_type = 2;
+	optional int64 content_length_bytes = 4;
+}
+
+message GetSignedUrlForAttachedMediaResponse { // agent.v1.GetSignedUrlForAttachedMediaResponse
+	string key = 1;
+	string post_url = 2;
+	string get_url = 3;
+	int64 expires_at_unix_ms = 4;
+	int64 refresh_after_unix_ms = 5;
+	map<string, string> post_fields = 6;
+	string put_url = 7;
+}
+
+message NotifyConversationCloneRequest { // agent.v1.NotifyConversationCloneRequest
+	string conversation_id = 1;
+	string source_conversation_id = 2;
+	string source_request_id = 3;
+}
+
+message NotifyConversationCloneResponse { // agent.v1.NotifyConversationCloneResponse
+}
+
+message GetNewChatNudgeLegacyModelPickerRequest { // agent.v1.GetNewChatNudgeLegacyModelPickerRequest
+	string current_model = 1;
+	bool max_mode = 2;
+}
+
+message NudgeBumpVariant { // agent.v1.NudgeBumpVariant
+	string banner_message = 1;
+}
+
+message NudgeAskVariant { // agent.v1.NudgeAskVariant
+	string popup_message = 1;
+	string accept_label = 2;
+}
+
+message NudgeSilentSwitchVariant { // agent.v1.NudgeSilentSwitchVariant
+}
+
+message NewChatNudge { // agent.v1.NewChatNudge
+	string nudge_id = 1;
+	string target_model = 2;
+	string experiment_name = 3;
+	NudgeBumpVariant bump = 4;
+	NudgeAskVariant ask = 5;
+	NudgeSilentSwitchVariant silent_switch = 6;
+}
+
+message GetNewChatNudgeLegacyModelPickerResponse { // agent.v1.GetNewChatNudgeLegacyModelPickerResponse
+	optional NewChatNudge nudge = 1;
+}
+
+message GetNewChatNudgeParameterizedModelPickerRequest { // agent.v1.GetNewChatNudgeParameterizedModelPickerRequest
+	RequestedModel current_model = 1;
+}
+
+message NewChatNudgeV2 { // agent.v1.NewChatNudgeV2
+	string nudge_id = 1;
+	RequestedModel target_model = 2;
+	string experiment_name = 3;
+	NudgeBumpVariant bump = 4;
+	NudgeAskVariant ask = 5;
+	NudgeSilentSwitchVariant silent_switch = 6;
+}
+
+message GetNewChatNudgeParameterizedModelPickerResponse { // agent.v1.GetNewChatNudgeParameterizedModelPickerResponse
+	optional NewChatNudgeV2 nudge = 1;
+}
+
+message PingRequest { // agent.v1.PingRequest
+}
+
+message PingResponse { // agent.v1.PingResponse
+}
+
+message GetCapabilitiesRequest { // agent.v1.GetCapabilitiesRequest
+}
+
+message GetCapabilitiesResponse { // agent.v1.GetCapabilitiesResponse
+	optional bool computer_use_supported = 1;
+	optional bool install_plugin_artifact_supported = 2;
+}
+
+message ExecRequest { // agent.v1.ExecRequest
+	string command = 1;
+	optional string cwd = 2;
+	repeated string args = 3;
+	map<string, string> environment = 4;
+}
+
+message StdoutEvent { // agent.v1.StdoutEvent
+	string data = 1;
+}
+
+message StderrEvent { // agent.v1.StderrEvent
+	string data = 1;
+}
+
+message ExitEvent { // agent.v1.ExitEvent
+	int32 exit_code = 1;
+}
+
+message ExecResponse { // agent.v1.ExecResponse
+	StdoutEvent stdout_event = 1;
+	StderrEvent stderr_event = 2;
+	ExitEvent exit_event = 3;
+}
+
+message ListDirectoryRequest { // agent.v1.ListDirectoryRequest
+	string path = 1;
+	bool include_hidden = 2;
+}
+
+message DirectoryEntry { // agent.v1.DirectoryEntry
+	string name = 1;
+	string path = 2;
+	EntryType type = 3;
+	uint64 size_bytes = 4;
+	int64 modified_at_unix_ms = 5;
+}
+
+message ListDirectoryResponse { // agent.v1.ListDirectoryResponse
+	repeated DirectoryEntry entries = 1;
+}
+
+message ReadTextFileRequest { // agent.v1.ReadTextFileRequest
+	string path = 1;
+}
+
+message ReadTextFileResponse { // agent.v1.ReadTextFileResponse
+	string content = 1;
+}
+
+message WriteTextFileRequest { // agent.v1.WriteTextFileRequest
+	string path = 1;
+	string content = 2;
+}
+
+message WriteTextFileResponse { // agent.v1.WriteTextFileResponse
+}
+
+message ReadBinaryFileRequest { // agent.v1.ReadBinaryFileRequest
+	string path = 1;
+}
+
+message ReadBinaryFileResponse { // agent.v1.ReadBinaryFileResponse
+	bytes content = 1;
+}
+
+message WriteBinaryFileRequest { // agent.v1.WriteBinaryFileRequest
+	string path = 1;
+	bytes content = 2;
+}
+
+message WriteBinaryFileResponse { // agent.v1.WriteBinaryFileResponse
+}
+
+message BatchGetDiffItem { // agent.v1.BatchGetDiffItem
+	AiserverV1_GetDiffRequest diff_request = 1;
+	repeated string fetch_branches = 2;
+}
+
+message BatchGetDiffRequest { // agent.v1.BatchGetDiffRequest
+	repeated BatchGetDiffItem items = 1;
+}
+
+message BatchGetDiffError { // agent.v1.BatchGetDiffError
+	BatchGetDiffErrorKind kind = 1;
+	string message = 2;
+}
+
+message BatchGetDiffResult { // agent.v1.BatchGetDiffResult
+	uint32 item_index = 1;
+	repeated string fetched_branches = 4;
+	repeated string failed_branches = 5;
+	AiserverV1_GetDiffResponse diff = 2;
+	BatchGetDiffError error = 3;
+}
+
+message BatchGetDiffResponse { // agent.v1.BatchGetDiffResponse
+	repeated BatchGetDiffResult results = 1;
+}
+
+message GetWorkspaceChangesHashRequest { // agent.v1.GetWorkspaceChangesHashRequest
+	string root_path = 1;
+	string base_ref = 2;
+}
+
+message GetWorkspaceChangesHashResponse { // agent.v1.GetWorkspaceChangesHashResponse
+	string hash = 1;
+}
+
+message RefreshGithubAccessTokenRequest { // agent.v1.RefreshGithubAccessTokenRequest
+	string github_access_token = 1;
+	string hostname = 2;
+	optional string repo_url = 3;
+}
+
+message RefreshGithubAccessTokenResponse { // agent.v1.RefreshGithubAccessTokenResponse
+}
+
+message WarmRemoteAccessServerRequest { // agent.v1.WarmRemoteAccessServerRequest
+	string commit = 1;
+	int32 port = 2;
+	string connection_token = 3;
+}
+
+message WarmRemoteAccessServerResponse { // agent.v1.WarmRemoteAccessServerResponse
+}
+
+message ListArtifactsRequest { // agent.v1.ListArtifactsRequest
+	repeated string extra_paths = 1;
+}
+
+message ArtifactUploadMetadata { // agent.v1.ArtifactUploadMetadata
+	string absolute_path = 1;
+	uint64 size_bytes = 2;
+	int64 updated_at_unix_ms = 3;
+	ArtifactUploadStatus status = 4;
+	uint64 bytes_uploaded = 5;
+	string last_error = 6;
+	uint32 upload_attempts = 7;
+	int64 last_started_at_unix_ms = 8;
+	int64 last_finished_at_unix_ms = 9;
+	string upload_id = 10;
+}
+
+message ArtifactPathError { // agent.v1.ArtifactPathError
+	ArtifactPathErrorKind kind = 1;
+	string code = 2;
+	string message = 3;
+}
+
+message ListArtifactsResponse { // agent.v1.ListArtifactsResponse
+	repeated ArtifactUploadMetadata artifacts = 1;
+	map<string, ArtifactPathError> path_errors = 2;
+}
+
+message ArtifactUploadInstruction { // agent.v1.ArtifactUploadInstruction
+	string absolute_path = 1;
+	string upload_url = 2;
+	string method = 3;
+	map<string, string> headers = 4;
+	optional string content_type = 5;
+	optional string slack_upload_url = 6;
+	optional string slack_file_id = 7;
+}
+
+message UploadArtifactsRequest { // agent.v1.UploadArtifactsRequest
+	repeated ArtifactUploadInstruction uploads = 1;
+	bool wait_for_completion = 2;
+}
+
+message ArtifactUploadDispatchResult { // agent.v1.ArtifactUploadDispatchResult
+	string absolute_path = 1;
+	ArtifactUploadDispatchStatus status = 2;
+	string message = 3;
+	optional string slack_file_id = 4;
+}
+
+message UploadArtifactsResponse { // agent.v1.UploadArtifactsResponse
+	repeated ArtifactUploadDispatchResult results = 1;
+}
+
+message RestoreArtifactInstruction { // agent.v1.RestoreArtifactInstruction
+	string absolute_path = 1;
+	string download_url = 2;
+	int64 updated_at_unix_ms = 3;
+}
+
+message RestoreArtifactsRequest { // agent.v1.RestoreArtifactsRequest
+	repeated RestoreArtifactInstruction artifacts = 1;
+}
+
+message RestoreArtifactResult { // agent.v1.RestoreArtifactResult
+	ArtifactRestoreStatus status = 2;
+	string error_message = 3;
+}
+
+message RestoreArtifactsResponse { // agent.v1.RestoreArtifactsResponse
+	repeated RestoreArtifactResult results = 1;
+}
+
+message GetMcpRefreshTokensRequest { // agent.v1.GetMcpRefreshTokensRequest
+}
+
+message GetMcpRefreshTokensResponse { // agent.v1.GetMcpRefreshTokensResponse
+	map<string, string> refresh_tokens = 1;
+}
+
+message DownloadCursorServerRequest { // agent.v1.DownloadCursorServerRequest
+	string commit = 1;
+}
+
+message DownloadCursorServerResponse { // agent.v1.DownloadCursorServerResponse
+	bool already_downloaded = 1;
+}
+
+message UpdateEnvironmentVariablesRequest { // agent.v1.UpdateEnvironmentVariablesRequest
+	map<string, string> env = 1;
+	bool replace = 2;
+}
+
+message UpdateEnvironmentVariablesResponse { // agent.v1.UpdateEnvironmentVariablesResponse
+	uint32 applied = 1;
+	uint32 removed = 2;
+}
+
+message ReloadAgentSkillsRequest { // agent.v1.ReloadAgentSkillsRequest
+}
+
+message ReloadAgentSkillsResponse { // agent.v1.ReloadAgentSkillsResponse
+}
+
+message ReloadPluginsRequest { // agent.v1.ReloadPluginsRequest
+	repeated string reload_targets = 1;
+}
+
+message ReloadPluginsResponse { // agent.v1.ReloadPluginsResponse
+}
+
+message InstallPluginArtifactRequest { // agent.v1.InstallPluginArtifactRequest
+	string download_url = 1;
+	string target_root = 2;
+	string artifact_digest = 3;
+}
+
+message InstallPluginArtifactResponse { // agent.v1.InstallPluginArtifactResponse
+}
+
+message ExecStreamElement { // agent.v1.ExecStreamElement
+	ExecClientMessage exec_client_message = 1;
+	ExecClientControlMessage exec_client_control_message = 2;
+}
+
+message GetWorkerIdResponse { // agent.v1.GetWorkerIdResponse
+	string worker_id = 1;
+}
+
+message WatchStatusResponse { // agent.v1.WatchStatusResponse
+	string worker_id = 1;
+	PrivateWorkerStatus status = 2;
+	bool connected = 3;
+	bool claimed = 4;
+}
+
+enum Frame_Kind { // agent.v1.Frame.Kind
+	FRAME_KIND_KIND_UNSPECIFIED = 0;
+	FRAME_KIND_KIND_REQUEST = 1;
+	FRAME_KIND_KIND_RESPONSE = 2;
+	FRAME_KIND_KIND_ERROR = 3;
+}
+
+message Frame { // agent.v1.Frame
+	string id = 1;
+	string method = 2;
+	bytes data = 3;
+	Frame_Kind kind = 4;
+	string error = 5;
+}
+
+message Empty { // agent.v1.Empty
+}
+
+message ClaimWorkerRequest { // agent.v1.ClaimWorkerRequest
+	string http_mcp_config_json = 1;
+	string mcp_config_json = 2;
+	string bc_id = 3;
+}
+
+message ReleaseWorkerRequest { // agent.v1.ReleaseWorkerRequest
+}
+
+message Process { // agent.v1.Process
+	string shell = 1;
+	repeated string args = 2;
+}
+
+message SpawnPtyRequest { // agent.v1.SpawnPtyRequest
+	optional Process process = 1;
+	string cwd = 2;
+	map<string, string> env = 3;
+	uint32 cols = 4;
+	uint32 rows = 5;
+}
+
+message SpawnPtyResponse { // agent.v1.SpawnPtyResponse
+	string pty_id = 1;
+}
+
+message AttachPtyRequest { // agent.v1.AttachPtyRequest
+	string pty_id = 1;
+	optional string last_event_id = 2;
+}
+
+message PtyData { // agent.v1.PtyData
+	bytes data = 1;
+}
+
+message PtyExited { // agent.v1.PtyExited
+	int32 exit_code = 1;
+	optional int32 signal = 2;
+}
+
+message PtyEvent { // agent.v1.PtyEvent
+	string event_id = 1;
+	PtyData pty_data = 2;
+	PtyExited pty_exited = 3;
+}
+
+message SendInputRequest { // agent.v1.SendInputRequest
+	string pty_id = 1;
+	bytes data = 2;
+}
+
+message SendInputResponse { // agent.v1.SendInputResponse
+	bool success = 1;
+}
+
+message ResizePtyRequest { // agent.v1.ResizePtyRequest
+	string pty_id = 1;
+	uint32 cols = 2;
+	uint32 rows = 3;
+}
+
+message ResizePtyResponse { // agent.v1.ResizePtyResponse
+	bool success = 1;
+}
+
+message ListPtysRequest { // agent.v1.ListPtysRequest
+}
+
+message PtyInfo { // agent.v1.PtyInfo
+	string pty_id = 1;
+	string shell = 2;
+	string cwd = 3;
+	uint32 cols = 4;
+	uint32 rows = 5;
+	int32 pid = 6;
+	repeated string process_args = 7;
+}
+
+message ListPtysResponse { // agent.v1.ListPtysResponse
+	repeated PtyInfo ptys = 1;
+}
+
+message TerminatePtyRequest { // agent.v1.TerminatePtyRequest
+	string pty_id = 1;
+}
+
+message TerminatePtyResponse { // agent.v1.TerminatePtyResponse
+	bool success = 1;
+}
+
+message CreateTmuxSessionRequest { // agent.v1.CreateTmuxSessionRequest
+	optional string session_name = 1;
+	string display_name = 2;
+	TmuxSessionKind kind = 3;
+	optional Process process = 4;
+	string cwd = 5;
+	map<string, string> env = 6;
+}
+
+message TmuxSession { // agent.v1.TmuxSession
+	string session_id = 1;
+	string session_name = 2;
+	string display_name = 3;
+	TmuxSessionKind kind = 4;
+	string cwd = 5;
+	string shell = 6;
+	repeated string process_args = 7;
+	int64 created_at_unix_ms = 8;
+	uint32 attached_client_count = 9;
+}
+
+message CreateTmuxSessionResponse { // agent.v1.CreateTmuxSessionResponse
+	TmuxSession session = 1;
+}
+
+message ListTmuxSessionsRequest { // agent.v1.ListTmuxSessionsRequest
+}
+
+message ListTmuxSessionsResponse { // agent.v1.ListTmuxSessionsResponse
+	repeated TmuxSession sessions = 1;
+}
+
+message KillTmuxSessionRequest { // agent.v1.KillTmuxSessionRequest
+	string session_id = 1;
+}
+
+message KillTmuxSessionResponse { // agent.v1.KillTmuxSessionResponse
+	bool success = 1;
+}
+
+message AttachTmuxSessionRequest { // agent.v1.AttachTmuxSessionRequest
+	string session_id = 1;
+	uint32 cols = 2;
+	uint32 rows = 3;
+}
+
+message AttachTmuxSessionResponse { // agent.v1.AttachTmuxSessionResponse
+	string pty_id = 1;
+	TmuxSession session = 2;
+}
+
+message FileState { // agent.v1.FileState
+	optional string content = 1;
+	optional string initial_content = 2;
+}
+
+message UserDisplayInfo { // agent.v1.UserDisplayInfo
+	int32 user_id = 1;
+	optional string display_name = 2;
+	optional string email = 3;
+	optional string profile_picture_url = 4;
+}
+
+message AiserverV1_BidiRequestId { // aiserver.v1.BidiRequestId
+	string request_id = 1;
+}
+
+message AiserverV1_BidiPollRequest { // aiserver.v1.BidiPollRequest
+	AiserverV1_BidiRequestId request_id = 1;
+	optional bool start_request = 2;
+}
+
+message AiserverV1_BidiPollResponse { // aiserver.v1.BidiPollResponse
+	int64 seqno = 1;
+	string data = 2;
+	optional bool eof = 3;
+}
+
+service AgentService {
+	rpc Run(AgentClientMessage) returns (AgentServerMessage) {}
+	rpc RunSSE(AiserverV1_BidiRequestId) returns (stream AgentServerMessage) {}
+	rpc RunPoll(AiserverV1_BidiPollRequest) returns (stream AiserverV1_BidiPollResponse) {}
+	rpc NameAgent(NameAgentRequest) returns (NameAgentResponse) {}
+	rpc UpdateConversationMetadata(UpdateConversationMetadataRequest) returns (UpdateConversationMetadataResponse) {}
+	rpc CreateTranscriptOverview(CreateTranscriptOverviewRequest) returns (CreateTranscriptOverviewResponse) {}
+	rpc GetUsableModels(GetUsableModelsRequest) returns (GetUsableModelsResponse) {}
+	rpc GetDefaultModelForCli(GetDefaultModelForCliRequest) returns (GetDefaultModelForCliResponse) {}
+	rpc GetAllowedModelIntents(GetAllowedModelIntentsRequest) returns (GetAllowedModelIntentsResponse) {}
+	rpc UploadConversationBlobs(UploadConversationBlobsRequest) returns (UploadConversationBlobsResponse) {}
+	rpc GetSignedUrlForAttachedMedia(GetSignedUrlForAttachedMediaRequest) returns (GetSignedUrlForAttachedMediaResponse) {}
+	rpc NotifyConversationClone(NotifyConversationCloneRequest) returns (NotifyConversationCloneResponse) {}
+	rpc GetNewChatNudgeLegacyModelPicker(GetNewChatNudgeLegacyModelPickerRequest) returns (GetNewChatNudgeLegacyModelPickerResponse) {}
+	rpc GetNewChatNudgeParameterizedModelPicker(GetNewChatNudgeParameterizedModelPickerRequest) returns (GetNewChatNudgeParameterizedModelPickerResponse) {}
+}
+
+service ControlService {
+	rpc Ping(PingRequest) returns (PingResponse) {}
+	rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse) {}
+	rpc Exec(ExecRequest) returns (stream ExecResponse) {}
+	rpc ListDirectory(ListDirectoryRequest) returns (ListDirectoryResponse) {}
+	rpc ReadTextFile(ReadTextFileRequest) returns (ReadTextFileResponse) {}
+	rpc WriteTextFile(WriteTextFileRequest) returns (WriteTextFileResponse) {}
+	rpc ReadBinaryFile(ReadBinaryFileRequest) returns (ReadBinaryFileResponse) {}
+	rpc WriteBinaryFile(WriteBinaryFileRequest) returns (WriteBinaryFileResponse) {}
+	rpc GetDiff(AiserverV1_GetDiffRequest) returns (AiserverV1_GetDiffResponse) {}
+	rpc BatchGetDiff(BatchGetDiffRequest) returns (BatchGetDiffResponse) {}
+	rpc GetWorkspaceChangesHash(GetWorkspaceChangesHashRequest) returns (GetWorkspaceChangesHashResponse) {}
+	rpc RefreshGithubAccessToken(RefreshGithubAccessTokenRequest) returns (RefreshGithubAccessTokenResponse) {}
+	rpc WarmRemoteAccessServer(WarmRemoteAccessServerRequest) returns (WarmRemoteAccessServerResponse) {}
+	rpc ListArtifacts(ListArtifactsRequest) returns (ListArtifactsResponse) {}
+	rpc UploadArtifacts(UploadArtifactsRequest) returns (UploadArtifactsResponse) {}
+	rpc RestoreArtifacts(RestoreArtifactsRequest) returns (RestoreArtifactsResponse) {}
+	rpc GetMcpRefreshTokens(GetMcpRefreshTokensRequest) returns (GetMcpRefreshTokensResponse) {}
+	rpc DownloadCursorServer(DownloadCursorServerRequest) returns (DownloadCursorServerResponse) {}
+	rpc UpdateEnvironmentVariables(UpdateEnvironmentVariablesRequest) returns (UpdateEnvironmentVariablesResponse) {}
+	rpc ReloadAgentSkills(ReloadAgentSkillsRequest) returns (ReloadAgentSkillsResponse) {}
+	rpc ReloadPlugins(ReloadPluginsRequest) returns (ReloadPluginsResponse) {}
+	rpc InstallPluginArtifact(InstallPluginArtifactRequest) returns (InstallPluginArtifactResponse) {}
+}
+
+service ExecService {
+	rpc Exec(ExecServerMessage) returns (stream ExecStreamElement) {}
+}
+
+message GoogleProtobuf_Empty { // google.protobuf.Empty
+}
+
+service PrivateWorkerApiService {
+	rpc GetWorkerId(GoogleProtobuf_Empty) returns (GetWorkerIdResponse) {}
+	rpc WatchStatus(GoogleProtobuf_Empty) returns (stream WatchStatusResponse) {}
+}
+
+service PrivateWorkerBridgeExternalService {
+	rpc Connect(Frame) returns (Frame) {}
+}
+
+service LifecycleService {
+	rpc ResetInstance(Empty) returns (Empty) {}
+	rpc RenewInstance(Empty) returns (Empty) {}
+	rpc ClaimWorker(ClaimWorkerRequest) returns (Empty) {}
+	rpc ReleaseWorker(ReleaseWorkerRequest) returns (Empty) {}
+}
+
+service PtyHostService {
+	rpc SpawnPty(SpawnPtyRequest) returns (SpawnPtyResponse) {}
+	rpc AttachPty(AttachPtyRequest) returns (stream PtyEvent) {}
+	rpc SendInput(SendInputRequest) returns (SendInputResponse) {}
+	rpc ResizePty(ResizePtyRequest) returns (ResizePtyResponse) {}
+	rpc ListPtys(ListPtysRequest) returns (ListPtysResponse) {}
+	rpc TerminatePty(TerminatePtyRequest) returns (TerminatePtyResponse) {}
+}
+
+service TmuxSessionService {
+	rpc CreateSession(CreateTmuxSessionRequest) returns (CreateTmuxSessionResponse) {}
+	rpc ListSessions(ListTmuxSessionsRequest) returns (ListTmuxSessionsResponse) {}
+	rpc KillSession(KillTmuxSessionRequest) returns (KillTmuxSessionResponse) {}
+	rpc AttachSession(AttachTmuxSessionRequest) returns (AttachTmuxSessionResponse) {}
+}

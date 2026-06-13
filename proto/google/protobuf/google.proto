@@ -1,0 +1,37 @@
+syntax = "proto3";
+package google.protobuf;
+option go_package = "cursor/gen/google/protobuf;googleprotobuf";
+
+enum NullValue { // google.protobuf.NullValue
+	NULL_VALUE_NULL_VALUE = 0;
+}
+
+message Struct { // google.protobuf.Struct
+	map<string, Value> fields = 1;
+}
+
+message ListValue { // google.protobuf.ListValue
+	repeated Value values = 1;
+}
+
+message Value { // google.protobuf.Value
+	NullValue null_value = 1;
+	double number_value = 2;
+	string string_value = 3;
+	bool bool_value = 4;
+	Struct struct_value = 5;
+	ListValue list_value = 6;
+}
+
+message Empty { // google.protobuf.Empty
+}
+
+message Timestamp { // google.protobuf.Timestamp
+	int64 seconds = 1;
+	int32 nanos = 2;
+}
+
+message Duration { // google.protobuf.Duration
+	int64 seconds = 1;
+	int32 nanos = 2;
+}

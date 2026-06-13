@@ -1,0 +1,23 @@
+[
+  {
+    "path": "/aiserver.v1.AiService/AvailableModels",
+    "package": "aiserver.v1",
+    "service": "AiService",
+    "method": "AvailableModels",
+    "policy": "intercept",
+    "reason": "Merge conservative local model entries with upstream models."
+  },
+  {
+    "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithTools",
+    "package": "aiserver.v1",
+    "service": "ChatService",
+    "method": "StreamUnifiedChatWithTools",
+    "policy": "intercept",
+    "reason": "Handle requests only when selected model is registered locally; otherwise pass upstream."
+  },
+  {
+    "path": "*",
+    "policy": "pass-through",
+    "reason": "Default byte-preserving proxy policy for unknown or unverified routes."
+  }
+]
