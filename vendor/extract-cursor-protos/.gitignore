@@ -1,0 +1,13 @@
+extract
+*.exe
+*.o
+*.a
+*.so
+*.test
+.DS_Store
+Thumbs.db
+node_modules/
+*.tmp
+*.log
+*.bak
+*_FIX.md

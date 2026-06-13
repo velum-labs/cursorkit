@@ -1,0 +1,238 @@
+syntax = "proto3";
+
+package aiserver.v1;
+
+// Focused proto slice for the initial Cursor bridge research path.
+//
+// Source baseline: public extracted Cursor aiserver.proto snapshots observed in
+// June 2026. Keep this file intentionally small until fresh local captures prove
+// which fields the current client requires.
+
+service AiService {
+  rpc AvailableModels(AvailableModelsRequest) returns (AvailableModelsResponse) {}
+}
+
+service ChatService {
+  // Some extracted Cursor builds mark this unary, while older notes describe a
+  // streaming response. The bridge handles Connect envelopes directly so tests
+  // can cover both unary and streamed-by-envelope behavior.
+  rpc StreamUnifiedChatWithTools(StreamUnifiedChatRequestWithTools) returns (StreamUnifiedChatResponseWithTools) {}
+  rpc StreamUnifiedChatWithToolsSSE(BidiRequestId) returns (stream StreamUnifiedChatResponseWithTools) {}
+}
+
+message AvailableModelsRequest {
+  bool is_nightly = 1;
+  bool include_long_context_models = 2;
+  bool exclude_max_named_models = 3;
+  repeated string additional_model_names = 4;
+  optional bool use_model_parameters = 5;
+}
+
+message AvailableModelsResponse {
+  message AvailableModel {
+    enum DegradationStatus {
+      DEGRADATION_STATUS_UNSPECIFIED = 0;
+      DEGRADATION_STATUS_DEGRADED = 1;
+      DEGRADATION_STATUS_DISABLED = 2;
+    }
+
+    message TooltipData {
+      string primary_text = 1;
+      string secondary_text = 2;
+      bool secondary_warning_text = 3;
+      string icon = 4;
+      string tertiary_text = 5;
+      string tertiary_text_url = 6;
+      optional string markdown_content = 7;
+    }
+
+    string name = 1;
+    bool default_on = 2;
+    optional bool is_long_context_only = 3;
+    optional bool is_chat_only = 4;
+    optional bool supports_agent = 5;
+    optional DegradationStatus degradation_status = 6;
+    optional double price = 7;
+    optional TooltipData tooltip_data = 8;
+    optional bool supports_thinking = 9;
+    optional bool supports_images = 10;
+    optional bool supports_auto_context = 11;
+    optional int32 auto_context_max_tokens = 12;
+    optional int32 auto_context_extended_max_tokens = 13;
+    optional bool supports_max_mode = 14;
+    optional int32 context_token_limit = 15;
+    optional int32 context_token_limit_for_max_mode = 16;
+    optional string client_display_name = 17;
+    optional string server_model_name = 18;
+    optional bool supports_non_max_mode = 19;
+    optional TooltipData tooltip_data_for_max_mode = 20;
+    optional bool is_recommended_for_background_composer = 21;
+    optional bool supports_plan_mode = 22;
+    optional bool is_user_added = 23;
+    optional string inputbox_short_model_name = 24;
+    optional bool supports_sandboxing = 25;
+    optional bool supports_cmd_k = 26;
+    optional bool only_supports_cmd_k = 27;
+    optional int32 background_composer_sort_order = 28;
+  }
+
+  message FeatureModelConfig {
+    string default_model = 1;
+    repeated string fallback_models = 2;
+    repeated string best_of_n_default_models = 3;
+  }
+
+  repeated string model_names = 1;
+  repeated AvailableModel models = 2;
+  optional FeatureModelConfig composer_model_config = 4;
+  optional FeatureModelConfig cmd_k_model_config = 5;
+  optional FeatureModelConfig background_composer_model_config = 6;
+  optional FeatureModelConfig plan_execution_model_config = 7;
+  optional FeatureModelConfig spec_model_config = 8;
+  optional FeatureModelConfig deep_search_model_config = 9;
+  optional FeatureModelConfig quick_agent_model_config = 10;
+  bool use_model_parameters = 11;
+}
+
+message StreamUnifiedChatRequestWithTools {
+  StreamUnifiedChatRequest stream_unified_chat_request = 1;
+  ClientSideToolV2Result client_side_tool_v2_result = 2;
+}
+
+message StreamUnifiedChatRequest {
+  repeated ConversationMessage conversation = 1;
+  optional bool allow_long_file_scan = 2;
+  ExplicitContext explicit_context = 3;
+  optional bool can_handle_filenames_after_language_ids = 4;
+  ModelDetails model_details = 5;
+  LinterErrors linter_errors = 6;
+  repeated string documentation_identifiers = 7;
+  optional string use_web = 8;
+  repeated ComposerExternalLink external_links = 9;
+  optional ConversationMessage project_context = 10;
+  bool is_chat = 22;
+  string conversation_id = 23;
+  bool is_agentic = 27;
+  repeated ClientSideToolV2 supported_tools = 29;
+  optional UnifiedMode unified_mode = 46;
+
+  enum UnifiedMode {
+    UNIFIED_MODE_UNSPECIFIED = 0;
+    UNIFIED_MODE_CHAT = 1;
+    UNIFIED_MODE_AGENT = 2;
+    UNIFIED_MODE_EDIT = 3;
+    UNIFIED_MODE_CUSTOM = 4;
+    UNIFIED_MODE_PLAN = 5;
+    UNIFIED_MODE_DEBUG = 6;
+  }
+}
+
+message StreamUnifiedChatResponseWithTools {
+  ClientSideToolV2Call client_side_tool_v2_call = 1;
+  StreamUnifiedChatResponse stream_unified_chat_response = 2;
+  ConversationSummary conversation_summary = 3;
+  UserRules user_rules = 4;
+  StreamStart stream_start = 5;
+  optional SpanContext tracing_context = 6;
+  string event_id = 7;
+}
+
+message StreamUnifiedChatResponse {
+  string text = 1;
+  optional string debugging_only_chat_prompt = 2;
+  optional int32 debugging_only_token_count = 3;
+  optional string filled_prompt = 5;
+  optional bool is_big_file = 6;
+  optional string intermediate_text = 7;
+  optional bool should_break_ai_message = 14;
+  optional ConversationSummary conversation_summary = 18;
+  optional string server_bubble_id = 22;
+  optional string usage_uuid = 27;
+  optional bool parallel_tool_calls_complete = 32;
+  optional string model_provider_request_json = 35;
+}
+
+message ConversationMessage {
+  enum MessageType {
+    MESSAGE_TYPE_UNSPECIFIED = 0;
+    MESSAGE_TYPE_HUMAN = 1;
+    MESSAGE_TYPE_AI = 2;
+  }
+
+  string text = 1;
+  MessageType type = 2;
+  optional string bubble_id = 3;
+  optional string server_bubble_id = 4;
+  optional bool is_capability_iteration = 22;
+  optional string checkpoint_id = 23;
+}
+
+message ModelDetails {
+  optional string model_name = 1;
+  optional string api_key = 2;
+  optional bool enable_ghost_mode = 3;
+  optional string openai_api_base_url = 6;
+  optional bool max_mode = 8;
+}
+
+message ExplicitContext {
+  string context = 1;
+  optional string repo_context = 2;
+}
+
+message LinterErrors {
+  string relative_workspace_path = 1;
+  repeated LinterError errors = 2;
+  string file_contents = 3;
+}
+
+message LinterError {
+  string message = 1;
+}
+
+message ComposerExternalLink {
+  string url = 1;
+  string uuid = 2;
+  optional string pdf_content = 3;
+  optional bool is_pdf = 4;
+  optional string filename = 5;
+}
+
+message ClientSideToolV2 {}
+message ClientSideToolV2Result {}
+message ClientSideToolV2Call {}
+
+message ConversationSummary {
+  string summary = 1;
+  string truncation_last_bubble_id_inclusive = 2;
+  string client_should_start_sending_from_inclusive_bubble_id = 3;
+  string previous_conversation_summary_bubble_id = 4;
+  bool includes_tool_results = 5;
+  string strategy = 6;
+}
+
+message UserRules {
+  message KnowledgeItem {
+    string title = 1;
+    string knowledge = 2;
+    string knowledge_id = 3;
+    bool is_generated = 4;
+  }
+
+  repeated KnowledgeItem rules = 1;
+}
+
+message StreamStart {
+  string padding = 1;
+}
+
+message SpanContext {
+  string trace_id = 1;
+  string span_id = 2;
+  optional uint32 trace_flags = 3;
+  optional string trace_state = 4;
+}
+
+message BidiRequestId {
+  string request_id = 1;
+}

@@ -1,0 +1,33 @@
+{
+  "name": "cursor-rpc",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Unofficial research bridge for experimenting with Cursor's ConnectRPC protocol against a self-hosted OpenAI-compatible model.",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "extract:protos": "cd vendor/extract-cursor-protos && go run . /Applications/Cursor.app ../../proto",
+    "test": "vitest run",
+    "serve": "node dist/cli.js serve",
+    "dev": "tsx src/cli.ts serve"
+  },
+  "bin": {
+    "cursor-rpc": "./dist/cli.js"
+  },
+  "dependencies": {
+    "protobufjs": "8.6.3",
+    "selfsigned": "5.5.0",
+    "undici": "8.4.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "prettier": "3.8.4",
+    "tsx": "4.21.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.8"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
