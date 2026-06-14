@@ -8,6 +8,8 @@ describe("ModelRegistry", () => {
     const model = {
       id: "local",
       displayName: "Local",
+      baseUrl: "http://localhost:8080/v1",
+      apiKey: "",
       contextTokenLimit: 1000,
       provider: { name: "test", async *streamCompletion() {} },
     };

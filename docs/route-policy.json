@@ -8,6 +8,22 @@
     "reason": "Merge conservative local model entries with upstream models."
   },
   {
+    "path": "/aiserver.v1.AiService/GetUsableModels",
+    "package": "aiserver.v1",
+    "service": "AiService",
+    "method": "GetUsableModels",
+    "policy": "intercept",
+    "reason": "Cursor Agent CLI reads this route for its model picker; merge local model entries with upstream usable models."
+  },
+  {
+    "path": "/aiserver.v1.AiService/GetDefaultModelForCli",
+    "package": "aiserver.v1",
+    "service": "AiService",
+    "method": "GetDefaultModelForCli",
+    "policy": "intercept",
+    "reason": "Preserve upstream's CLI default model when present; otherwise provide the first registered local model."
+  },
+  {
     "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithTools",
     "package": "aiserver.v1",
     "service": "ChatService",

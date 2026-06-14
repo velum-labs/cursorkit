@@ -7,8 +7,11 @@ This document records the transport assumptions that the bridge is allowed to re
 - The default proto files are package-preserving outputs under `proto/`.
 - `docs/service-manifest.json` and `docs/type-manifest-summary.json` are generated from the full default proto files.
 - Runtime interception is allowlisted in `src/routes.ts`.
+- Cursor Agent CLI model-listing RPCs use raw `application/proto` framing, not Connect envelopes. Model interceptors must preserve the incoming protobuf framing.
 - The initial interceptable routes are:
   - `/aiserver.v1.AiService/AvailableModels`
+  - `/aiserver.v1.AiService/GetUsableModels`
+  - `/aiserver.v1.AiService/GetDefaultModelForCli`
   - `/aiserver.v1.ChatService/StreamUnifiedChatWithTools`
 
 ## Transport Behavior To Capture

@@ -25,6 +25,7 @@
     "extract:protos": "cd vendor/extract-cursor-protos && go run . /Applications/Cursor.app ../../proto",
     "proto:inventory": "tsx src/tools/generateProtoInventory.ts",
     "test": "vitest run tests",
+    "e2e:cursor-agent": "python3 tests/e2e/cursor-agent-smoke.py",
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"docs/**/*.md\" \"*.md\" \"*.json\" \"*.yaml\" \"examples/**/*.ts\" \".github/workflows/*.yml\"",
     "check": "pnpm build && pnpm test && pnpm format:check",
     "serve": "node dist/src/cli.js serve",

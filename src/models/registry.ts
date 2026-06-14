@@ -3,6 +3,8 @@ import type { LocalModelConfig } from "../config.js";
 export interface RegisteredModel {
   id: string;
   displayName: string;
+  baseUrl: string;
+  apiKey: string;
   contextTokenLimit: number;
   provider: ModelProvider;
 }
@@ -45,6 +47,8 @@ export function registerConfiguredModels(
     registry.register({
       id: config.id,
       displayName: config.displayName,
+      baseUrl: config.baseUrl,
+      apiKey: config.apiKey,
       contextTokenLimit: config.contextTokenLimit,
       provider: providerFactory(config),
     });
