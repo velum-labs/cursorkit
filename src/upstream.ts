@@ -1,12 +1,16 @@
 import http, {
+  type RequestOptions,
   type IncomingHttpHeaders,
   type IncomingMessage,
   type ServerResponse,
 } from "node:http";
 import https from "node:https";
 import { pipeline } from "node:stream";
+import { promisify } from "node:util";
+import { brotliDecompress, gunzip, inflate } from "node:zlib";
 
 import type { BridgeConfig } from "./config.js";
+import { DESKTOP_HOSTNAMES } from "./desktop.js";
 import type { Logger } from "./logger.js";
 import { redactHeaders } from "./redaction.js";
 
@@ -20,6 +24,14 @@ const HOP_BY_HOP_HEADERS = new Set([
   "transfer-encoding",
   "upgrade",
 ]);
+
+const gunzipAsync = promisify(gunzip);
+const inflateAsync = promisify(inflate);
+const brotliDecompressAsync = promisify(brotliDecompress);
+
+export type UpstreamRequestOptions = RequestOptions & {
+  servername?: string;
+};
 
 export async function readRequestBody(
   request: IncomingMessage,
@@ -45,22 +57,20 @@ export function proxyRequest(
   logger: Logger,
 ): void {
   const upstreamUrl = upstreamRequestUrl(request, config);
-  const headers = upstreamHeaders(request.headers, upstreamUrl);
+  const options = upstreamRequestOptions(request, config, upstreamUrl);
   const client = upstreamUrl.protocol === "https:" ? https : http;
   const upstreamRequest = client.request(
-    upstreamUrl,
     {
+      ...options,
       method: request.method,
-      headers,
     },
     (upstreamResponse) => {
       response.writeHead(
         upstreamResponse.statusCode ?? 502,
-        upstreamResponse.statusMessage,
         responseHeaders(upstreamResponse.headers),
       );
       pipeline(upstreamResponse, response, (error) => {
-        if (error !== null && !response.destroyed) {
+        if (error != null && !response.destroyed) {
           logger.warn("upstream response pipeline failed", {
             error: error.message,
           });
@@ -98,36 +108,16 @@ export async function proxyBufferedRequest(
   config: BridgeConfig,
   logger: Logger,
 ): Promise<void> {
-  const upstreamUrl = upstreamRequestUrl(request, config);
-  const upstreamResponse = await fetch(upstreamUrl, {
-    method: request.method,
-    headers: fetchHeaders(upstreamHeaders(request.headers, upstreamUrl)),
-    body: body.length > 0 ? new Uint8Array(body) : undefined,
-  });
+  const upstreamResponse = await requestUpstreamBuffer(request, body, config);
 
-  response.statusCode = upstreamResponse.status;
-  for (const [key, value] of upstreamResponse.headers.entries()) {
-    if (!HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+  response.statusCode = upstreamResponse.statusCode;
+  for (const [key, value] of Object.entries(upstreamResponse.headers)) {
+    if (value !== undefined && !HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
       response.setHeader(key, value);
     }
   }
 
-  if (upstreamResponse.body === null) {
-    response.end();
-    return;
-  }
-
-  try {
-    for await (const chunk of upstreamResponse.body as AsyncIterable<Uint8Array>) {
-      response.write(chunk);
-    }
-    response.end();
-  } catch (error) {
-    logger.error("buffered upstream stream failed", {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    response.destroy(error instanceof Error ? error : new Error(String(error)));
-  }
+  response.end(upstreamResponse.body);
 }
 
 export async function fetchUpstreamBuffer(
@@ -138,16 +128,11 @@ export async function fetchUpstreamBuffer(
   if (config.upstreamBaseUrl === undefined) {
     return undefined;
   }
-  const upstreamUrl = upstreamRequestUrl(request, config);
-  const response = await fetch(upstreamUrl, {
-    method: request.method,
-    headers: fetchHeaders(upstreamHeaders(request.headers, upstreamUrl)),
-    body: body.length > 0 ? new Uint8Array(body) : undefined,
-  });
-  if (!response.ok) {
-    throw new Error(`Upstream returned ${response.status}`);
+  const response = await requestUpstreamBuffer(request, body, config);
+  if (response.statusCode < 200 || response.statusCode >= 300) {
+    throw new Error(`Upstream returned ${response.statusCode}`);
   }
-  return Buffer.from(await response.arrayBuffer());
+  return decodeResponseBody(response.body, response.headers);
 }
 
 export function upstreamRequestUrl(
@@ -159,8 +144,82 @@ export function upstreamRequestUrl(
       "CURSOR_UPSTREAM_BASE_URL is required for pass-through traffic",
     );
   }
-  const upstreamBaseUrl = new URL(config.upstreamBaseUrl);
+  const requestHost = requestHostWithoutPort(request);
+  const upstreamBaseUrl =
+    config.desktopMode &&
+    requestHost !== undefined &&
+    DESKTOP_HOSTNAMES.includes(
+      requestHost as (typeof DESKTOP_HOSTNAMES)[number],
+    )
+      ? new URL(`https://${requestHost}`)
+      : new URL(config.upstreamBaseUrl);
   return new URL(request.url ?? "/", upstreamBaseUrl);
+}
+
+function requestHostWithoutPort(request: IncomingMessage): string | undefined {
+  const host = request.headers.host;
+  if (host === undefined) {
+    return undefined;
+  }
+  const first = Array.isArray(host) ? host[0] : host;
+  if (first === undefined || first.length === 0) {
+    return undefined;
+  }
+  return first.split(":")[0];
+}
+
+export function upstreamRequestOptions(
+  request: IncomingMessage,
+  config: BridgeConfig,
+  upstreamUrl = upstreamRequestUrl(request, config),
+): UpstreamRequestOptions {
+  const isHttps = upstreamUrl.protocol === "https:";
+  return {
+    protocol: upstreamUrl.protocol,
+    hostname: config.upstreamConnectHost ?? upstreamUrl.hostname,
+    port:
+      config.upstreamConnectPort ??
+      (upstreamUrl.port.length > 0 ? Number(upstreamUrl.port) : undefined),
+    path: `${upstreamUrl.pathname}${upstreamUrl.search}`,
+    headers: upstreamHeaders(request.headers, upstreamUrl),
+    servername: isHttps ? upstreamUrl.hostname : undefined,
+  };
+}
+
+async function requestUpstreamBuffer(
+  request: IncomingMessage,
+  body: Buffer,
+  config: BridgeConfig,
+): Promise<{
+  statusCode: number;
+  headers: IncomingHttpHeaders;
+  body: Buffer;
+}> {
+  const upstreamUrl = upstreamRequestUrl(request, config);
+  const options = upstreamRequestOptions(request, config, upstreamUrl);
+  const client = upstreamUrl.protocol === "https:" ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const upstreamRequest = client.request(
+      {
+        ...options,
+        method: request.method,
+      },
+      (upstreamResponse) => {
+        const chunks: Buffer[] = [];
+        upstreamResponse.on("data", (chunk: Buffer) => chunks.push(chunk));
+        upstreamResponse.on("end", () => {
+          resolve({
+            statusCode: upstreamResponse.statusCode ?? 502,
+            headers: responseHeaders(upstreamResponse.headers),
+            body: Buffer.concat(chunks),
+          });
+        });
+      },
+    );
+    upstreamRequest.on("error", reject);
+    upstreamRequest.end(body);
+  });
 }
 
 function upstreamHeaders(
@@ -171,6 +230,7 @@ function upstreamHeaders(
   for (const [key, value] of Object.entries(headers)) {
     if (
       value === undefined ||
+      key.startsWith(":") ||
       HOP_BY_HOP_HEADERS.has(key.toLowerCase()) ||
       key.toLowerCase() === "host"
     ) {
@@ -187,7 +247,11 @@ function responseHeaders(
 ): Record<string, string | string[]> {
   const next: Record<string, string | string[]> = {};
   for (const [key, value] of Object.entries(headers)) {
-    if (value === undefined || HOP_BY_HOP_HEADERS.has(key.toLowerCase())) {
+    if (
+      value === undefined ||
+      key.startsWith(":") ||
+      HOP_BY_HOP_HEADERS.has(key.toLowerCase())
+    ) {
       continue;
     }
     next[key] = value;
@@ -195,16 +259,27 @@ function responseHeaders(
   return next;
 }
 
-function fetchHeaders(headers: Record<string, string | string[]>): Headers {
-  const result = new Headers();
-  for (const [key, value] of Object.entries(headers)) {
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        result.append(key, item);
-      }
-    } else {
-      result.set(key, value);
-    }
+async function decodeResponseBody(
+  body: Buffer,
+  headers: IncomingHttpHeaders,
+): Promise<Buffer> {
+  const encodingHeader = headers["content-encoding"];
+  const encoding = Array.isArray(encodingHeader)
+    ? encodingHeader[0]
+    : encodingHeader;
+  switch (encoding?.toLowerCase()) {
+    case undefined:
+    case "":
+    case "identity":
+      return body;
+    case "gzip":
+    case "x-gzip":
+      return gunzipAsync(body);
+    case "deflate":
+      return inflateAsync(body);
+    case "br":
+      return brotliDecompressAsync(body);
+    default:
+      return body;
   }
-  return result;
 }

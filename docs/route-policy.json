@@ -24,6 +24,38 @@
     "reason": "Preserve upstream's CLI default model when present; otherwise provide the first registered local model."
   },
   {
+    "path": "/aiserver.v1.AiService/NameAgent",
+    "package": "aiserver.v1",
+    "service": "AiService",
+    "method": "NameAgent",
+    "policy": "intercept",
+    "reason": "Provide a local fallback name for Cursor Agent sessions routed to a local model."
+  },
+  {
+    "path": "/aiserver.v1.ServerConfigService/GetServerConfig",
+    "package": "aiserver.v1",
+    "service": "ServerConfigService",
+    "method": "GetServerConfig",
+    "policy": "intercept",
+    "reason": "Rewrite agent URLs to the bridge origin and force HTTP/2 off for local bridge compatibility."
+  },
+  {
+    "path": "/agent.v1.AgentService/RunSSE",
+    "package": "agent.v1",
+    "service": "AgentService",
+    "method": "RunSSE",
+    "policy": "intercept",
+    "reason": "Serve Cursor Agent local-model runs when paired with a matching BidiAppend payload."
+  },
+  {
+    "path": "/aiserver.v1.BidiService/BidiAppend",
+    "package": "aiserver.v1",
+    "service": "BidiService",
+    "method": "BidiAppend",
+    "policy": "intercept",
+    "reason": "Decode Cursor Agent client messages and register pending local-model runs."
+  },
+  {
     "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithTools",
     "package": "aiserver.v1",
     "service": "ChatService",

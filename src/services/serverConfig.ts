@@ -4,6 +4,7 @@ import {
   AgentUrlConfigSchema,
   GetServerConfigResponseSchema,
   Http2Config,
+  type GetServerConfigResponse,
 } from "../gen/aiserver/v1/aiserver_pb.js";
 
 export function rewriteServerConfigAgentUrls(
@@ -11,6 +12,20 @@ export function rewriteServerConfigAgentUrls(
   bridgeOrigin: string,
 ): Buffer {
   const upstream = fromBinary(GetServerConfigResponseSchema, upstreamPayload);
+  return encodeServerConfig(upstream, bridgeOrigin);
+}
+
+export function buildLocalServerConfig(bridgeOrigin: string): Buffer {
+  return encodeServerConfig(
+    create(GetServerConfigResponseSchema),
+    bridgeOrigin,
+  );
+}
+
+function encodeServerConfig(
+  upstream: GetServerConfigResponse,
+  bridgeOrigin: string,
+): Buffer {
   return Buffer.from(
     toBinary(GetServerConfigResponseSchema, {
       ...upstream,

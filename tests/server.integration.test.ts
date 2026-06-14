@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import type { AddressInfo } from "node:net";
 
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
@@ -10,6 +11,7 @@ import {
   encodeEnvelope,
   firstMessagePayload,
   isEndStreamEnvelope,
+  parseEnvelopes,
 } from "../src/connectEnvelope.js";
 import {
   AgentV1_GetDefaultModelForCliRequestSchema,
@@ -31,7 +33,22 @@ import {
   AgentRunRequestSchema,
   AgentServerMessageSchema,
   ConversationActionSchema,
+  ConversationStateStructureSchema,
+  ConversationTokenDetailsSchema,
+  CursorRuleSchema,
+  ExecClientMessageSchema,
+  McpToolDefinitionSchema,
+  McpToolsSchema,
+  PromptContextNodeSchema,
+  PromptContextUsageTreeSchema,
   RequestedModelSchema,
+  RequestContextResultSchema,
+  RequestContextSchema,
+  RequestContextSuccessSchema,
+  ReadResultSchema,
+  ReadSuccessSchema,
+  SelectedContextSchema,
+  SelectedFileSchema,
   UserMessageActionSchema,
   UserMessageSchema,
 } from "../src/gen/agent/v1/agent_pb.js";
@@ -124,6 +141,9 @@ describe("bridge server", () => {
         legacySlugs?: string[];
         idAliases?: string[];
         variants?: Array<{
+          isMaxMode?: boolean;
+          isDefaultMaxConfig?: boolean;
+          isDefaultNonMaxConfig?: boolean;
           parameterValues?: Array<{
             id?: string;
             value?: string;
@@ -143,23 +163,73 @@ describe("bridge server", () => {
     expect(decoded.modelNames).toContain("local-model");
     expect(localModel?.supportsAgent).toBe(true);
     expect(localModel?.namedModelSectionIndex).toBe(1);
-    expect(localModel?.parameterDefinitions).toEqual([
-      expect.objectContaining({ id: "provider", name: "Provider" }),
+    expect(localModel?.parameterDefinitions ?? []).toEqual([
+      expect.objectContaining({ id: "context", name: "Context" }),
+      expect.objectContaining({ id: "reasoning", name: "Reasoning" }),
+      expect.objectContaining({ id: "fast", name: "Fast" }),
     ]);
     expect(localModel?.legacySlugs).toContain("local-model");
     expect(localModel?.idAliases).toContain("local-model");
-    expect(localModel?.variants).toHaveLength(1);
-    expect(localModel?.variants?.[0]?.parameterValues).toEqual([
-      expect.objectContaining({ id: "provider", value: "local" }),
+    expect(localModel?.variants).toHaveLength(2);
+    expect(localModel?.variants?.[0]?.parameterValues ?? []).toEqual([
+      expect.objectContaining({ id: "context", value: "272k" }),
+      expect.objectContaining({ id: "reasoning", value: "medium" }),
+      expect.objectContaining({ id: "fast", value: "false" }),
     ]);
     expect(localModel?.variants?.[0]?.tooltipData).toBeDefined();
     expect(localModel?.variants?.[0]?.displayNameOutsidePicker).toBe(
       "Local Model",
     );
     expect(localModel?.variants?.[0]?.variantStringRepresentation).toBe(
-      "local-model[provider=local]",
+      "local-model[context=272k,reasoning=medium,fast=false]",
     );
     expect(localModel?.variants?.[0]?.legacySlug).toBe("local-model");
+    expect(localModel?.variants?.[0]).toMatchObject({
+      isDefaultNonMaxConfig: true,
+    });
+    expect(localModel?.variants?.[0]?.isMaxMode).not.toBe(true);
+    expect(localModel?.variants?.[1]).toMatchObject({
+      isMaxMode: true,
+      isDefaultMaxConfig: true,
+      variantStringRepresentation:
+        "local-model[context=1m,reasoning=medium,fast=false]",
+      legacySlug: "local-model",
+    });
+  });
+
+  it("falls back to local models when upstream model payload decoding fails", async () => {
+    const upstream = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/proto" });
+      response.end(Buffer.from([0, 0, 0, 0, 1, 255]));
+    });
+    await listen(upstream);
+    servers.push(upstream);
+    const bridge = await startTestBridge({
+      upstreamBaseUrl: `http://127.0.0.1:${portOf(upstream)}`,
+    });
+    const runtime = await createBridgeRuntime(
+      baseConfig(),
+      createLogger("error"),
+    );
+    const requestBody = encodeEnvelope(
+      encodeMessage(runtime.proto.AvailableModelsRequest, {}),
+    );
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.AiService/AvailableModels`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/connect+proto" },
+        body: new Uint8Array(requestBody),
+      },
+    );
+    const decoded = decodeMessage(
+      runtime.proto.AvailableModelsResponse,
+      firstMessagePayload(Buffer.from(await response.arrayBuffer())),
+    ) as { modelNames: string[] };
+
+    expect(response.status).toBe(200);
+    expect(decoded.modelNames).toContain("local-model");
   });
 
   it("serves local models from Cursor Agent CLI model routes", async () => {
@@ -325,6 +395,124 @@ describe("bridge server", () => {
     );
   });
 
+  it("uses configured public origin for desktop server config rewrites", async () => {
+    const upstreamPayload = toBinary(
+      GetServerConfigResponseSchema,
+      create(GetServerConfigResponseSchema),
+    );
+    const upstream = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/proto" });
+      response.end(upstreamPayload);
+    });
+    await listen(upstream);
+    servers.push(upstream);
+    const bridge = await startTestBridge({
+      desktopMode: true,
+      publicOrigin: "https://api2.cursor.sh",
+      upstreamBaseUrl: `http://127.0.0.1:${portOf(upstream)}`,
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.ServerConfigService/GetServerConfig`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/proto" },
+        body: new Uint8Array(
+          toBinary(
+            GetServerConfigRequestSchema,
+            create(GetServerConfigRequestSchema),
+          ),
+        ),
+      },
+    );
+    const decoded = fromBinary(
+      GetServerConfigResponseSchema,
+      Buffer.from(await response.arrayBuffer()),
+    );
+
+    expect(response.status).toBe(200);
+    expect(decoded.agentUrlConfig?.agentUrl).toBe("https://api2.cursor.sh");
+    expect(decoded.agentUrlConfig?.agentnUrl).toBe("https://api2.cursor.sh");
+  });
+
+  it("uses configured agent public origin for desktop agent URL rewrites", async () => {
+    const upstreamPayload = toBinary(
+      GetServerConfigResponseSchema,
+      create(GetServerConfigResponseSchema),
+    );
+    const upstream = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/proto" });
+      response.end(upstreamPayload);
+    });
+    await listen(upstream);
+    servers.push(upstream);
+    const bridge = await startTestBridge({
+      desktopMode: true,
+      publicOrigin: "https://api2.cursor.sh",
+      agentPublicOrigin: "http://127.0.0.1:9777",
+      upstreamBaseUrl: `http://127.0.0.1:${portOf(upstream)}`,
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.ServerConfigService/GetServerConfig`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/proto" },
+        body: new Uint8Array(
+          toBinary(
+            GetServerConfigRequestSchema,
+            create(GetServerConfigRequestSchema),
+          ),
+        ),
+      },
+    );
+    const decoded = fromBinary(
+      GetServerConfigResponseSchema,
+      Buffer.from(await response.arrayBuffer()),
+    );
+
+    expect(response.status).toBe(200);
+    expect(decoded.agentUrlConfig?.agentUrl).toBe("http://127.0.0.1:9777");
+    expect(decoded.agentUrlConfig?.agentnUrl).toBe("http://127.0.0.1:9777");
+  });
+
+  it("falls back to local server config when upstream config decoding fails", async () => {
+    const upstream = http.createServer((_request, response) => {
+      response.writeHead(200, { "content-type": "application/proto" });
+      response.end(Buffer.from([0, 0, 0, 0, 1, 255]));
+    });
+    await listen(upstream);
+    servers.push(upstream);
+    const bridge = await startTestBridge({
+      upstreamBaseUrl: `http://127.0.0.1:${portOf(upstream)}`,
+      publicOrigin: "https://api2.cursor.sh",
+    });
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.ServerConfigService/GetServerConfig`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/proto" },
+        body: new Uint8Array(
+          toBinary(
+            GetServerConfigRequestSchema,
+            create(GetServerConfigRequestSchema),
+          ),
+        ),
+      },
+    );
+    const decoded = fromBinary(
+      GetServerConfigResponseSchema,
+      Buffer.from(await response.arrayBuffer()),
+    );
+
+    expect(response.status).toBe(200);
+    expect(decoded.agentUrlConfig?.agentUrl).toBe("https://api2.cursor.sh");
+    expect(decoded.http2Config).toBe(
+      Http2Config.HTTP2_CONFIG_FORCE_ALL_DISABLED,
+    );
+  });
+
   it("streams local chat chunks for registered models", async () => {
     const bridge = await startTestBridge();
     const runtime = await createBridgeRuntime(
@@ -429,6 +617,519 @@ describe("bridge server", () => {
     expect(messages[0]?.interactionUpdate?.textDelta?.text).toBe("hello");
     expect(messages.at(-1)?.interactionUpdate?.turnEnded).toBeDefined();
   });
+
+  it("serves local Cursor Agent Run requests from AgentClientMessage payloads", async () => {
+    const bridge = await startTestBridge();
+    const clientMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, { text: "hello" }),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/agent.v1.AgentService/Run`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/connect+proto" },
+        body: new Uint8Array(encodeEnvelope(clientMessage)),
+      },
+    );
+    const responseBody = Buffer.from(await response.arrayBuffer());
+    const messages = decodeEnvelopes(responseBody)
+      .filter((envelope) => !isEndStreamEnvelope(envelope))
+      .map((envelope) =>
+        fromBinary(AgentServerMessageSchema, envelope.payload),
+      );
+
+    expect(response.status).toBe(200);
+    expect(messages[0]?.interactionUpdate?.textDelta?.text).toBe("hello");
+    expect(messages.at(-1)?.interactionUpdate?.turnEnded).toBeDefined();
+  });
+
+  it("injects Cursor agent context into local OpenAI-compatible requests", async () => {
+    let capturedRequest: {
+      messages?: Array<{ role: string; content: string }>;
+    } = {};
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        capturedRequest = JSON.parse(
+          Buffer.concat(chunks).toString("utf8"),
+        ) as typeof capturedRequest;
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"context-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      logLevel: "debug",
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+    const requestId = "local-agent-context-run";
+    const runResponsePromise = fetch(
+      `http://127.0.0.1:${portOf(bridge)}/agent.v1.AgentService/RunSSE`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/proto" },
+        body: new Uint8Array(
+          toBinary(
+            BidiRequestIdSchema,
+            create(BidiRequestIdSchema, { requestId }),
+          ),
+        ),
+      },
+    );
+
+    const clientMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          customSystemPrompt: "custom system prompt for local model",
+          mcpTools: create(McpToolsSchema, {
+            mcpTools: [
+              create(McpToolDefinitionSchema, {
+                name: "ReadFile",
+                toolName: "read_file",
+                providerIdentifier: "cursor",
+                description: "Read files from the workspace",
+              }),
+            ],
+          }),
+          conversationState: create(ConversationStateStructureSchema, {
+            tokenDetails: create(ConversationTokenDetailsSchema, {
+              promptContextUsageTree: create(PromptContextUsageTreeSchema, {
+                nodes: [
+                  create(PromptContextNodeSchema, {
+                    id: "node-1",
+                    label: "Inline context",
+                    kind: "file",
+                    inlineContent: "inline repo context",
+                  }),
+                ],
+              }),
+            }),
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "answer using context",
+                selectedContext: create(SelectedContextSchema, {
+                  files: [
+                    create(SelectedFileSchema, {
+                      path: "/repo/file.ts",
+                      relativePath: "file.ts",
+                      content: "export const fromSelectedFile = true;",
+                    }),
+                  ],
+                }),
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const appendResponse = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.BidiService/BidiAppend`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/proto" },
+        body: new Uint8Array(
+          toBinary(
+            BidiAppendRequestSchema,
+            create(BidiAppendRequestSchema, {
+              requestId: create(BidiRequestIdSchema, { requestId }),
+              data: Buffer.from(clientMessage).toString("hex"),
+            }),
+          ),
+        ),
+      },
+    );
+    const runResponse = await runResponsePromise;
+    await runResponse.arrayBuffer();
+
+    const allMessageText =
+      capturedRequest.messages?.map((message) => message.content).join("\n") ??
+      "";
+    expect(appendResponse.status).toBe(200);
+    expect(runResponse.status).toBe(200);
+    expect(allMessageText).toContain("custom system prompt");
+    expect(allMessageText).toContain("export const fromSelectedFile");
+    expect(allMessageText).toContain("inline repo context");
+    expect(allMessageText).toContain("ReadFile");
+    expect(capturedRequest.messages?.at(-1)).toMatchObject({
+      role: "user",
+      content: "answer using context",
+    });
+  });
+
+  it("requests native Cursor context before calling local model for desktop Agent Run", async () => {
+    let capturedRequest: {
+      messages?: Array<{ role: string; content: string }>;
+    } = {};
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        capturedRequest = JSON.parse(
+          Buffer.concat(chunks).toString("utf8"),
+        ) as typeof capturedRequest;
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"native-context-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      logLevel: "debug",
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+
+    const runRequest = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "what is this project?",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const contextResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 1,
+          execId: "cursor-rpc-context-1",
+          requestContextResult: create(RequestContextResultSchema, {
+            success: create(RequestContextSuccessSchema, {
+              requestContext: create(RequestContextSchema, {
+                rules: [
+                  create(CursorRuleSchema, {
+                    fullPath: ".cursor/rules/project.mdc",
+                    content: "Always explain that cursor-rpc is a bridge.",
+                  }),
+                ],
+                tools: [
+                  create(McpToolDefinitionSchema, {
+                    name: "ReadFile",
+                    toolName: "read_file",
+                    providerIdentifier: "cursor",
+                    description: "Read files from the workspace",
+                  }),
+                ],
+                fileContents: {
+                  "README.md": "# cursor-rpc\n\nLocal Cursor backend bridge.",
+                },
+                gitRepos: [],
+                projectLayouts: [],
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const modelResponse = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/agent.v1.AgentService/Run`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/connect+proto",
+          "x-cursor-rpc-native-agent": "true",
+        },
+        body: new Uint8Array(
+          Buffer.concat([
+            encodeEnvelope(runRequest),
+            encodeEnvelope(contextResultMessage),
+          ]),
+        ),
+      },
+    );
+    expect(modelResponse.status).toBe(200);
+    const responseEnvelopes = decodeEnvelopes(
+      Buffer.from(await modelResponse.arrayBuffer()),
+    ).filter((envelope) => !isEndStreamEnvelope(envelope));
+    const contextServerMessage = fromBinary(
+      AgentServerMessageSchema,
+      responseEnvelopes[0]?.payload ?? new Uint8Array(),
+    );
+    expect(contextServerMessage.execServerMessage?.requestContextArgs).toBeDefined();
+    const allMessageText =
+      capturedRequest.messages?.map((message) => message.content).join("\n") ??
+      "";
+    expect(allMessageText).toContain("Cursor native request context");
+    expect(allMessageText).toContain("cursor-rpc");
+    expect(allMessageText).toContain("ReadFile");
+    expect(allMessageText).toContain("Always explain");
+    expect(capturedRequest.messages?.at(-1)).toMatchObject({
+      role: "user",
+      content: "what is this project?",
+    });
+  });
+
+  it("executes local model read_file tool calls through Cursor Agent Run", async () => {
+    const capturedRequests: Array<{
+      messages?: Array<{ role: string; content: string; tool_call_id?: string }>;
+      tools?: Array<{ function?: { name?: string } }>;
+    }> = [];
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        let parsed: {
+          messages?: Array<{ role: string; content: string; tool_call_id?: string }>;
+          tools?: Array<{ function?: { name?: string } }>;
+        };
+        try {
+          parsed = JSON.parse(Buffer.concat(chunks).toString("utf8")) as typeof parsed;
+        } catch (error) {
+          response.writeHead(500, { "content-type": "text/plain" });
+          response.end(error instanceof Error ? error.message : String(error));
+          return;
+        }
+        capturedRequests.push(parsed);
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        if (capturedRequests.length === 1) {
+          const toolCallChunk = {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "call-readme",
+                      type: "function",
+                      function: {
+                        name: "read_file",
+                        arguments: JSON.stringify({ path: "README.md" }),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          response.end(
+            [
+              `data: ${JSON.stringify(toolCallChunk)}`,
+              'data: {"choices":[{"finish_reason":"tool_calls"}]}',
+              "data: [DONE]",
+              "",
+            ].join("\n"),
+          );
+          return;
+        }
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"readme-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      logLevel: "debug",
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+
+    const runRequest = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "read the readme",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const contextResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 1,
+          execId: "cursor-rpc-context-1",
+          requestContextResult: create(RequestContextResultSchema, {
+            success: create(RequestContextSuccessSchema, {
+              requestContext: create(RequestContextSchema, {
+                tools: [
+                  create(McpToolDefinitionSchema, {
+                    name: "ReadFile",
+                    toolName: "read_file",
+                    providerIdentifier: "cursor",
+                    description: "Read files from the workspace",
+                  }),
+                ],
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const readResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 2,
+          execId: "cursor-rpc-tool-call-readme",
+          readResult: create(ReadResultSchema, {
+            success: create(ReadSuccessSchema, {
+              path: "README.md",
+              content: "# cursor-rpc\n\nThis project bridges Cursor to local models.",
+              totalLines: 3,
+              fileSize: BigInt(57),
+              truncated: false,
+              rangeApplied: false,
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const responseText = await runDuplexAgentRequest(
+      portOf(bridge),
+      runRequest,
+      contextResultMessage,
+      readResultMessage,
+    );
+
+    expect(capturedRequests).toHaveLength(2);
+    expect(
+      capturedRequests[0]?.tools?.map((tool) => tool.function?.name),
+    ).toContain("read_file");
+    const secondMessages = capturedRequests[1]?.messages ?? [];
+    expect(secondMessages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          tool_call_id: "call-readme",
+          content: expect.stringContaining("bridges Cursor"),
+        }),
+      ]),
+    );
+    expect(responseText).toContain("readme-ok");
+  });
+
+  it("serves typed local model and chat routes over HTTPS", async () => {
+    const bridge = await startTestBridge({ useTls: true });
+    const runtime = await createBridgeRuntime(
+      baseConfig(),
+      createLogger("error"),
+    );
+    const modelRequestBody = encodeEnvelope(
+      encodeMessage(runtime.proto.AvailableModelsRequest, {}),
+    );
+
+    const modelsResponse = await httpsRequestBuffer(portOf(bridge), {
+      path: "/aiserver.v1.AiService/AvailableModels",
+      method: "POST",
+      headers: { "content-type": "application/connect+proto" },
+      body: modelRequestBody,
+    });
+    const decoded = decodeMessage(
+      runtime.proto.AvailableModelsResponse,
+      firstMessagePayload(modelsResponse.body),
+    ) as { modelNames: string[] };
+    const chatRequestBody = encodeEnvelope(
+      encodeMessage(runtime.proto.StreamUnifiedChatRequestWithTools, {
+        streamUnifiedChatRequest: {
+          modelDetails: { modelName: "local-model" },
+          conversation: [{ text: "hello", type: 1 }],
+          isChat: true,
+        },
+      }),
+    );
+    const chatResponse = await httpsRequestBuffer(portOf(bridge), {
+      path: "/aiserver.v1.ChatService/StreamUnifiedChatWithTools",
+      method: "POST",
+      headers: { "content-type": "application/connect+proto" },
+      body: chatRequestBody,
+    });
+    const messages = decodeEnvelopes(chatResponse.body)
+      .filter((envelope) => !isEndStreamEnvelope(envelope))
+      .map((envelope) =>
+        decodeMessage(
+          runtime.proto.StreamUnifiedChatResponseWithTools,
+          envelope.payload,
+        ),
+      );
+
+    expect(modelsResponse.status).toBe(200);
+    expect(decoded.modelNames).toContain("local-model");
+    expect(chatResponse.status).toBe(200);
+    expect(messages[0]).toMatchObject({
+      streamUnifiedChatResponse: { text: "hello" },
+    });
+  });
 });
 
 async function startTestBridge(
@@ -436,7 +1137,7 @@ async function startTestBridge(
 ): Promise<http.Server> {
   const runtime = await createBridgeRuntime(
     { ...baseConfig(), ...overrides },
-    createLogger("error"),
+    createLogger(overrides.logLevel ?? "error"),
   );
   const server = await startServer(runtime);
   servers.push(server);
@@ -447,6 +1148,8 @@ function baseConfig(): BridgeConfig {
   return {
     host: "127.0.0.1",
     port: 0,
+    upstreamConnectHost: undefined,
+    upstreamConnectPort: undefined,
     modelBaseUrl: "http://localhost:8080/v1",
     modelApiKey: "",
     modelName: "local-model",
@@ -454,6 +1157,7 @@ function baseConfig(): BridgeConfig {
       {
         id: "local-model",
         displayName: "Local Model",
+        providerModel: "local-model",
         baseUrl: "http://localhost:8080/v1",
         apiKey: "",
         contextTokenLimit: 128000,
@@ -462,12 +1166,120 @@ function baseConfig(): BridgeConfig {
     ],
     captureDir: "fixtures/captures",
     captureEnabled: false,
+    desktopMode: false,
     failOpen: true,
     logLevel: "error",
+    publicOrigin: undefined,
+    agentPublicOrigin: undefined,
+    desktopAgentHttpPort: undefined,
+    routeInventoryEnabled: false,
+    modelPayloadLogging: "summary",
+    tlsHostnames: ["localhost", "127.0.0.1", "::1"],
     unsafeAllowNonLocalhost: false,
     maxInterceptBodyBytes: 1024 * 1024,
     useTls: false,
   };
+}
+
+async function httpsRequestBuffer(
+  port: number,
+  options: {
+    path: string;
+    method: string;
+    headers: Record<string, string>;
+    body: Buffer;
+  },
+): Promise<{ status: number; body: Buffer }> {
+  return new Promise((resolve, reject) => {
+    const request = https.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path: options.path,
+        method: options.method,
+        headers: options.headers,
+        rejectUnauthorized: false,
+      },
+      (response) => {
+        const chunks: Buffer[] = [];
+        response.on("data", (chunk: Buffer) => chunks.push(chunk));
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            body: Buffer.concat(chunks),
+          });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.end(options.body);
+  });
+}
+
+async function runDuplexAgentRequest(
+  port: number,
+  runRequest: Uint8Array,
+  contextResultMessage: Uint8Array,
+  readResultMessage: Uint8Array,
+): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    let responseText = "";
+    let responseBuffer = Buffer.alloc(0);
+    let contextSent = false;
+    let readSent = false;
+    const request = http.request(
+      {
+        host: "127.0.0.1",
+        port,
+        path: "/agent.v1.AgentService/Run",
+        method: "POST",
+        headers: {
+          "content-type": "application/connect+proto",
+          "x-cursor-rpc-native-agent": "true",
+        },
+      },
+      (response) => {
+        response.on("data", (chunk: Buffer) => {
+          responseBuffer = Buffer.concat([
+            responseBuffer,
+            Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk),
+          ]);
+          const parsed = parseEnvelopes(responseBuffer);
+          responseBuffer = Buffer.from(parsed.remainder);
+          for (const envelope of parsed.envelopes) {
+            if (isEndStreamEnvelope(envelope)) {
+              continue;
+            }
+            const message = fromBinary(AgentServerMessageSchema, envelope.payload);
+            if (
+              message.execServerMessage?.requestContextArgs !== undefined &&
+              !contextSent
+            ) {
+              contextSent = true;
+              request.write(encodeEnvelope(contextResultMessage));
+              continue;
+            }
+            if (message.execServerMessage?.readArgs !== undefined && !readSent) {
+              readSent = true;
+              request.write(encodeEnvelope(readResultMessage));
+              request.end();
+              continue;
+            }
+            responseText += message.interactionUpdate?.textDelta?.text ?? "";
+          }
+        });
+        response.on("end", () => {
+          if ((response.statusCode ?? 0) >= 400) {
+            reject(new Error(`Agent Run returned HTTP ${response.statusCode}`));
+            return;
+          }
+          resolve(responseText);
+        });
+      },
+    );
+    request.on("error", reject);
+    request.write(encodeEnvelope(runRequest));
+  });
 }
 
 async function listen(server: http.Server): Promise<void> {

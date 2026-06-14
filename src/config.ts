@@ -2,6 +2,9 @@ export interface BridgeConfig {
   host: string;
   port: number;
   upstreamBaseUrl?: string;
+  upstreamConnectHost?: string;
+  upstreamConnectPort?: number;
+  desktopMode: boolean;
   modelBaseUrl: string;
   modelApiKey: string;
   modelName: string;
@@ -9,7 +12,11 @@ export interface BridgeConfig {
   hardcodedResponse?: string;
   certPath?: string;
   keyPath?: string;
+  tlsHostnames: string[];
   useTls: boolean;
+  publicOrigin?: string;
+  agentPublicOrigin?: string;
+  desktopAgentHttpPort?: number;
   captureDir: string;
   captureEnabled: boolean;
   failOpen: boolean;
@@ -17,13 +24,17 @@ export interface BridgeConfig {
   pluginPath?: string;
   unsafeAllowNonLocalhost: boolean;
   maxInterceptBodyBytes: number;
+  routeInventoryEnabled: boolean;
+  modelPayloadLogging: ModelPayloadLogging;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
+export type ModelPayloadLogging = "summary" | "full";
 
 export interface LocalModelConfig {
   id: string;
   displayName: string;
+  providerModel: string;
   baseUrl: string;
   apiKey: string;
   contextTokenLimit: number;
@@ -37,6 +48,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
   }
 
   const host = env.BRIDGE_HOST ?? "127.0.0.1";
+  const desktopMode = parseBoolean(env.BRIDGE_DESKTOP_MODE, false);
   const unsafeAllowNonLocalhost = parseBoolean(
     env.BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST,
     false,
@@ -50,10 +62,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
   const modelBaseUrl = env.MODEL_BASE_URL ?? "http://localhost:8080/v1";
   const modelApiKey = env.MODEL_API_KEY ?? "";
   const modelName = env.MODEL_NAME ?? "local-model";
+  const providerModel = env.MODEL_PROVIDER_MODEL ?? modelName;
   const hardcodedResponse = env.BRIDGE_HARDCODED_RESPONSE;
   const models = parseModels(env, {
     id: modelName,
     displayName: modelName,
+    providerModel,
     baseUrl: modelBaseUrl,
     apiKey: modelApiKey,
     contextTokenLimit: parseInteger(env.MODEL_CONTEXT_TOKEN_LIMIT, 128000),
@@ -63,7 +77,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
   return {
     host,
     port,
-    upstreamBaseUrl: emptyToUndefined(env.CURSOR_UPSTREAM_BASE_URL),
+    upstreamBaseUrl:
+      emptyToUndefined(env.CURSOR_UPSTREAM_BASE_URL) ??
+      (desktopMode ? "https://api2.cursor.sh" : undefined),
+    upstreamConnectHost: emptyToUndefined(env.CURSOR_UPSTREAM_CONNECT_HOST),
+    upstreamConnectPort:
+      emptyToUndefined(env.CURSOR_UPSTREAM_CONNECT_PORT) === undefined
+        ? undefined
+        : parseInteger(env.CURSOR_UPSTREAM_CONNECT_PORT, 443),
+    desktopMode,
     modelBaseUrl,
     modelApiKey,
     modelName,
@@ -71,7 +93,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     hardcodedResponse,
     certPath: emptyToUndefined(env.BRIDGE_CERT_PATH),
     keyPath: emptyToUndefined(env.BRIDGE_KEY_PATH),
+    tlsHostnames: parseCsv(
+      env.BRIDGE_TLS_HOSTNAMES,
+      desktopMode
+        ? [
+            "api2.cursor.sh",
+            "api3.cursor.sh",
+            "agent.api5.cursor.sh",
+            "agentn.api5.cursor.sh",
+            "agentn.global.api5.cursor.sh",
+            "localhost",
+            "127.0.0.1",
+            "::1",
+          ]
+        : ["localhost", "127.0.0.1", "::1"],
+    ),
     useTls: parseBoolean(env.BRIDGE_USE_TLS, false),
+    publicOrigin:
+      emptyToUndefined(env.BRIDGE_PUBLIC_ORIGIN) ??
+      (desktopMode ? "https://api2.cursor.sh" : undefined),
+    agentPublicOrigin: emptyToUndefined(env.BRIDGE_AGENT_PUBLIC_ORIGIN),
+    desktopAgentHttpPort:
+      emptyToUndefined(env.BRIDGE_DESKTOP_AGENT_HTTP_PORT) === undefined
+        ? undefined
+        : parseInteger(env.BRIDGE_DESKTOP_AGENT_HTTP_PORT, 0),
     captureDir: env.BRIDGE_CAPTURE_DIR ?? "fixtures/captures",
     captureEnabled: parseBoolean(env.BRIDGE_CAPTURE_ENABLED, false),
     failOpen: parseBoolean(env.BRIDGE_FAIL_OPEN, true),
@@ -82,7 +127,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
       env.BRIDGE_MAX_INTERCEPT_BODY_BYTES,
       50 * 1024 * 1024,
     ),
+    routeInventoryEnabled:
+      desktopMode || parseBoolean(env.BRIDGE_ROUTE_INVENTORY, false),
+    modelPayloadLogging: parseModelPayloadLogging(
+      env.BRIDGE_LOG_MODEL_PAYLOADS,
+    ),
   };
+}
+
+function parseModelPayloadLogging(
+  value: string | undefined,
+): ModelPayloadLogging {
+  if (value === "full") {
+    return "full";
+  }
+  return "summary";
 }
 
 function parseModels(
@@ -111,6 +170,8 @@ function parseModels(
     return {
       id,
       displayName: typeof item.displayName === "string" ? item.displayName : id,
+      providerModel:
+        typeof item.providerModel === "string" ? item.providerModel : id,
       baseUrl,
       apiKey: typeof item.apiKey === "string" ? item.apiKey : "",
       contextTokenLimit:
@@ -161,6 +222,20 @@ function parseInteger(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     throw new Error(`Invalid integer value: ${value}`);
+  }
+  return parsed;
+}
+
+function parseCsv(value: string | undefined, fallback: string[]): string[] {
+  if (value === undefined || value === "") {
+    return fallback;
+  }
+  const parsed = value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  if (parsed.length === 0) {
+    throw new Error("CSV value must contain at least one non-empty item");
   }
   return parsed;
 }

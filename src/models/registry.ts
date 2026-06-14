@@ -1,4 +1,9 @@
 import type { LocalModelConfig } from "../config.js";
+import type {
+  ChatMessage,
+  OpenAICompletionEvent,
+  OpenAIToolDefinition,
+} from "../providers/openai.js";
 
 export interface RegisteredModel {
   id: string;
@@ -11,9 +16,11 @@ export interface RegisteredModel {
 
 export interface ModelProvider {
   readonly name: string;
-  streamCompletion(
-    messages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
-  ): AsyncGenerator<string>;
+  streamCompletion(messages: ChatMessage[]): AsyncGenerator<string>;
+  streamCompletionEvents?(
+    messages: ChatMessage[],
+    tools?: OpenAIToolDefinition[],
+  ): AsyncGenerator<OpenAICompletionEvent>;
 }
 
 export class ModelRegistry {

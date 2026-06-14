@@ -2,6 +2,11 @@
 
 This document records the transport assumptions that the bridge is allowed to rely on. Unknown or unverified behavior must stay on the byte-preserving pass-through path.
 
+See `docs/learnings.md` for the broader set of implementation observations,
+debugging lessons, and known unknowns behind these protocol rules.
+See `docs/protocol-surface-audit.md` for the gap analysis between the full proto
+surface and the routes currently implemented by the bridge.
+
 ## Current Verified Surface
 
 - The default proto files are package-preserving outputs under `proto/`.
@@ -12,7 +17,12 @@ This document records the transport assumptions that the bridge is allowed to re
   - `/aiserver.v1.AiService/AvailableModels`
   - `/aiserver.v1.AiService/GetUsableModels`
   - `/aiserver.v1.AiService/GetDefaultModelForCli`
+  - `/aiserver.v1.AiService/NameAgent`
+  - `/aiserver.v1.ServerConfigService/GetServerConfig`
+  - `/agent.v1.AgentService/RunSSE`
+  - `/aiserver.v1.BidiService/BidiAppend`
   - `/aiserver.v1.ChatService/StreamUnifiedChatWithTools`
+- Cursor desktop app support is observe-first. Desktop mode enables redacted route inventory logging, but it does not add desktop-only interceptors until traffic proves the exact RPC and framing.
 
 ## Transport Behavior To Capture
 

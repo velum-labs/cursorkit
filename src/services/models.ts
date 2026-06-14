@@ -9,12 +9,14 @@ import {
   AgentV1_GetUsableModelsResponseSchema,
   AgentV1_ModelDetailsSchema,
   AgentV1_RequestedModel_ModelParameterValueSchema,
+  AvailableModelsResponse_DegradationStatus,
   AvailableModelsResponse_AvailableModelSchema,
   AvailableModelsResponse_ModelVariantConfigSchema,
   AvailableModelsResponse_TooltipDataSchema,
   AvailableModelsResponse_ModelVendorId,
   AvailableModelsResponse_ModelVendorSchema,
   AvailableModelsResponseSchema,
+  GetDefaultModelResponseSchema,
   ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
   ModelParameterDefinition_EnumParameterDefinitionSchema,
   ModelParameterDefinition_ModelParameterTypeSchema,
@@ -47,20 +49,23 @@ export function mergeAvailableModels(
         defaultOn: false,
         isChatOnly: false,
         supportsAgent: true,
+        degradationStatus:
+          AvailableModelsResponse_DegradationStatus.AVAILABLE_MODELS_RESPONSE_DEGRADATION_STATUS_DEGRADATION_STATUS_UNSPECIFIED,
         supportsThinking: false,
         supportsImages: false,
         supportsAutoContext: false,
-        supportsMaxMode: false,
+        supportsMaxMode: true,
         supportsNonMaxMode: true,
-        supportsPlanMode: false,
+        supportsPlanMode: true,
         supportsSandboxing: false,
         supportsCmdK: false,
+        cloudAgentEffortModes: [],
         clientDisplayName: model.displayName,
         serverModelName: model.id,
         inputboxShortModelName: model.displayName,
         contextTokenLimit: model.contextTokenLimit,
         isUserAdded: true,
-        parameterDefinitions: [localProviderParameterDefinition()],
+        parameterDefinitions: localParameterDefinitions(),
         legacySlugs: [model.id],
         idAliases: [model.id],
         namedModelSectionIndex: 1,
@@ -71,18 +76,8 @@ export function mergeAvailableModels(
           displayName: "Local",
         }),
         variants: [
-          create(AvailableModelsResponse_ModelVariantConfigSchema, {
-            displayName: model.displayName,
-            displayNameOutsidePicker: model.displayName,
-            isMaxMode: false,
-            isDefaultNonMaxConfig: true,
-            parameterValues: [localProviderParameterValue()],
-            tooltipData: create(AvailableModelsResponse_TooltipDataSchema, {
-              markdownContent: `**${model.displayName}**<br />Local OpenAI-compatible model.`,
-            }),
-            variantStringRepresentation: `${model.id}[provider=local]`,
-            legacySlug: model.id,
-          }),
+          localVariantConfig(model, false),
+          localVariantConfig(model, true),
         ],
       }),
     );
@@ -156,6 +151,32 @@ export function mergeDefaultModelForCli(
   );
 }
 
+export function mergeDefaultModel(
+  upstreamPayload: Buffer | undefined,
+  models: ModelRegistry,
+): Buffer {
+  const upstream =
+    upstreamPayload === undefined
+      ? create(GetDefaultModelResponseSchema)
+      : fromBinary(GetDefaultModelResponseSchema, upstreamPayload);
+  const firstLocalModel = models.list()[0];
+  if (firstLocalModel === undefined) {
+    return Buffer.from(toBinary(GetDefaultModelResponseSchema, upstream));
+  }
+
+  return Buffer.from(
+    toBinary(
+      GetDefaultModelResponseSchema,
+      create(GetDefaultModelResponseSchema, {
+        ...upstream,
+        model: firstLocalModel.id,
+        thinkingModel: firstLocalModel.id,
+        maxMode: true,
+      }),
+    ),
+  );
+}
+
 export function writeAvailableModelsResponse(
   response: ServerResponse,
   payload: Buffer,
@@ -205,32 +226,112 @@ function localCliModelDetails(model: RegisteredModel) {
   });
 }
 
-function localProviderParameterDefinition() {
-  return create(ModelParameterDefinitionSchema, {
-    id: "provider",
-    name: "Provider",
-    parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
-      enumParameter: create(
-        ModelParameterDefinition_EnumParameterDefinitionSchema,
-        {
-          values: [
-            create(
-              ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-              {
-                value: "local",
-                displayName: "Local",
-              },
-            ),
-          ],
-        },
-      ),
+function localVariantConfig(model: RegisteredModel, isMaxMode: boolean) {
+  return create(AvailableModelsResponse_ModelVariantConfigSchema, {
+    displayName: model.displayName,
+    displayNameOutsidePicker: model.displayName,
+    isMaxMode,
+    isDefaultMaxConfig: isMaxMode,
+    isDefaultNonMaxConfig: !isMaxMode,
+    parameterValues: localParameterValues(isMaxMode),
+    tooltipData: create(AvailableModelsResponse_TooltipDataSchema, {
+      markdownContent: `**${model.displayName}**<br />Local OpenAI-compatible model.`,
     }),
+    variantStringRepresentation: localVariantString(model.id, isMaxMode),
+    legacySlug: model.id,
   });
 }
 
-function localProviderParameterValue() {
-  return create(AgentV1_RequestedModel_ModelParameterValueSchema, {
-    id: "provider",
-    value: "local",
-  });
+function localVariantString(modelId: string, isMaxMode: boolean): string {
+  const context = isMaxMode ? "1m" : "272k";
+  return `${modelId}[context=${context},reasoning=medium,fast=false]`;
+}
+
+function localParameterDefinitions() {
+  return [
+    create(ModelParameterDefinitionSchema, {
+      id: "context",
+      name: "Context",
+      markdownTooltip: "Context size the model has available.",
+      parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
+        enumParameter: create(
+          ModelParameterDefinition_EnumParameterDefinitionSchema,
+          {
+            values: [
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "272k", displayName: "272K" },
+              ),
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "1m", displayName: "1M" },
+              ),
+            ],
+          },
+        ),
+      }),
+    }),
+    create(ModelParameterDefinitionSchema, {
+      id: "reasoning",
+      name: "Reasoning",
+      markdownTooltip: "Reasoning effort the model uses to generate its response.",
+      parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
+        enumParameter: create(
+          ModelParameterDefinition_EnumParameterDefinitionSchema,
+          {
+            values: [
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "none", displayName: "None" },
+              ),
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "low", displayName: "Low" },
+              ),
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "medium", displayName: "Medium" },
+              ),
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "high", displayName: "High" },
+              ),
+              create(
+                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                { value: "extra-high", displayName: "Extra High" },
+              ),
+            ],
+          },
+        ),
+      }),
+      isCycleableByHotkey: true,
+    }),
+    create(ModelParameterDefinitionSchema, {
+      id: "fast",
+      name: "Fast",
+      markdownTooltip: "Use the provider's fast lane when supported.",
+      parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
+        booleanParameter: {
+          values: [{ value: "false" }, { value: "true", displayName: "Fast" }],
+        },
+      }),
+    }),
+  ];
+}
+
+function localParameterValues(isMaxMode: boolean) {
+  return [
+    create(AgentV1_RequestedModel_ModelParameterValueSchema, {
+      id: "context",
+      value: isMaxMode ? "1m" : "272k",
+    }),
+    create(AgentV1_RequestedModel_ModelParameterValueSchema, {
+      id: "reasoning",
+      value: "medium",
+    }),
+    create(AgentV1_RequestedModel_ModelParameterValueSchema, {
+      id: "fast",
+      value: "false",
+    }),
+  ];
 }

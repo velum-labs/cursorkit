@@ -29,9 +29,12 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"docs/**/*.md\" \"*.md\" \"*.json\" \"*.yaml\" \"examples/**/*.ts\" \".github/workflows/*.yml\"",
     "check": "pnpm build && pnpm test && pnpm format:check",
     "serve": "node dist/src/cli.js serve",
-    "dev": "tsx src/cli.ts serve"
+    "dev": "tsx src/cli.ts serve",
+    "ck": "node dist/src/ck.js",
+    "test:harness": "node dist/src/testing/cli.js"
   },
   "bin": {
+    "ck": "./dist/src/ck.js",
     "cursor-rpc": "./dist/src/cli.js"
   },
   "files": [

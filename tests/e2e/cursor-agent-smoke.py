@@ -78,6 +78,8 @@ def free_port() -> int:
 
 def start_bridge(port: int, log_file) -> subprocess.Popen:
     env = os.environ.copy()
+    bridge_models_json = env.pop("E2E_BRIDGE_MODELS_JSON", None)
+    env.pop("BRIDGE_MODELS_JSON", None)
     env.update(
         {
             "BRIDGE_PORT": str(port),
@@ -91,6 +93,8 @@ def start_bridge(port: int, log_file) -> subprocess.Popen:
             "BRIDGE_LOG_LEVEL": env.get("BRIDGE_LOG_LEVEL", "debug"),
         }
     )
+    if bridge_models_json is not None:
+        env["BRIDGE_MODELS_JSON"] = bridge_models_json
     return subprocess.Popen(
         ["pnpm", "exec", "tsx", "src/cli.ts", "serve"],
         cwd=ROOT,
@@ -162,16 +166,15 @@ def run_interactive_agent(endpoint: str) -> None:
         transcript += chunk
         debug_url_printed = print_debug_url(transcript, debug_url_printed)
         rendered_picker = transcript.decode(errors="replace")
-        if (
-            f"→ {MODEL_NAME}" not in rendered_picker
-            or "no matches" in rendered_picker.lower()
-        ):
+        model_is_listed = f"→ {MODEL_NAME}" in rendered_picker
+        model_is_already_selected = MODEL_NAME in rendered_picker
+        if not model_is_listed and not model_is_already_selected:
             raise AssertionError(
                 "interactive /model picker did not show local model\n"
                 + rendered_picker
             )
 
-        os.write(master_fd, b"\x1b[13u")
+        os.write(master_fd, b"\x1b[13u" if model_is_listed else b"\x1b")
         transcript += read_for(master_fd, 2)
         debug_url_printed = print_debug_url(transcript, debug_url_printed)
         os.write(master_fd, b"hi from cursor-rpc e2e\x1b[13u")

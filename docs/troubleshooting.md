@@ -1,5 +1,8 @@
 # Troubleshooting
 
+For the full set of observed CLI, desktop, model-picker, and proxy lessons, see
+`docs/learnings.md`.
+
 ## `doctor` Warns About Missing Upstream
 
 Set `CURSOR_UPSTREAM_BASE_URL` before using pass-through traffic. Without it, unknown routes cannot be forwarded.
@@ -7,6 +10,8 @@ Set `CURSOR_UPSTREAM_BASE_URL` before using pass-through traffic. Without it, un
 ## Cursor Rejects The Bridge Certificate
 
 The bridge does not install trust silently. Set `BRIDGE_USE_TLS=true` and either provide `BRIDGE_CERT_PATH` plus `BRIDGE_KEY_PATH` or use the generated self-signed development certificate. Trust installation is a manual local action.
+
+For the Cursor desktop app, the certificate must cover `api2.cursor.sh`. Run `cursor-rpc desktop-cert`, trust the generated certificate manually, then start with the printed `BRIDGE_CERT_PATH` and `BRIDGE_KEY_PATH` values.
 
 ## Streaming Hangs
 
@@ -23,6 +28,8 @@ If `GetUsableModels` is intercepted but the picker still appears empty, decode t
 Cursor Agent CLI model routes use raw `application/proto` responses. If a local decoder using `application/connect+proto` works but `cursor-agent --list-models` prints no models, check that the bridge is not wrapping raw CLI responses in Connect envelopes.
 
 The interactive `/model` picker uses picker metadata from `AvailableModels`, not only the flat model list. Local models need named-picker fields such as `named_model_section_index`, `vendor`, and at least one default non-max variant to show up when filtering in interactive mode.
+
+For Cursor desktop app experiments, start with `cursor-rpc desktop-proxy` and `BRIDGE_LOG_LEVEL=debug`. Confirm the logs contain `desktop route inventory` entries for model and chat routes before adding new interceptors. If the app does not call the same model routes as `cursor-agent`, use the logged route inventory to decode and add typed support from the generated proto.
 
 ## Capture Safety
 

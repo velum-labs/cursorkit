@@ -28,15 +28,74 @@ pass through to an upstream. See `docs/configuration.md` for all config.
 ## CLI
 
 ```bash
+ck
+ck test
+ck --use-default-profile
+ck --print
+ck doctor
+ck cert
+ck route
+ck route status
+ck route rollback
+ck stop
 cursor-rpc serve
 cursor-rpc doctor
+cursor-rpc desktop-cert
+cursor-rpc desktop-proxy
+cursor-rpc desktop-doctor
 cursor-rpc capture
 cursor-rpc fixtures
 cursor-rpc --help
 ```
 
 `serve` starts the local bridge. `doctor` checks proto loading, upstream config,
-TLS status, capture status, and local model registration.
+TLS status, capture status, and local model registration. The `desktop-*`
+commands support explicit Cursor desktop app proxy experiments; see
+`docs/cursor-app.md`.
+
+`ck` is the recommended desktop test launcher. It starts the desktop bridge plus
+a local HTTP CONNECT proxy, opens an isolated Cursor profile with
+`--proxy-server`, and reports whether route inventory traffic reaches the
+bridge. For isolated desktop UI tests, it also seeds/activates local models
+additively in Cursor's settings-backed model picker state. It does not install
+certificates, edit `/etc/hosts`, modify `pf`, or kill your normal Cursor app.
+Inside this repo, use `pnpm ck`; when installed or linked as a package, use
+`ck` directly. If the isolated profile cannot complete browser login,
+`ck --use-default-profile` reuses your current Cursor auth state while keeping
+the same non-privileged routing attempt.
+Use `ck test --use-default-profile` for a bounded desktop smoke test that reports
+whether route inventory and the known model-list RPCs reached the bridge.
+
+The project knowledge base for observed Cursor behavior is `docs/learnings.md`.
+Read it before changing route interception, model metadata, or desktop proxy
+behavior.
+Use `docs/protocol-surface-audit.md` to see which parts of the full generated
+proto are implemented, which are only pass-through, and what is missing for full
+tool/context support.
+
+Use `docs/testing-harness.md` for the unified test runner that orchestrates
+static checks, bridge protocol tests, cursor-agent e2e, local backend probes,
+real `cursor-agent` traffic discovery, ACP JSON-RPC probes, and desktop
+route-inventory smoke tests.
+
+For app-level evidence, run the experimental desktop UI probe:
+
+```bash
+pnpm test:harness -- \
+  --suite desktop-ui-experimental \
+  --include-experimental \
+  --base-url http://127.0.0.1:8080/v1 \
+  --model local-qwen \
+  --provider-model mlx-community/Qwen3.5-4B-8bit \
+  --display-name local-qwen \
+  --api-key local
+```
+
+It launches an isolated Cursor instance with auth seeded from the logged-in
+default profile, waits for Cursor to initialize settings, activates the local
+model, opens this repo, attaches to the renderer over CDP, opens the Agent model
+picker, and fails unless both the configured local model and built-in Cursor
+models are visible.
 
 ## Proto Extraction
 
@@ -69,6 +128,8 @@ The current typed extension surface is deliberately narrow:
 - `AvailableModels` can append conservative local model entries.
 - `StreamUnifiedChatWithTools` is intercepted only when the selected model is
   registered locally; normal Cursor models pass upstream.
+- Cursor desktop app support starts in route-inventory mode so app-specific
+  RPCs can be observed before adding typed interceptors.
 
 See `docs/plugin-authoring.md` and `examples/` for the experimental local plugin
 shape.

@@ -4,13 +4,19 @@ export const AVAILABLE_MODELS_PATH = "/aiserver.v1.AiService/AvailableModels";
 export const GET_USABLE_MODELS_PATH = "/aiserver.v1.AiService/GetUsableModels";
 export const GET_DEFAULT_MODEL_FOR_CLI_PATH =
   "/aiserver.v1.AiService/GetDefaultModelForCli";
+export const GET_DEFAULT_MODEL_PATH = "/aiserver.v1.AiService/GetDefaultModel";
 export const NAME_AGENT_PATH = "/aiserver.v1.AiService/NameAgent";
 export const GET_SERVER_CONFIG_PATH =
   "/aiserver.v1.ServerConfigService/GetServerConfig";
+export const AGENT_RUN_PATH = "/agent.v1.AgentService/Run";
 export const AGENT_RUN_SSE_PATH = "/agent.v1.AgentService/RunSSE";
 export const BIDI_APPEND_PATH = "/aiserver.v1.BidiService/BidiAppend";
 export const STREAM_CHAT_WITH_TOOLS_PATH =
   "/aiserver.v1.ChatService/StreamUnifiedChatWithTools";
+export const UPLOAD_ISSUE_TRACE_PATH =
+  "/aiserver.v1.AnalyticsService/UploadIssueTrace";
+export const AUTH_FULL_STRIPE_PROFILE_PATH = "/auth/full_stripe_profile";
+export const AUTH_STRIPE_PROFILE_PATH = "/auth/stripe_profile";
 
 export type RoutePolicy = "intercept" | "observe-only" | "pass-through";
 
@@ -24,11 +30,16 @@ const INTERCEPTABLE_ROUTES = new Set([
   AVAILABLE_MODELS_PATH,
   GET_USABLE_MODELS_PATH,
   GET_DEFAULT_MODEL_FOR_CLI_PATH,
+  GET_DEFAULT_MODEL_PATH,
   NAME_AGENT_PATH,
   GET_SERVER_CONFIG_PATH,
+  AGENT_RUN_PATH,
   AGENT_RUN_SSE_PATH,
   BIDI_APPEND_PATH,
   STREAM_CHAT_WITH_TOOLS_PATH,
+  UPLOAD_ISSUE_TRACE_PATH,
+  AUTH_FULL_STRIPE_PROFILE_PATH,
+  AUTH_STRIPE_PROFILE_PATH,
 ]);
 
 export function classifyRoute(request: IncomingMessage): RouteDecision {

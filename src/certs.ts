@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { isIP } from "node:net";
 
 import { generate } from "selfsigned";
 
@@ -26,7 +27,14 @@ export async function loadTlsMaterial(
     };
   }
 
-  const attrs = [{ name: "commonName", value: "localhost" }];
+  return generateTlsMaterial(config.tlsHostnames);
+}
+
+export async function generateTlsMaterial(
+  hostnames: string[],
+): Promise<TlsMaterial> {
+  const primaryHostname = hostnames[0] ?? "localhost";
+  const attrs = [{ name: "commonName", value: primaryHostname }];
   const pem = await generate(attrs, {
     notAfterDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     keySize: 2048,
@@ -34,11 +42,11 @@ export async function loadTlsMaterial(
     extensions: [
       {
         name: "subjectAltName",
-        altNames: [
-          { type: 2, value: "localhost" },
-          { type: 7, ip: "127.0.0.1" },
-          { type: 7, ip: "::1" },
-        ],
+        altNames: hostnames.map((hostname) =>
+          isIP(hostname) === 0
+            ? { type: 2, value: hostname }
+            : { type: 7, ip: hostname },
+        ),
       },
     ],
   });

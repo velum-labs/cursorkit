@@ -4,6 +4,15 @@ import path from "node:path";
 
 import { loadConfig } from "./config.js";
 import { loadTlsMaterial } from "./certs.js";
+import {
+  desktopCertificateStatus,
+  desktopDnsStatus,
+  desktopEnv,
+  desktopTrustCommand,
+  localModelBackendStatus,
+  upstreamReachabilityStatus,
+  writeDesktopCertificate,
+} from "./desktop.js";
 import { createLogger } from "./logger.js";
 import {
   listProtoFiles,
@@ -12,16 +21,27 @@ import {
 } from "./proto.js";
 import { createBridgeRuntime, startServer } from "./server.js";
 
-type Command = "serve" | "doctor" | "capture" | "fixtures" | "help";
+type Command =
+  | "serve"
+  | "doctor"
+  | "capture"
+  | "fixtures"
+  | "desktop-cert"
+  | "desktop-proxy"
+  | "desktop-doctor"
+  | "help";
 
 const HELP = `cursor-rpc
 
 Usage:
-  cursor-rpc serve       Start the local bridge
-  cursor-rpc doctor      Check local configuration and proto availability
-  cursor-rpc capture     Print capture-mode guidance
-  cursor-rpc fixtures    Validate committed fixture metadata
-  cursor-rpc --help      Show this help
+  cursor-rpc serve            Start the local bridge
+  cursor-rpc doctor           Check local configuration and proto availability
+  cursor-rpc desktop-cert     Generate local TLS material for Cursor desktop proxying
+  cursor-rpc desktop-proxy    Start the bridge with Cursor desktop proxy defaults
+  cursor-rpc desktop-doctor   Check Cursor desktop proxy prerequisites
+  cursor-rpc capture          Print capture-mode guidance
+  cursor-rpc fixtures         Validate committed fixture metadata
+  cursor-rpc --help           Show this help
 
 Environment:
   BRIDGE_HOST=127.0.0.1
@@ -38,7 +58,11 @@ async function main(argv: string[]): Promise<void> {
     return;
   }
 
-  const config = loadConfig();
+  const config = loadConfig(
+    command === "desktop-proxy" || command === "desktop-doctor"
+      ? desktopEnv(process.env)
+      : process.env,
+  );
   const logger = createLogger(config.logLevel);
 
   switch (command) {
@@ -57,6 +81,20 @@ async function main(argv: string[]): Promise<void> {
     }
     case "fixtures": {
       validateFixtures(config.captureDir);
+      break;
+    }
+    case "desktop-cert": {
+      await desktopCert();
+      break;
+    }
+    case "desktop-proxy": {
+      const runtime = await createBridgeRuntime(config, logger);
+      await startServer(runtime);
+      break;
+    }
+    case "desktop-doctor": {
+      await doctor(config);
+      await desktopDoctor(config);
       break;
     }
     default: {
@@ -80,7 +118,10 @@ function parseCommand(argv: string[]): Command {
     first === "serve" ||
     first === "doctor" ||
     first === "capture" ||
-    first === "fixtures"
+    first === "fixtures" ||
+    first === "desktop-cert" ||
+    first === "desktop-proxy" ||
+    first === "desktop-doctor"
   ) {
     return first;
   }
@@ -134,6 +175,49 @@ async function doctor(config: ReturnType<typeof loadConfig>): Promise<void> {
     console.warn(
       "warning: capture mode treats traffic as sensitive; sanitize before committing fixtures",
     );
+  }
+}
+
+async function desktopCert(): Promise<void> {
+  const cert = await writeDesktopCertificate();
+
+  console.log(`cert: ${cert.certPath}`);
+  console.log(`key: ${cert.keyPath}`);
+  console.log("");
+  console.log("Manual macOS trust command:");
+  console.log(desktopTrustCommand(cert.certPath).join(" "));
+  console.log("");
+  console.log("Then start with:");
+  console.log(
+    `BRIDGE_CERT_PATH=${cert.certPath} BRIDGE_KEY_PATH=${cert.keyPath} cursor-rpc desktop-proxy`,
+  );
+}
+
+async function desktopDoctor(
+  config: ReturnType<typeof loadConfig>,
+): Promise<void> {
+  const checks: Array<[string, string]> = [];
+  checks.push(["desktop mode", String(config.desktopMode)]);
+  checks.push(["public origin", config.publicOrigin ?? "not configured"]);
+  checks.push(["tls hostnames", config.tlsHostnames.join(", ")]);
+  checks.push(["route inventory", String(config.routeInventoryEnabled)]);
+  checks.push(["desktop upstream", config.upstreamBaseUrl ?? "not configured"]);
+  checks.push([
+    "desktop upstream connect",
+    config.upstreamConnectHost === undefined
+      ? "system DNS"
+      : `${config.upstreamConnectHost}${config.upstreamConnectPort === undefined ? "" : `:${config.upstreamConnectPort}`}`,
+  ]);
+  checks.push(["desktop cert", desktopCertificateStatus(config)]);
+  checks.push(["desktop dns", await desktopDnsStatus(config)]);
+  checks.push([
+    "upstream reachability",
+    await upstreamReachabilityStatus(config),
+  ]);
+  checks.push(["local model backend", await localModelBackendStatus(config)]);
+
+  for (const [name, value] of checks) {
+    console.log(`${name}: ${value}`);
   }
 }
 

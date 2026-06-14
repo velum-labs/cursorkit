@@ -7,8 +7,10 @@ coverage/
 *.log
 fixtures/captures/
 fixtures/local/
+.cursor-rpc/
 certs/
 *.key
 *.pem
+*.crt
 *.tgz
 cursor-rpc-*.tgz

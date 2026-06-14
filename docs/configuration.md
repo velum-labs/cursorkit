@@ -9,7 +9,20 @@ Configuration is loaded from environment variables. CLI flags are intentionally 
 - `BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST`: required before binding to anything other than `127.0.0.1`, `::1`, or `localhost`.
 - `BRIDGE_USE_TLS`: set to `true` to run HTTPS.
 - `BRIDGE_CERT_PATH` and `BRIDGE_KEY_PATH`: custom TLS material. Both must be set together.
+- `BRIDGE_TLS_HOSTNAMES`: comma-separated hostnames/IPs for generated TLS certificate SANs. Desktop mode defaults to `api2.cursor.sh,localhost,127.0.0.1,::1`.
+- `BRIDGE_PUBLIC_ORIGIN`: public origin advertised in rewritten server config responses. Desktop mode defaults to `https://api2.cursor.sh`.
 - `CURSOR_UPSTREAM_BASE_URL`: upstream Cursor backend base URL for pass-through traffic.
+- `CURSOR_UPSTREAM_CONNECT_HOST`: optional physical upstream host/IP to connect to while preserving `CURSOR_UPSTREAM_BASE_URL` for Host and TLS SNI. Use this in desktop proxy mode after redirecting `api2.cursor.sh` to localhost.
+- `CURSOR_UPSTREAM_CONNECT_PORT`: optional physical upstream port paired with `CURSOR_UPSTREAM_CONNECT_HOST`.
+
+## Desktop Proxy
+
+- `BRIDGE_DESKTOP_MODE`: enables desktop proxy defaults when set to `true`.
+- `BRIDGE_ROUTE_INVENTORY`: logs redacted route metadata for observing Cursor desktop traffic. Desktop mode enables this automatically.
+
+The `desktop-proxy` CLI command sets desktop defaults without changing the
+normal `serve` command. See `docs/cursor-app.md` for certificate, cutover, and
+rollback instructions.
 
 ## Models
 
