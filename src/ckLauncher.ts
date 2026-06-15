@@ -1209,7 +1209,10 @@ function localDesktopVariantConfig(
   };
 }
 
-function localDesktopVariantString(modelId: string, isMaxMode: boolean): string {
+function localDesktopVariantString(
+  modelId: string,
+  isMaxMode: boolean,
+): string {
   const context = isMaxMode ? "1m" : "272k";
   return `${modelId}[context=${context},reasoning=medium,fast=false]`;
 }
@@ -1242,7 +1245,8 @@ function localDesktopParameterDefinitions(): Array<Record<string, unknown>> {
     {
       id: "reasoning",
       name: "Reasoning",
-      markdownTooltip: "Reasoning effort the model uses to generate its response.",
+      markdownTooltip:
+        "Reasoning effort the model uses to generate its response.",
       parameterType: {
         enumParameter: {
           values: [
@@ -1262,10 +1266,7 @@ function localDesktopParameterDefinitions(): Array<Record<string, unknown>> {
       markdownTooltip: "Use the provider's fast lane when supported.",
       parameterType: {
         booleanParameter: {
-          values: [
-            { value: "false" },
-            { value: "true", displayName: "Fast" },
-          ],
+          values: [{ value: "false" }, { value: "true", displayName: "Fast" }],
         },
       },
     },
@@ -1326,7 +1327,10 @@ function isolatedCursorProcessIds(userDataDir: string): number[] {
   return pids;
 }
 
-function cursorCommandUsesUserDataDir(command: string, userDataDir: string): boolean {
+function cursorCommandUsesUserDataDir(
+  command: string,
+  userDataDir: string,
+): boolean {
   return (
     command.includes(`--user-data-dir=${userDataDir}`) ||
     command.includes(`--user-data-dir "${userDataDir}"`) ||

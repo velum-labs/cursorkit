@@ -97,6 +97,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       url,
       stream: true,
       toolCount: tools.length,
+      toolNames: tools.map((tool) => tool.function.name),
       ...summarizeMessages(messages),
       ...(this.options.logFullPayload
         ? {
@@ -214,7 +215,9 @@ function preview(value: string | undefined): string | undefined {
 
 export async function* parseOpenAIStream(
   stream: AsyncIterable<Uint8Array>,
-): AsyncGenerator<string | Extract<OpenAICompletionEvent, { type: "tool_calls" }>> {
+): AsyncGenerator<
+  string | Extract<OpenAICompletionEvent, { type: "tool_calls" }>
+> {
   const decoder = new TextDecoder();
   let buffer = "";
   const toolCalls = new Map<number, OpenAIToolCall>();

@@ -26,10 +26,12 @@ export interface BridgeConfig {
   maxInterceptBodyBytes: number;
   routeInventoryEnabled: boolean;
   modelPayloadLogging: ModelPayloadLogging;
+  agentToolPolicy: AgentToolPolicy;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 export type ModelPayloadLogging = "summary" | "full";
+export type AgentToolPolicy = "safe" | "all";
 
 export interface LocalModelConfig {
   id: string;
@@ -132,6 +134,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     modelPayloadLogging: parseModelPayloadLogging(
       env.BRIDGE_LOG_MODEL_PAYLOADS,
     ),
+    agentToolPolicy: parseAgentToolPolicy(env.BRIDGE_AGENT_TOOL_POLICY),
   };
 }
 
@@ -142,6 +145,16 @@ function parseModelPayloadLogging(
     return "full";
   }
   return "summary";
+}
+
+function parseAgentToolPolicy(value: string | undefined): AgentToolPolicy {
+  if (value === undefined || value === "") {
+    return "safe";
+  }
+  if (value === "safe" || value === "all") {
+    return value;
+  }
+  throw new Error("BRIDGE_AGENT_TOOL_POLICY must be safe or all");
 }
 
 function parseModels(

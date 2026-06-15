@@ -10,6 +10,7 @@ describe("loadConfig", () => {
     expect(config.upstreamBaseUrl).toBeUndefined();
     expect(config.routeInventoryEnabled).toBe(false);
     expect(config.modelPayloadLogging).toBe("summary");
+    expect(config.agentToolPolicy).toBe("safe");
     expect(config.tlsHostnames).toEqual(["localhost", "127.0.0.1", "::1"]);
   });
 
@@ -102,5 +103,21 @@ describe("loadConfig", () => {
     });
 
     expect(config.modelPayloadLogging).toBe("full");
+  });
+
+  it("can opt into all local agent tools explicitly", () => {
+    const config = loadConfig({
+      BRIDGE_AGENT_TOOL_POLICY: "all",
+    });
+
+    expect(config.agentToolPolicy).toBe("all");
+  });
+
+  it("rejects unknown local agent tool policies", () => {
+    expect(() =>
+      loadConfig({
+        BRIDGE_AGENT_TOOL_POLICY: "danger",
+      }),
+    ).toThrow(/BRIDGE_AGENT_TOOL_POLICY/);
   });
 });

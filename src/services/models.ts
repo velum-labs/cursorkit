@@ -274,7 +274,8 @@ function localParameterDefinitions() {
     create(ModelParameterDefinitionSchema, {
       id: "reasoning",
       name: "Reasoning",
-      markdownTooltip: "Reasoning effort the model uses to generate its response.",
+      markdownTooltip:
+        "Reasoning effort the model uses to generate its response.",
       parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
         enumParameter: create(
           ModelParameterDefinition_EnumParameterDefinitionSchema,

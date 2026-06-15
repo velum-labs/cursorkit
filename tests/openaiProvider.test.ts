@@ -98,6 +98,85 @@ describe("OpenAICompatibleProvider observability", () => {
       }),
     );
   });
+
+  it("parses streamed OpenAI tool calls", async () => {
+    const server = http.createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        const toolChunk = {
+          choices: [
+            {
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "read_file",
+                      arguments: JSON.stringify({ path: "README.md" }),
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        };
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          [
+            `data: ${JSON.stringify(toolChunk)}`,
+            'data: {"choices":[{"finish_reason":"tool_calls"}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const provider = new OpenAICompatibleProvider({
+      id: "local-qwen",
+      displayName: "local-qwen",
+      providerModel: "mlx-community/Qwen3.5-4B-8bit",
+      baseUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      contextTokenLimit: 128000,
+    });
+
+    const events = [];
+    for await (const event of provider.streamCompletionEvents(
+      [{ role: "user", content: "read it" }],
+      [
+        {
+          type: "function",
+          function: {
+            name: "read_file",
+            description: "Read a file",
+            parameters: { type: "object" },
+          },
+        },
+      ],
+    )) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        type: "tool_calls",
+        toolCalls: [
+          {
+            id: "call-1",
+            type: "function",
+            function: {
+              name: "read_file",
+              arguments: JSON.stringify({ path: "README.md" }),
+            },
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 async function listen(server: http.Server): Promise<number> {

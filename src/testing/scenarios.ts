@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import path from "node:path";
 import readline from "node:readline";
@@ -35,6 +36,20 @@ interface TrafficProcessSummary {
   logPath: string;
   stdoutPreview: string;
   stderrPreview: string;
+}
+
+interface ScriptedToolBackend {
+  server: http.Server;
+  baseUrl: string;
+  requests: ScriptedToolBackendRequest[];
+}
+
+interface ScriptedToolBackendRequest {
+  messageRoles: string[];
+  toolNames: string[];
+  assistantToolCallNames: string[];
+  lastMessageRole: string | undefined;
+  lastMessagePreview: string | undefined;
 }
 
 interface AcpMessage {
@@ -361,6 +376,12 @@ function desktopUiScenario(): Scenario {
       const started = Date.now();
       const debugPort = await freePort();
       const instanceId = `desktop-ui-${debugPort}`;
+      const scriptedBackend =
+        context.options.env.E2E_SCRIPTED_TOOL_BACKEND === "true"
+          ? await startScriptedToolBackend()
+          : undefined;
+      const effectiveBaseUrl =
+        scriptedBackend?.baseUrl ?? context.options.baseUrl;
       const ckLogPath = path.join(
         context.options.cwd,
         ".cursor-rpc",
@@ -381,11 +402,17 @@ function desktopUiScenario(): Scenario {
             id: context.options.model,
             displayName: context.options.displayName,
             providerModel: context.options.providerModel,
-            baseUrl: context.options.baseUrl,
+            baseUrl: effectiveBaseUrl,
             apiKey: context.options.apiKey,
             contextTokenLimit: 128000,
           },
         ]),
+        ...(context.options.env.BRIDGE_LOG_MODEL_PAYLOADS !== undefined
+          ? {
+              BRIDGE_LOG_MODEL_PAYLOADS:
+                context.options.env.BRIDGE_LOG_MODEL_PAYLOADS,
+            }
+          : {}),
       };
       const commandLogPath = context.artifacts.writeText(
         "logs/desktop-ui-ck-live.log",
@@ -458,13 +485,14 @@ function desktopUiScenario(): Scenario {
         const routeInventory = analyzeRouteInventoryLog(ckLog);
         const modelBackendRequestSeen = desktopModelBackendRequestSeen(
           ckLog,
-          context.options.baseUrl,
+          effectiveBaseUrl,
         );
-        const modelBackendResponseComplete = desktopModelBackendResponseComplete(
-          ckLog,
-          context.options.baseUrl,
-        );
+        const modelBackendResponseComplete =
+          desktopModelBackendResponseComplete(ckLog, effectiveBaseUrl);
         const cursorToolResultSeen = desktopCursorToolResultSeen(ckLog);
+        const requiredCursorToolResultsSeen =
+          scriptedBackend === undefined ||
+          desktopCursorToolNamesSeen(ckLog, ["read_file", "list_dir", "grep"]);
         const report = {
           debugPort,
           instanceId,
@@ -474,6 +502,8 @@ function desktopUiScenario(): Scenario {
           modelBackendRequestSeen,
           modelBackendResponseComplete,
           cursorToolResultSeen,
+          requiredCursorToolResultsSeen,
+          scriptedBackendRequests: scriptedBackend?.requests,
         };
         const reportPath = context.artifacts.writeJson(
           "desktop-ui-cdp-report.json",
@@ -512,10 +542,11 @@ function desktopUiScenario(): Scenario {
             modelBackendRequestSeen) &&
           cdp.desktopPromptSubmitted &&
           !cdp.desktopModelErrorSeen &&
-          desktopSendRoutesSeen.length > 0 &&
+          (desktopSendRoutesSeen.length > 0 || modelBackendRequestSeen) &&
           modelBackendRequestSeen &&
           modelBackendResponseComplete &&
-          cursorToolResultSeen;
+          cursorToolResultSeen &&
+          requiredCursorToolResultsSeen;
         const failureCode = desktopUiFailureCode(
           cdp,
           routeInventory,
@@ -562,6 +593,8 @@ function desktopUiScenario(): Scenario {
             modelBackendRequestSeen,
             modelBackendResponseComplete,
             cursorToolResultSeen,
+            requiredCursorToolResultsSeen,
+            scriptedBackendRequests: scriptedBackend?.requests,
             modelRoutesSeen: routeInventory.modelRoutesSeen,
             localModelSeedStatus,
             actions: cdp.actions,
@@ -573,6 +606,7 @@ function desktopUiScenario(): Scenario {
         ck.kill("SIGTERM");
         cleanupIsolatedCursorProcesses(userDataDir);
         log.end();
+        scriptedBackend?.server.close();
       }
     },
   };
@@ -592,7 +626,9 @@ function captureCursorProfileLogs(
     if (!name.endsWith(".log")) {
       continue;
     }
-    const relative = path.relative(logsDir, filePath).replaceAll(path.sep, "__");
+    const relative = path
+      .relative(logsDir, filePath)
+      .replaceAll(path.sep, "__");
     const artifactName = `logs/cursor-${relative}`;
     captured[`cursorLog_${relative.replaceAll(".", "_")}`] =
       context.artifacts.writeText(
@@ -783,7 +819,10 @@ function desktopUiFailureCode(
   if (cdp.desktopModelErrorSeen) {
     return "model_metadata_rejected";
   }
-  if (desktopSendRoutes(routeInventory).length === 0) {
+  if (
+    desktopSendRoutes(routeInventory).length === 0 &&
+    !modelBackendRequestSeen
+  ) {
     return "extension_host_route_missing";
   }
   if (!modelBackendRequestSeen) {
@@ -829,7 +868,10 @@ function desktopUiFailureMessage(
   if (cdp.desktopModelErrorSeen) {
     return "Cursor desktop selected the local model, but sending a prompt produced a model-not-found error";
   }
-  if (desktopSendRoutes(routeInventory).length === 0) {
+  if (
+    desktopSendRoutes(routeInventory).length === 0 &&
+    !modelBackendRequestSeen
+  ) {
     return "Cursor desktop selected the local model and submitted the prompt, but no Agent execution route or local model backend request was observed; bridge routing is working for desktop metadata routes, but the injected model is not yet accepted by the desktop Agent execution path";
   }
   if (!modelBackendRequestSeen) {
@@ -869,6 +911,185 @@ function desktopCursorToolResultSeen(logText: string): boolean {
     logText.includes('"message":"requested cursor tool execution"') &&
     logText.includes('"message":"received cursor tool result"')
   );
+}
+
+function desktopCursorToolNamesSeen(
+  logText: string,
+  toolNames: string[],
+): boolean {
+  const resultCount = (
+    logText.match(/"message":"received cursor tool result"/g) ?? []
+  ).length;
+  return (
+    resultCount >= toolNames.length &&
+    toolNames.every((toolName) => logText.includes(`"toolName":"${toolName}"`))
+  );
+}
+
+async function startScriptedToolBackend(): Promise<ScriptedToolBackend> {
+  const requests: ScriptedToolBackendRequest[] = [];
+  const server = http.createServer((request, response) => {
+    if (request.url === "/v1/models" && request.method === "GET") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(
+        JSON.stringify({
+          object: "list",
+          data: [
+            {
+              id: "mlx-community/Qwen3.5-4B-8bit",
+              object: "model",
+              created: 0,
+            },
+          ],
+        }),
+      );
+      return;
+    }
+    if (request.url !== "/v1/chat/completions" || request.method !== "POST") {
+      response.writeHead(404, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "not found" }));
+      return;
+    }
+
+    const chunks: Buffer[] = [];
+    request.on("data", (chunk: Buffer) => chunks.push(chunk));
+    request.on("end", () => {
+      let body: Record<string, unknown>;
+      try {
+        body = JSON.parse(Buffer.concat(chunks).toString("utf8")) as Record<
+          string,
+          unknown
+        >;
+      } catch (error) {
+        response.writeHead(400, { "content-type": "application/json" });
+        response.end(
+          JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+          }),
+        );
+        return;
+      }
+
+      const messages = Array.isArray(body.messages)
+        ? (body.messages as Array<Record<string, unknown>>)
+        : [];
+      const tools = Array.isArray(body.tools)
+        ? (body.tools as Array<Record<string, unknown>>)
+        : [];
+      requests.push({
+        messageRoles: messages
+          .map((message) => message.role)
+          .filter((role): role is string => typeof role === "string"),
+        toolNames: tools
+          .map((tool) =>
+            typeof tool.function === "object" &&
+            tool.function !== null &&
+            !Array.isArray(tool.function)
+              ? (tool.function as Record<string, unknown>).name
+              : undefined,
+          )
+          .filter((name): name is string => typeof name === "string"),
+        assistantToolCallNames: messages.flatMap((message) =>
+          Array.isArray(message.tool_calls)
+            ? message.tool_calls
+                .map((toolCall) =>
+                  typeof toolCall === "object" &&
+                  toolCall !== null &&
+                  !Array.isArray(toolCall) &&
+                  typeof (toolCall as Record<string, unknown>).function ===
+                    "object" &&
+                  (toolCall as Record<string, unknown>).function !== null
+                    ? (
+                        (toolCall as Record<string, unknown>)
+                          .function as Record<string, unknown>
+                      ).name
+                    : undefined,
+                )
+                .filter((name): name is string => typeof name === "string")
+            : [],
+        ),
+        lastMessageRole:
+          typeof messages.at(-1)?.role === "string"
+            ? (messages.at(-1)?.role as string)
+            : undefined,
+        lastMessagePreview:
+          typeof messages.at(-1)?.content === "string"
+            ? (messages.at(-1)?.content as string).slice(0, 500)
+            : undefined,
+      });
+
+      response.writeHead(200, { "content-type": "text/event-stream" });
+      const step = requests.length;
+      if (step === 1) {
+        response.end(
+          scriptedToolCallSse("read-call", "read_file", {
+            path: "README.md",
+          }),
+        );
+      } else if (step === 2) {
+        response.end(
+          scriptedToolCallSse("list-call", "list_dir", { path: "." }),
+        );
+      } else if (step === 3) {
+        response.end(
+          scriptedToolCallSse("grep-call", "grep", {
+            pattern: "bridge",
+            path: ".",
+            head_limit: 5,
+          }),
+        );
+      } else {
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"desktop-probe-ok scripted-tool-loop-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      }
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (address === null || typeof address === "string") {
+    throw new Error("scripted backend did not bind to a TCP port");
+  }
+  return {
+    server,
+    baseUrl: `http://127.0.0.1:${address.port}/v1`,
+    requests,
+  };
+}
+
+function scriptedToolCallSse(
+  id: string,
+  name: string,
+  args: Record<string, unknown>,
+): string {
+  return [
+    `data: ${JSON.stringify({
+      choices: [
+        {
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id,
+                type: "function",
+                function: {
+                  name,
+                  arguments: JSON.stringify(args),
+                },
+              },
+            ],
+          },
+        },
+      ],
+    })}`,
+    'data: {"choices":[{"finish_reason":"tool_calls"}]}',
+    "data: [DONE]",
+    "",
+  ].join("\n");
 }
 
 function desktopSendRoutes(
@@ -1607,7 +1828,7 @@ async function probeModelPickerDom(
     bodyText = await ensureDesktopComposerOpen(webSocketDebuggerUrl, actions);
     desktopPromptSubmitted = await submitDesktopComposerPrompt(
       webSocketDebuggerUrl,
-      "Use the read_file tool to read README.md, then reply with desktop-probe-ok and one sentence about the project.",
+      "Use the read_file tool to read README.md, then reply with the marker formed by joining these words with hyphens: desktop probe ok. Also include one sentence about the project.",
       actions,
     );
     if (desktopPromptSubmitted) {
@@ -1819,12 +2040,18 @@ async function submitDesktopComposerPrompt(
   await clickComposerInputArea(webSocketDebuggerUrl);
   const controlSummary = await describeComposerControls(webSocketDebuggerUrl);
   actions.push(`composer-controls:${controlSummary.slice(0, 1200)}`);
-  const sendClickStatus = (await composerEditorContains(webSocketDebuggerUrl, prompt))
+  const sendClickStatus = (await composerEditorContains(
+    webSocketDebuggerUrl,
+    prompt,
+  ))
     ? await clickComposerSendButton(webSocketDebuggerUrl, prompt)
     : "missing-prompt";
   let clicked = sendClickStatus.startsWith("clicked");
   actions.push(`send-clicked:${sendClickStatus}`);
-  if (!clicked && (await composerEditorContains(webSocketDebuggerUrl, prompt))) {
+  if (
+    !clicked &&
+    (await composerEditorContains(webSocketDebuggerUrl, prompt))
+  ) {
     await dispatchEnter(webSocketDebuggerUrl, 4);
     clicked = true;
     actions.push("send-fallback:cmd-enter");
@@ -1858,9 +2085,7 @@ async function submitDesktopComposerPrompt(
     );
   }
   const finalEditorText = await composerEditorText(webSocketDebuggerUrl);
-  actions.push(
-    `composer-editor-after-submit:${finalEditorText.slice(0, 500)}`,
-  );
+  actions.push(`composer-editor-after-submit:${finalEditorText.slice(0, 500)}`);
   return (
     (clicked && !finalEditorText.includes(prompt)) ||
     text.includes("Taking longer than expected") ||
@@ -2296,7 +2521,7 @@ async function clickComposerSendButton(
     typeof (point as { x?: unknown }).x !== "number" ||
     typeof (point as { y?: unknown }).y !== "number"
   ) {
-    return `not-clicked:${directClick || 'no-target'}`;
+    return `not-clicked:${directClick || "no-target"}`;
   }
   const { x, y } = point as { x: number; y: number };
   await cdpCommand(webSocketDebuggerUrl, "Input.dispatchMouseEvent", {

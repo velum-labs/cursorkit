@@ -157,6 +157,7 @@ function baseConfig(): BridgeConfig {
     desktopAgentHttpPort: undefined,
     routeInventoryEnabled: false,
     modelPayloadLogging: "summary",
+    agentToolPolicy: "safe",
     tlsHostnames: ["localhost", "127.0.0.1", "::1"],
     unsafeAllowNonLocalhost: false,
     useTls: false,

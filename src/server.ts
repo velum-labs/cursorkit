@@ -11,6 +11,11 @@ import zlib from "node:zlib";
 
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 
+import {
+  agentExecClientMessageFields,
+  cursorOpenAITools,
+  executeCursorToolCall,
+} from "./agentTools/registry.js";
 import type { BridgeConfig } from "./config.js";
 import { loadTlsMaterial } from "./certs.js";
 import {
@@ -69,19 +74,12 @@ import {
   AgentClientMessageSchema,
   AgentServerMessageSchema,
   ExecServerMessageSchema,
-  GrepArgsSchema,
-  RequestContextArgsSchema,
-  LsArgsSchema,
-  ReadArgsSchema,
   InteractionUpdateSchema,
+  RequestContextArgsSchema,
   TextDeltaUpdateSchema,
   TurnEndedUpdateSchema,
 } from "./gen/agent/v1/agent_pb.js";
-import type {
-  ChatMessage,
-  OpenAIToolCall,
-  OpenAIToolDefinition,
-} from "./providers/openai.js";
+import type { ChatMessage, OpenAIToolCall } from "./providers/openai.js";
 import {
   BidiAppendRequestSchema,
   BidiAppendResponseSchema,
@@ -617,7 +615,9 @@ async function handleAuthFullStripeProfile(
   });
   if (upstreamBody === undefined) {
     response.writeHead(502, { "content-type": "application/json" });
-    response.end(JSON.stringify({ error: "auth profile upstream unavailable" }));
+    response.end(
+      JSON.stringify({ error: "auth profile upstream unavailable" }),
+    );
     return;
   }
   if (upstreamBody.byteLength === 0) {
@@ -653,7 +653,10 @@ async function handleAuthFullStripeProfile(
   runtime.logger.info("served auth profile", { rewrites });
 }
 
-function rewriteAgentBackendUrlsInJson(value: unknown, agentOrigin: string): number {
+function rewriteAgentBackendUrlsInJson(
+  value: unknown,
+  agentOrigin: string,
+): number {
   if (!isRecord(value)) {
     return 0;
   }
@@ -893,7 +896,9 @@ async function handleAgentRun(
           payloads: [] as Buffer[],
         };
   const candidates =
-    format === "connect" ? payloads : requestPayloadCandidatesForFormat(body, format);
+    format === "connect"
+      ? payloads
+      : requestPayloadCandidatesForFormat(body, format);
   if (candidates.length === 0) {
     await proxyBufferedRequest(
       request,
@@ -906,7 +911,9 @@ async function handleAgentRun(
   }
 
   const requestId =
-    path === AGENT_RUN_SSE_PATH ? getBidiRequestId(candidates[0]) : undefined;
+    path === AGENT_RUN_SSE_PATH
+      ? getBidiRequestIdFromPayloads(candidates)
+      : undefined;
   const decision =
     requestId === undefined
       ? getLocalAgentRunDecisionFromPayloads(candidates, runtime)
@@ -921,7 +928,9 @@ async function handleAgentRun(
     });
     if (format === "connect") {
       response.writeHead(502, { "content-type": "application/json" });
-      response.end(JSON.stringify({ error: "agent run did not match local model" }));
+      response.end(
+        JSON.stringify({ error: "agent run did not match local model" }),
+      );
       return;
     }
     await proxyBufferedRequest(
@@ -1002,7 +1011,7 @@ async function writeLocalAgentRunResponseWithCursorTools(
   }
 
   const messages: ChatMessage[] = [...decision.messages];
-  const tools = cursorOpenAITools();
+  const tools = cursorOpenAITools(runtime.config.agentToolPolicy);
   let outputCharacters = 0;
   let toolIterations = 0;
   while (toolIterations < 8) {
@@ -1025,7 +1034,9 @@ async function writeLocalAgentRunResponseWithCursorTools(
     if (requestedToolCalls.length === 0) {
       response.write(agentTurnEndedEnvelope(outputCharacters));
       response.end(encodeEndStream());
-      runtime.logger.info("served local agent run", { model: decision.model.id });
+      runtime.logger.info("served local agent run", {
+        model: decision.model.id,
+      });
       runtime.logger.info("local agent run diagnostics", {
         ...decision.diagnostics,
       });
@@ -1084,274 +1095,6 @@ function agentTurnEndedEnvelope(outputCharacters: number): Buffer {
       }),
     ),
   );
-}
-
-function cursorOpenAITools(): OpenAIToolDefinition[] {
-  return [
-    {
-      type: "function",
-      function: {
-        name: "read_file",
-        description:
-          "Read a file from the Cursor workspace using Cursor's native file tool.",
-        parameters: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-            offset: { type: "integer" },
-            limit: { type: "integer" },
-          },
-          required: ["path"],
-          additionalProperties: false,
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "list_dir",
-        description:
-          "List a directory from the Cursor workspace using Cursor's native ls tool.",
-        parameters: {
-          type: "object",
-          properties: {
-            path: { type: "string" },
-          },
-          required: ["path"],
-          additionalProperties: false,
-        },
-      },
-    },
-    {
-      type: "function",
-      function: {
-        name: "grep",
-        description:
-          "Search workspace files using Cursor's native grep tool.",
-        parameters: {
-          type: "object",
-          properties: {
-            pattern: { type: "string" },
-            path: { type: "string" },
-            glob: { type: "string" },
-            head_limit: { type: "integer" },
-          },
-          required: ["pattern"],
-          additionalProperties: false,
-        },
-      },
-    },
-  ];
-}
-
-async function executeCursorToolCall(
-  response: ServerResponse,
-  runtime: BridgeRuntime,
-  payloads: AsyncIterator<Buffer>,
-  toolCall: OpenAIToolCall,
-): Promise<string> {
-  const parsedArgs = parseToolArguments(toolCall);
-  const execId = `cursor-rpc-tool-${toolCall.id}`;
-  const id = runtime.nextAgentExecId;
-  runtime.nextAgentExecId += 1;
-  const execServerMessage = cursorToolCallToExecServerMessage(
-    id,
-    execId,
-    toolCall,
-    parsedArgs,
-  );
-  if (execServerMessage === undefined) {
-    return `Unsupported tool call: ${toolCall.function.name}`;
-  }
-
-  runtime.logger.info("requested cursor tool execution", {
-    id,
-    execId,
-    toolCallId: toolCall.id,
-    toolName: toolCall.function.name,
-  });
-  response.write(
-    encodeEnvelope(
-      toBinary(
-        AgentServerMessageSchema,
-        create(AgentServerMessageSchema, {
-          execServerMessage,
-        }),
-      ),
-    ),
-  );
-
-  const result = await waitForCursorToolResult(payloads, id, execId);
-  runtime.logger.info("received cursor tool result", {
-    id,
-    execId,
-    fields: agentExecClientMessageFields(result),
-  });
-  return formatCursorToolResult(result);
-}
-
-function cursorToolCallToExecServerMessage(
-  id: number,
-  execId: string,
-  toolCall: OpenAIToolCall,
-  args: Record<string, unknown>,
-): ReturnType<typeof create<typeof ExecServerMessageSchema>> | undefined {
-  const name = normalizeToolName(toolCall.function.name);
-  const toolCallId = toolCall.id;
-  if (name === "read_file") {
-    return create(ExecServerMessageSchema, {
-      id,
-      execId,
-      readArgs: create(ReadArgsSchema, {
-        path: stringArg(args, "path"),
-        toolCallId,
-        offset: numberArg(args, "offset"),
-        limit: numberArg(args, "limit"),
-      }),
-    });
-  }
-  if (name === "list_dir") {
-    return create(ExecServerMessageSchema, {
-      id,
-      execId,
-      lsArgs: create(LsArgsSchema, {
-        path: stringArg(args, "path"),
-        ignore: [],
-        toolCallId,
-      }),
-    });
-  }
-  if (name === "grep") {
-    return create(ExecServerMessageSchema, {
-      id,
-      execId,
-      grepArgs: create(GrepArgsSchema, {
-        pattern: stringArg(args, "pattern"),
-        path: optionalStringArg(args, "path"),
-        glob: optionalStringArg(args, "glob"),
-        headLimit: numberArg(args, "head_limit"),
-        toolCallId,
-      }),
-    });
-  }
-  return undefined;
-}
-
-async function waitForCursorToolResult(
-  payloads: AsyncIterator<Buffer>,
-  id: number,
-  execId: string,
-): Promise<NonNullable<ReturnType<typeof fromBinary<typeof AgentClientMessageSchema>>["execClientMessage"]>> {
-  const started = Date.now();
-  while (Date.now() - started < 120_000) {
-    const next = await Promise.race([
-      payloads.next(),
-      new Promise<{ done: true; value?: undefined }>((resolve) =>
-        setTimeout(() => resolve({ done: true }), 120_000),
-      ),
-    ]);
-    if (next.done === true || next.value === undefined) {
-      break;
-    }
-    let message: ReturnType<typeof fromBinary<typeof AgentClientMessageSchema>>;
-    try {
-      message = fromBinary(AgentClientMessageSchema, next.value);
-    } catch {
-      continue;
-    }
-    const execMessage = message.execClientMessage;
-    if (execMessage === undefined) {
-      continue;
-    }
-    if (execMessage.id === id || execMessage.execId === execId) {
-      return execMessage;
-    }
-  }
-  throw new Error(`Timed out waiting for Cursor tool result ${execId}`);
-}
-
-function formatCursorToolResult(
-  message: NonNullable<
-    ReturnType<typeof fromBinary<typeof AgentClientMessageSchema>>["execClientMessage"]
-  >,
-): string {
-  if (message.readResult !== undefined) {
-    const result = message.readResult;
-    if (result.success !== undefined) {
-      return result.success.content;
-    }
-    return JSON.stringify(summarizeToolResult(result));
-  }
-  if (message.lsResult !== undefined) {
-    return JSON.stringify(summarizeToolResult(message.lsResult), null, 2);
-  }
-  if (message.grepResult !== undefined) {
-    return JSON.stringify(summarizeToolResult(message.grepResult), null, 2);
-  }
-  return JSON.stringify(summarizeToolResult(message), null, 2);
-}
-
-function summarizeToolResult(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.slice(0, 40).map((entry) => summarizeToolResult(entry));
-  }
-  if (value === null || typeof value !== "object") {
-    return typeof value === "string" ? value.slice(0, 20_000) : value;
-  }
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (key === "$typeName") {
-      continue;
-    }
-    result[key] = summarizeToolResult(entry);
-  }
-  return result;
-}
-
-function parseToolArguments(toolCall: OpenAIToolCall): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(toolCall.function.arguments) as unknown;
-    return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function normalizeToolName(name: string): string {
-  const normalized = name.replace(/[-\s]/g, "_").toLowerCase();
-  if (["readfile", "read_file", "read"].includes(normalized)) {
-    return "read_file";
-  }
-  if (["ls", "list", "list_dir", "list_directory"].includes(normalized)) {
-    return "list_dir";
-  }
-  if (["grep", "search"].includes(normalized)) {
-    return "grep";
-  }
-  return normalized;
-}
-
-function stringArg(args: Record<string, unknown>, key: string): string {
-  const value = args[key];
-  return typeof value === "string" ? value : "";
-}
-
-function optionalStringArg(
-  args: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  const value = stringArg(args, key);
-  return value.length > 0 ? value : undefined;
-}
-
-function numberArg(
-  args: Record<string, unknown>,
-  key: string,
-): number | undefined {
-  const value = args[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function storePendingAgentContextRun(
@@ -1458,30 +1201,6 @@ function firstPendingAgentContextRun(
   return runtime.pendingAgentContextRuns.values().next().value as
     | PendingAgentContextRun
     | undefined;
-}
-
-function agentExecClientMessageFields(
-  message: NonNullable<
-    ReturnType<typeof fromBinary<typeof AgentClientMessageSchema>>["execClientMessage"]
-  >,
-): string[] {
-  return [
-    ["shellResult", message.shellResult],
-    ["writeResult", message.writeResult],
-    ["deleteResult", message.deleteResult],
-    ["grepResult", message.grepResult],
-    ["readResult", message.readResult],
-    ["lsResult", message.lsResult],
-    ["diagnosticsResult", message.diagnosticsResult],
-    ["requestContextResult", message.requestContextResult],
-    ["mcpResult", message.mcpResult],
-    ["shellStream", message.shellStream],
-    ["mcpStateExecResult", message.mcpStateExecResult],
-    ["fetchResult", message.fetchResult],
-    ["gitDiffResponse", message.gitDiffResponse],
-  ]
-    .filter(([, value]) => value !== undefined)
-    .map(([name]) => name as string);
 }
 
 function agentContextKey(value: { id: number; execId: string }): string {
@@ -1598,6 +1317,18 @@ function getBidiRequestId(payload: Uint8Array): string | undefined {
   }
 }
 
+function getBidiRequestIdFromPayloads(
+  payloads: Uint8Array[],
+): string | undefined {
+  for (const payload of payloads) {
+    const requestId = getBidiRequestId(payload);
+    if (requestId !== undefined) {
+      return requestId;
+    }
+  }
+  return undefined;
+}
+
 function requestPayloadForFormat(
   body: Buffer,
   format: ModelResponseFormat,
@@ -1622,7 +1353,12 @@ function requestPayloadCandidatesForFormat(
   try {
     const framedPayloads = decodeEnvelopes(body)
       .filter((envelope) => !isEndStreamEnvelope(envelope))
-      .flatMap((envelope) => connectEnvelopePayloadCandidates(envelope.payload, isCompressedEnvelope(envelope)));
+      .flatMap((envelope) =>
+        connectEnvelopePayloadCandidates(
+          envelope.payload,
+          isCompressedEnvelope(envelope),
+        ),
+      );
     return [body, ...framedPayloads];
   } catch {
     const payload = requestPayloadForFormat(body, format);
@@ -1725,7 +1461,10 @@ async function* connectPayloadStream(
     if (totalBytes > maxBytes) {
       throw new Error(`Request body exceeds ${maxBytes} bytes`);
     }
-    buffered = Buffer.concat([buffered, buffer], buffered.length + buffer.length);
+    buffered = Buffer.concat(
+      [buffered, buffer],
+      buffered.length + buffer.length,
+    );
     const parsed = parseEnvelopes(buffered);
     buffered = Buffer.from(parsed.remainder);
     for (const envelope of parsed.envelopes) {
