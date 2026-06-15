@@ -1,5 +1,5 @@
 import type { LogLevel } from "./config.js";
-import { redactValue } from "./redaction.js";
+import { redactForLogging, redactValue } from "./redaction.js";
 
 const LEVELS: Record<LogLevel, number> = {
   debug: 10,
@@ -31,7 +31,7 @@ export function createLogger(level: LogLevel): Logger {
       message,
       ...metadata,
     };
-    const output = redactValue(JSON.stringify(entry));
+    const output = redactValue(JSON.stringify(redactForLogging(entry)));
     if (entryLevel === "error") {
       console.error(output);
     } else if (entryLevel === "warn") {

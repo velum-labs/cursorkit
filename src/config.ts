@@ -22,8 +22,15 @@ export interface BridgeConfig {
   failOpen: boolean;
   logLevel: LogLevel;
   pluginPath?: string;
+  authToken?: string;
   unsafeAllowNonLocalhost: boolean;
   maxInterceptBodyBytes: number;
+  upstreamRequestTimeoutMs?: number;
+  agentRunSseWaitTimeoutMs?: number;
+  agentContextTimeoutMs?: number;
+  agentNativeContextEnabled: boolean;
+  toolResultTimeoutMs?: number;
+  extensionSetupTimeoutMs?: number;
   routeInventoryEnabled: boolean;
   modelPayloadLogging: ModelPayloadLogging;
   agentToolPolicy: AgentToolPolicy;
@@ -40,6 +47,7 @@ export interface LocalModelConfig {
   baseUrl: string;
   apiKey: string;
   contextTokenLimit: number;
+  requestTimeoutMs?: number;
   hardcodedResponse?: string;
 }
 
@@ -55,9 +63,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     env.BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST,
     false,
   );
-  if (!unsafeAllowNonLocalhost && !isLocalhost(host)) {
+  const authToken = emptyToUndefined(env.BRIDGE_AUTH_TOKEN);
+  if (
+    !unsafeAllowNonLocalhost &&
+    authToken === undefined &&
+    !isLocalhost(host)
+  ) {
     throw new Error(
-      `Refusing to bind bridge to non-localhost host ${host}. Set BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST=true to override.`,
+      `Refusing to bind bridge to non-localhost host ${host}. Set BRIDGE_AUTH_TOKEN or BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST=true to override.`,
     );
   }
 
@@ -73,6 +86,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     baseUrl: modelBaseUrl,
     apiKey: modelApiKey,
     contextTokenLimit: parseInteger(env.MODEL_CONTEXT_TOKEN_LIMIT, 128000),
+    requestTimeoutMs: parseOptionalPositiveInteger(
+      env.MODEL_REQUEST_TIMEOUT_MS,
+    ),
     hardcodedResponse,
   });
 
@@ -124,10 +140,30 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
     failOpen: parseBoolean(env.BRIDGE_FAIL_OPEN, true),
     logLevel: parseLogLevel(env.BRIDGE_LOG_LEVEL),
     pluginPath: emptyToUndefined(env.BRIDGE_PLUGIN_PATH),
+    authToken,
     unsafeAllowNonLocalhost,
     maxInterceptBodyBytes: parseInteger(
       env.BRIDGE_MAX_INTERCEPT_BODY_BYTES,
       50 * 1024 * 1024,
+    ),
+    upstreamRequestTimeoutMs: parseOptionalPositiveInteger(
+      env.BRIDGE_UPSTREAM_REQUEST_TIMEOUT_MS,
+    ),
+    agentRunSseWaitTimeoutMs: parseOptionalPositiveInteger(
+      env.BRIDGE_AGENT_RUN_SSE_WAIT_TIMEOUT_MS,
+    ),
+    agentContextTimeoutMs: parseOptionalPositiveInteger(
+      env.BRIDGE_AGENT_CONTEXT_TIMEOUT_MS,
+    ),
+    agentNativeContextEnabled: parseBoolean(
+      env.BRIDGE_AGENT_NATIVE_CONTEXT,
+      true,
+    ),
+    toolResultTimeoutMs: parseOptionalPositiveInteger(
+      env.BRIDGE_AGENT_TOOL_RESULT_TIMEOUT_MS,
+    ),
+    extensionSetupTimeoutMs: parseOptionalPositiveInteger(
+      env.BRIDGE_EXTENSION_SETUP_TIMEOUT_MS,
     ),
     routeInventoryEnabled:
       desktopMode || parseBoolean(env.BRIDGE_ROUTE_INVENTORY, false),
@@ -192,6 +228,12 @@ function parseModels(
         Number.isFinite(item.contextTokenLimit)
           ? item.contextTokenLimit
           : fallback.contextTokenLimit,
+      requestTimeoutMs:
+        typeof item.requestTimeoutMs === "number" &&
+        Number.isFinite(item.requestTimeoutMs) &&
+        item.requestTimeoutMs > 0
+          ? item.requestTimeoutMs
+          : fallback.requestTimeoutMs,
       hardcodedResponse:
         typeof item.hardcodedResponse === "string"
           ? item.hardcodedResponse
@@ -231,6 +273,19 @@ function parseBoolean(value: string | undefined, fallback: boolean): boolean {
 function parseInteger(value: string | undefined, fallback: number): number {
   if (value === undefined || value === "") {
     return fallback;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid integer value: ${value}`);
+  }
+  return parsed;
+}
+
+function parseOptionalPositiveInteger(
+  value: string | undefined,
+): number | undefined {
+  if (value === undefined || value === "") {
+    return undefined;
   }
   const parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {

@@ -24,9 +24,13 @@ import {
   writeDesktopCertificate,
 } from "./desktop.js";
 import {
+  AGENT_RUN_PATH,
+  AGENT_RUN_SSE_PATH,
   AVAILABLE_MODELS_PATH,
+  BIDI_APPEND_PATH,
   GET_DEFAULT_MODEL_FOR_CLI_PATH,
   GET_USABLE_MODELS_PATH,
+  STREAM_CHAT_WITH_TOOLS_PATH,
 } from "./routes.js";
 
 export type CkCommand =
@@ -126,12 +130,27 @@ export interface RouteInventoryPathSummary {
   outcomes: string[];
 }
 
+export type DesktopRouteCategory =
+  | "model-metadata"
+  | "local-agent-candidate"
+  | "pass-through"
+  | "decoded-only"
+  | "unsupported"
+  | "unknown";
+
+export interface DesktopRouteCategorySummary {
+  path: string;
+  category: DesktopRouteCategory;
+  reason: string;
+}
+
 export interface DesktopTestReport {
   routeInventorySeen: boolean;
   modelRoutesSeen: string[];
   missingModelRoutes: string[];
   observedPaths: string[];
   routeSummary: RouteInventoryPathSummary[];
+  routeCategories: DesktopRouteCategorySummary[];
   failedRoutes: RouteInventoryObservation[];
   passThroughRoutes: RouteInventoryObservation[];
   diagnosis: string[];
@@ -141,6 +160,26 @@ export interface CkProcessGroup {
   bridge: ChildProcess;
   log: fs.WriteStream;
   connectProxy?: DesktopConnectProxy;
+}
+
+interface CkState {
+  bridgePid?: number;
+  bridgeCommand?: string;
+  bridgePort?: number;
+  connectProxyPort?: number;
+  agentHttpPort?: number;
+  logPath?: string;
+  connectProxyLogPath?: string;
+  profileMode?: CkProfileMode;
+  userDataDir?: string;
+  extensionsDir?: string;
+  workspacePath?: string;
+  debugPort?: number;
+  instanceId?: string;
+  seedAuthFromDefault?: boolean;
+  authSeedStatus?: CursorAuthSeedStatus;
+  localModelSeedStatus?: CursorLocalModelSeedStatus;
+  startedAt?: string;
 }
 
 export const CK_STATE_DIR = path.join(".cursor-rpc", "ck");
@@ -157,6 +196,12 @@ const MODEL_ROUTE_PATHS = [
   AVAILABLE_MODELS_PATH,
   GET_USABLE_MODELS_PATH,
   GET_DEFAULT_MODEL_FOR_CLI_PATH,
+];
+const LOCAL_AGENT_CANDIDATE_PATHS = [
+  AGENT_RUN_PATH,
+  AGENT_RUN_SSE_PATH,
+  BIDI_APPEND_PATH,
+  STREAM_CHAT_WITH_TOOLS_PATH,
 ];
 
 const CK_HELP = `ck
@@ -544,6 +589,7 @@ export function analyzeRouteInventoryLog(logText: string): DesktopTestReport {
     observations.map((observation) => observation.path),
   );
   const routeSummary = summarizeRouteInventory(observations);
+  const routeCategories = categorizeRouteInventory(routeSummary);
   const modelRoutesSeen = MODEL_ROUTE_PATHS.filter((path) =>
     observedPaths.includes(path),
   );
@@ -563,6 +609,7 @@ export function analyzeRouteInventoryLog(logText: string): DesktopTestReport {
     missingModelRoutes,
     observedPaths,
     routeSummary,
+    routeCategories,
     failedRoutes,
     passThroughRoutes,
     diagnosis: desktopTestDiagnosis({
@@ -575,6 +622,54 @@ export function analyzeRouteInventoryLog(logText: string): DesktopTestReport {
       passThroughRoutes,
     }),
   };
+}
+
+function categorizeRouteInventory(
+  routeSummary: RouteInventoryPathSummary[],
+): DesktopRouteCategorySummary[] {
+  return routeSummary.map((summary) => {
+    if (MODEL_ROUTE_PATHS.includes(summary.path)) {
+      return {
+        path: summary.path,
+        category: "model-metadata",
+        reason: "known model-list/default-model route",
+      };
+    }
+    if (LOCAL_AGENT_CANDIDATE_PATHS.includes(summary.path)) {
+      return {
+        path: summary.path,
+        category: "local-agent-candidate",
+        reason: "known route that can carry desktop prompt execution",
+      };
+    }
+    if (summary.policies.includes("pass-through")) {
+      return {
+        path: summary.path,
+        category: "pass-through",
+        reason: "observed but intentionally forwarded upstream",
+      };
+    }
+    if (summary.policies.includes("intercept")) {
+      return {
+        path: summary.path,
+        category: "decoded-only",
+        reason:
+          "intercepted by bridge without desktop-specific acceptance proof",
+      };
+    }
+    if (summary.statuses.some((status) => status >= 400)) {
+      return {
+        path: summary.path,
+        category: "unsupported",
+        reason: "observed with an HTTP error status",
+      };
+    }
+    return {
+      path: summary.path,
+      category: "unknown",
+      reason: "observed route needs fixture or traffic classification",
+    };
+  });
 }
 
 function summarizeRouteInventory(
@@ -1390,8 +1485,11 @@ function writeLatestStatus(
           modelRoutesSeen: report.modelRoutesSeen,
           missingModelRoutes: report.missingModelRoutes,
           observedPaths: report.observedPaths,
+          routeCategories: report.routeCategories,
           failedRoutes: report.failedRoutes,
           passThroughRoutes: report.passThroughRoutes,
+          authSeedStatus: plan.authSeedStatus,
+          localModelSeedStatus: plan.localModelSeedStatus,
           checkedAt: new Date().toISOString(),
         },
       },
@@ -1430,6 +1528,20 @@ function printDesktopTestReport(
   console.log(`failed routes: ${String(report.failedRoutes.length)}`);
   console.log(
     `pass-through routes: ${String(report.passThroughRoutes.length)}`,
+  );
+  console.log(
+    `auth seed: ${plan.authSeedStatus ?? "not-run"}; local model seed: ${
+      plan.localModelSeedStatus ?? "not-run"
+    }`,
+  );
+  console.log(
+    `route categories: ${
+      report.routeCategories.length > 0
+        ? report.routeCategories
+            .map((entry) => `${entry.category}:${entry.path}`)
+            .join(", ")
+        : "none"
+    }`,
   );
   console.log(`log: ${plan.logPath}`);
   console.log(`state: ${plan.statePath}`);
@@ -1690,11 +1802,22 @@ async function stopBridgeFromState(): Promise<void> {
     console.log("No ck state file found.");
     return;
   }
-  const state = JSON.parse(fs.readFileSync(CK_STATE_PATH, "utf8")) as {
-    bridgePid?: number;
-  };
+  const state = JSON.parse(fs.readFileSync(CK_STATE_PATH, "utf8")) as CkState;
   if (state.bridgePid === undefined) {
     console.log("No bridge PID recorded.");
+    return;
+  }
+  const command = processCommandForPid(state.bridgePid);
+  if (command === undefined) {
+    console.warn(
+      `No running process found for ck bridge PID ${state.bridgePid}.`,
+    );
+    return;
+  }
+  if (!bridgeProcessMatchesState(command, state)) {
+    console.warn(
+      `Refusing to stop PID ${state.bridgePid}; it does not look like the ck-owned desktop bridge recorded in state.`,
+    );
     return;
   }
   try {
@@ -1709,12 +1832,49 @@ async function stopBridgeFromState(): Promise<void> {
   }
 }
 
+export function bridgeProcessMatchesState(
+  command: string,
+  state: Pick<CkState, "bridgeCommand"> = {},
+): boolean {
+  const normalizedCommand = command.replace(/\s+/g, " ").trim();
+  const normalizedStateCommand = state.bridgeCommand
+    ?.replace(/\s+/g, " ")
+    .trim();
+  if (
+    normalizedStateCommand !== undefined &&
+    normalizedStateCommand.length > 0 &&
+    normalizedCommand.includes(normalizedStateCommand)
+  ) {
+    return true;
+  }
+  return (
+    /\bdesktop-proxy\b/.test(normalizedCommand) &&
+    (normalizedCommand.includes("src/cli.ts") ||
+      normalizedCommand.includes("dist/src/cli.js") ||
+      normalizedCommand.includes("/cli.js") ||
+      normalizedCommand.includes("cursor-rpc"))
+  );
+}
+
+function processCommandForPid(pid: number): string | undefined {
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], {
+    encoding: "utf8",
+    maxBuffer: 1024 * 1024,
+  });
+  if (result.status !== 0) {
+    return undefined;
+  }
+  const command = result.stdout.trim();
+  return command.length === 0 ? undefined : command;
+}
+
 function writeState(plan: CkLaunchPlan, bridge: ChildProcess): void {
   fs.writeFileSync(
     plan.statePath,
     JSON.stringify(
       {
         bridgePid: bridge.pid,
+        bridgeCommand: commandForDisplay(plan.bridge),
         bridgePort: plan.bridgePort,
         connectProxyPort: plan.connectProxyPort,
         agentHttpPort: plan.agentHttpPort,
@@ -1728,6 +1888,7 @@ function writeState(plan: CkLaunchPlan, bridge: ChildProcess): void {
         instanceId: plan.instanceId,
         seedAuthFromDefault: plan.seedAuthFromDefault,
         authSeedStatus: plan.authSeedStatus,
+        localModelSeedStatus: plan.localModelSeedStatus,
         startedAt: new Date().toISOString(),
       },
       null,

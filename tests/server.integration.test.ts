@@ -1,6 +1,9 @@
 import http from "node:http";
 import https from "node:https";
 import type { AddressInfo } from "node:net";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import { afterEach, describe, expect, it } from "vitest";
@@ -126,6 +129,101 @@ describe("bridge server", () => {
     expect(Buffer.from(await response.arrayBuffer())).toEqual(
       Buffer.from([9, 8, 7]),
     );
+  });
+
+  it("requires bridge auth when configured", async () => {
+    const bridge = await startTestBridge({ authToken: "local-secret" });
+
+    const unauthorized = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/unknown`,
+      {
+        method: "POST",
+        body: new Uint8Array([1]),
+      },
+    );
+    const authorized = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/healthz`,
+      {
+        headers: { authorization: "Bearer local-secret" },
+      },
+    );
+
+    expect(unauthorized.status).toBe(401);
+    expect(authorized.status).toBe(200);
+  });
+
+  it("returns 413 for oversized intercepted request bodies", async () => {
+    const bridge = await startTestBridge({ maxInterceptBodyBytes: 4 });
+
+    const response = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/aiserver.v1.AiService/AvailableModels`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/connect+proto" },
+        body: new Uint8Array([0, 1, 2, 3, 4]),
+      },
+    );
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({
+      error: "request body too large",
+    });
+  });
+
+  it("times out hanging upstream pass-through requests", async () => {
+    const upstream = http.createServer((request, _response) => {
+      request.resume();
+    });
+    await listen(upstream);
+    servers.push(upstream);
+    const bridge = await startTestBridge({
+      upstreamBaseUrl: `http://127.0.0.1:${portOf(upstream)}`,
+      upstreamRequestTimeoutMs: 25,
+    });
+
+    const response = await fetch(`http://127.0.0.1:${portOf(bridge)}/unknown`, {
+      method: "POST",
+      body: new Uint8Array([1]),
+    });
+
+    expect(response.status).toBe(504);
+    expect(await response.json()).toMatchObject({
+      error: "upstream request timed out",
+    });
+  });
+
+  it("reports listener startup errors for port-in-use", async () => {
+    const occupied = http.createServer((_request, response) => {
+      response.end();
+    });
+    await listen(occupied);
+    servers.push(occupied);
+    const runtime = await createBridgeRuntime(
+      { ...baseConfig(), port: portOf(occupied) },
+      createLogger("error"),
+    );
+
+    await expect(startServer(runtime)).rejects.toThrow(
+      /bridge listener failed to start/,
+    );
+  });
+
+  it("contains plugin setup failures during runtime creation", async () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "cursor-rpc-plugin-"),
+    );
+    const pluginPath = path.join(tempDir, "bad-plugin.mjs");
+    fs.writeFileSync(
+      pluginPath,
+      "export default { name: 'bad-plugin', setup() { throw new Error('boom'); } };",
+    );
+
+    const runtime = await createBridgeRuntime(
+      { ...baseConfig(), pluginPath, extensionSetupTimeoutMs: 25 },
+      createLogger("error"),
+    );
+
+    expect(runtime.models.list()).toHaveLength(1);
   });
 
   it("serves local models from the allowlisted AvailableModels route", async () => {
@@ -640,6 +738,53 @@ describe("bridge server", () => {
     expect(messages.at(-1)?.interactionUpdate?.turnEnded).toBeDefined();
   });
 
+  it("expires stale pending Bidi Agent RunSSE state on later appends", async () => {
+    const runtime = await createBridgeRuntime(
+      { ...baseConfig(), agentRunSseWaitTimeoutMs: 20 },
+      createLogger("error"),
+    );
+    const bridge = await startServer(runtime);
+    servers.push(bridge);
+    const firstClientMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, { text: "first" }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const secondClientMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, { text: "second" }),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    await appendBidiRun(portOf(bridge), "first-run", firstClientMessage);
+    expect(runtime.pendingAgentRuns.has("first-run")).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    await appendBidiRun(portOf(bridge), "second-run", secondClientMessage);
+
+    expect(runtime.pendingAgentRuns.has("first-run")).toBe(false);
+    expect(runtime.pendingAgentRuns.has("second-run")).toBe(true);
+  });
+
   it("serves local Cursor Agent Run requests from AgentClientMessage payloads", async () => {
     const bridge = await startTestBridge();
     const clientMessage = toBinary(
@@ -939,6 +1084,94 @@ describe("bridge server", () => {
     expect(capturedRequest.messages?.at(-1)).toMatchObject({
       role: "user",
       content: "what is this project?",
+    });
+  });
+
+  it("can skip native Cursor context for lightweight desktop Agent Run probes", async () => {
+    let capturedRequest: {
+      messages?: Array<{ role: string; content: string }>;
+    } = {};
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        capturedRequest = JSON.parse(
+          Buffer.concat(chunks).toString("utf8"),
+        ) as typeof capturedRequest;
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"desktop-probe-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      agentNativeContextEnabled: false,
+      logLevel: "debug",
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+
+    const runRequest = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "Reply with exactly: desktop-probe-ok",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const modelResponse = await fetch(
+      `http://127.0.0.1:${portOf(bridge)}/agent.v1.AgentService/Run`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/connect+proto",
+          "x-cursor-rpc-native-agent": "true",
+        },
+        body: new Uint8Array(Buffer.concat([encodeEnvelope(runRequest)])),
+      },
+    );
+
+    expect(modelResponse.status).toBe(200);
+    const responseEnvelopes = decodeEnvelopes(
+      Buffer.from(await modelResponse.arrayBuffer()),
+    ).filter((envelope) => !isEndStreamEnvelope(envelope));
+    const firstServerMessage = fromBinary(
+      AgentServerMessageSchema,
+      responseEnvelopes[0]?.payload ?? new Uint8Array(),
+    );
+    expect(
+      firstServerMessage.execServerMessage?.requestContextArgs,
+    ).toBeUndefined();
+    const allMessageText =
+      capturedRequest.messages?.map((message) => message.content).join("\n") ??
+      "";
+    expect(allMessageText).not.toContain("Cursor native request context");
+    expect(capturedRequest.messages?.at(-1)).toMatchObject({
+      role: "user",
+      content: "Reply with exactly: desktop-probe-ok",
     });
   });
 
@@ -1260,6 +1493,189 @@ describe("bridge server", () => {
       ]),
     );
     expect(responseText).toContain("readme-ok");
+  });
+
+  it("serializes multiple local model tool calls through Cursor Agent Run", async () => {
+    const capturedRequests: Array<{
+      messages?: Array<{
+        role: string;
+        content: string;
+        tool_call_id?: string;
+      }>;
+    }> = [];
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        capturedRequests.push(
+          JSON.parse(
+            Buffer.concat(chunks).toString("utf8"),
+          ) as (typeof capturedRequests)[number],
+        );
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        if (capturedRequests.length === 1) {
+          const toolCallChunk = {
+            choices: [
+              {
+                delta: {
+                  tool_calls: [
+                    {
+                      index: 0,
+                      id: "call-read",
+                      type: "function",
+                      function: {
+                        name: "read_file",
+                        arguments: JSON.stringify({ path: "README.md" }),
+                      },
+                    },
+                    {
+                      index: 1,
+                      id: "call-list",
+                      type: "function",
+                      function: {
+                        name: "list_dir",
+                        arguments: JSON.stringify({ path: "." }),
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          };
+          response.end(
+            [
+              `data: ${JSON.stringify(toolCallChunk)}`,
+              'data: {"choices":[{"finish_reason":"tool_calls"}]}',
+              "data: [DONE]",
+              "",
+            ].join("\n"),
+          );
+          return;
+        }
+        response.end(
+          [
+            'data: {"choices":[{"delta":{"content":"serialized-ok"}}]}',
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+    const runRequest = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "read and list",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const contextResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 1,
+          execId: "cursor-rpc-context-1",
+          requestContextResult: create(RequestContextResultSchema, {
+            success: create(RequestContextSuccessSchema, {
+              requestContext: create(RequestContextSchema),
+            }),
+          }),
+        }),
+      }),
+    );
+    const readResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 2,
+          execId: "cursor-rpc-tool-call-read",
+          readResult: create(ReadResultSchema, {
+            success: create(ReadSuccessSchema, {
+              path: "README.md",
+              content: "read result",
+            }),
+          }),
+        }),
+      }),
+    );
+    const lsResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 3,
+          execId: "cursor-rpc-tool-call-list",
+          lsResult: create(LsResultSchema, {
+            success: create(LsSuccessSchema, {
+              directoryTreeRoot: create(LsDirectoryTreeNodeSchema, {
+                absPath: "/repo",
+                childrenFiles: [
+                  create(LsDirectoryTreeNode_FileSchema, { name: "README.md" }),
+                ],
+                childrenWereProcessed: true,
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const { responseText, serverMessages } = await runDuplexAgentRequest(
+      portOf(bridge),
+      runRequest,
+      contextResultMessage,
+      [readResultMessage, lsResultMessage],
+    );
+
+    const toolExecMessages = serverMessages.filter(isToolExecServerMessage);
+    expect(
+      toolExecMessages.map((message) => message.execServerMessage?.id),
+    ).toEqual([2, 3]);
+    expect(toolExecMessages[0]?.execServerMessage?.readArgs).toMatchObject({
+      path: "README.md",
+      toolCallId: "call-read",
+    });
+    expect(toolExecMessages[1]?.execServerMessage?.lsArgs).toMatchObject({
+      path: ".",
+      toolCallId: "call-list",
+    });
+    expect(capturedRequests[1]?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "tool",
+          tool_call_id: "call-read",
+          content: expect.stringContaining("read result"),
+        }),
+        expect.objectContaining({
+          role: "tool",
+          tool_call_id: "call-list",
+          content: expect.stringContaining("README.md"),
+        }),
+      ]),
+    );
+    expect(responseText).toContain("serialized-ok");
   });
 
   it("maps extended Cursor tool calls through Agent Run", async () => {
@@ -1632,6 +2048,7 @@ function baseConfig(): BridgeConfig {
     routeInventoryEnabled: false,
     modelPayloadLogging: "summary",
     agentToolPolicy: "safe",
+    agentNativeContextEnabled: true,
     tlsHostnames: ["localhost", "127.0.0.1", "::1"],
     unsafeAllowNonLocalhost: false,
     maxInterceptBodyBytes: 1024 * 1024,
@@ -1804,6 +2221,30 @@ function scriptedToolCallSse(
     "data: [DONE]",
     "",
   ].join("\n");
+}
+
+async function appendBidiRun(
+  port: number,
+  requestId: string,
+  clientMessage: Uint8Array,
+): Promise<void> {
+  const response = await fetch(
+    `http://127.0.0.1:${port}/aiserver.v1.BidiService/BidiAppend`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/proto" },
+      body: new Uint8Array(
+        toBinary(
+          BidiAppendRequestSchema,
+          create(BidiAppendRequestSchema, {
+            requestId: create(BidiRequestIdSchema, { requestId }),
+            data: Buffer.from(clientMessage).toString("hex"),
+          }),
+        ),
+      ),
+    },
+  );
+  expect(response.status).toBe(200);
 }
 
 async function listen(server: http.Server): Promise<void> {

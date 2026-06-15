@@ -95,6 +95,7 @@ function baseConfig(): BridgeConfig {
     routeInventoryEnabled: false,
     modelPayloadLogging: "summary",
     agentToolPolicy: "safe",
+    agentNativeContextEnabled: true,
     tlsHostnames: ["localhost", "127.0.0.1", "::1"],
     unsafeAllowNonLocalhost: false,
     useTls: false,

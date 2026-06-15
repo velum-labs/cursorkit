@@ -14,6 +14,7 @@ import {
 import { parseHarnessArgs } from "../src/testing/cli.js";
 import { probeLocalBackend } from "../src/testing/localBackend.js";
 import { expandSuites } from "../src/testing/runner.js";
+import { desktopUiCkArgs } from "../src/testing/scenarios.js";
 
 let tempDir: string | undefined;
 
@@ -86,6 +87,29 @@ describe("testing harness", () => {
         includeExperimental: true,
       }),
     ).toContain("cursor-agent-acp-experimental");
+  });
+
+  it("launches desktop UI CK with an isolated debuggable profile", () => {
+    const args = desktopUiCkArgs(
+      {
+        timeoutMs: 180_000,
+        useDefaultProfile: true,
+      },
+      9333,
+      "desktop-ui-9333",
+    );
+
+    expect(args).not.toContain("--use-default-profile");
+    expect(args).toEqual([
+      "ck",
+      "--debug-port",
+      "9333",
+      "--instance-id",
+      "desktop-ui-9333",
+      "--seed-auth-from-default",
+      "--timeout-ms",
+      "5000",
+    ]);
   });
 
   it("writes summary artifacts", () => {

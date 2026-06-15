@@ -5,8 +5,20 @@ import type { ModelRegistry } from "../models/registry.js";
 
 export interface CursorExtension {
   name: string;
+  manifest?: CursorExtensionManifest;
   setup(context: ExtensionContext): void | Promise<void>;
 }
+
+export interface CursorExtensionManifest {
+  apiVersion: "cursor-rpc/v1";
+  trusted: "local";
+  permissions: CursorExtensionPermission[];
+}
+
+export type CursorExtensionPermission =
+  | "models:register"
+  | "routes:register"
+  | "middleware:register";
 
 export interface ExtensionContext {
   models: ModelRegistry;

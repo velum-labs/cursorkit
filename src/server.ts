@@ -103,7 +103,9 @@ import {
   fetchUpstreamBuffer,
   proxyBufferedRequest,
   proxyRequest,
+  RequestBodyTooLargeError,
   readRequestBody,
+  UpstreamRequestTimeoutError,
 } from "./upstream.js";
 
 export interface BridgeRuntime {
@@ -112,9 +114,14 @@ export interface BridgeRuntime {
   proto: CursorProto;
   models: ModelRegistry;
   extensions: ExtensionManager;
-  pendingAgentRuns: Map<string, LocalAgentRunDecision>;
+  pendingAgentRuns: Map<string, PendingAgentRun>;
   pendingAgentContextRuns: Map<string, PendingAgentContextRun>;
   nextAgentExecId: number;
+}
+
+interface PendingAgentRun {
+  decision: LocalAgentRunDecision;
+  createdAt: number;
 }
 
 interface PendingAgentContextRun {
@@ -124,7 +131,22 @@ interface PendingAgentContextRun {
   createdAt: number;
 }
 
+interface StartableServer {
+  listen(port: number, host: string): this;
+  once(event: "error", listener: (error: Error) => void): this;
+  once(event: "listening", listener: () => void): this;
+  off(event: "error", listener: (error: Error) => void): this;
+  off(event: "listening", listener: () => void): this;
+  on(event: "close", listener: () => void): this;
+  close(callback?: (error?: Error) => void): this;
+}
+
 const MAX_AGENT_STREAM_BYTES = 256 * 1024 * 1024;
+const DEFAULT_AGENT_RUN_SSE_WAIT_TIMEOUT_MS = 5_000;
+const DEFAULT_AGENT_CONTEXT_TIMEOUT_MS = 5 * 60_000;
+const DEFAULT_EXTENSION_SETUP_TIMEOUT_MS = 10_000;
+const MAX_PENDING_AGENT_RUNS = 100;
+const MAX_PENDING_AGENT_CONTEXT_RUNS = 100;
 
 export async function createBridgeRuntime(
   config: BridgeConfig,
@@ -142,7 +164,18 @@ export async function createBridgeRuntime(
   );
   const extensions = createExtensionManager(models, logger);
   if (config.pluginPath !== undefined) {
-    await extensions.load(await loadExtension(config.pluginPath));
+    try {
+      await withTimeout(
+        extensions.load(await loadExtension(config.pluginPath)),
+        config.extensionSetupTimeoutMs ?? DEFAULT_EXTENSION_SETUP_TIMEOUT_MS,
+        `Extension setup timed out for ${config.pluginPath}`,
+      );
+    } catch (error) {
+      logger.error("extension load failed", {
+        pluginPath: config.pluginPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   return {
     config,
@@ -175,22 +208,28 @@ export async function startServer(runtime: BridgeRuntime): Promise<Server> {
         )
       : https.createServer(await loadTlsMaterial(runtime.config), listener)
     : http.createServer(listener);
+  const agentHttpPort = runtime.config.desktopAgentHttpPort;
   const agentHttpServer =
-    runtime.config.desktopAgentHttpPort !== undefined
-      ? http.createServer(listener)
-      : undefined;
+    agentHttpPort !== undefined ? http.createServer(listener) : undefined;
 
-  await new Promise<void>((resolve) => {
-    server.listen(runtime.config.port, runtime.config.host, resolve);
-  });
-  if (agentHttpServer !== undefined) {
-    await new Promise<void>((resolve) => {
-      agentHttpServer.listen(
-        runtime.config.desktopAgentHttpPort,
+  await listenWithStartupErrors(
+    server,
+    runtime.config.port,
+    runtime.config.host,
+    "bridge",
+  );
+  if (agentHttpServer !== undefined && agentHttpPort !== undefined) {
+    try {
+      await listenWithStartupErrors(
+        agentHttpServer,
+        agentHttpPort,
         runtime.config.host,
-        resolve,
+        "desktop agent http",
       );
-    });
+    } catch (error) {
+      await closeServer(server);
+      throw error;
+    }
     server.on("close", () => {
       agentHttpServer.close();
     });
@@ -206,6 +245,33 @@ export async function startServer(runtime: BridgeRuntime): Promise<Server> {
   return server as unknown as Server;
 }
 
+function listenWithStartupErrors(
+  server: StartableServer,
+  port: number,
+  host: string,
+  name: string,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onError = (error: Error) => {
+      server.off("listening", onListening);
+      reject(new Error(`${name} listener failed to start: ${error.message}`));
+    };
+    const onListening = () => {
+      server.off("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
+}
+
+function closeServer(server: StartableServer): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => resolve());
+  });
+}
+
 async function handleRequest(
   runtime: BridgeRuntime,
   request: IncomingMessage,
@@ -214,6 +280,9 @@ async function handleRequest(
   if (request.url === "/healthz") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(JSON.stringify({ ok: true }));
+    return;
+  }
+  if (!authorizeRequest(runtime, request, response)) {
     return;
   }
 
@@ -299,6 +368,15 @@ async function handleRequest(
       return;
     }
   } catch (error) {
+    const handled = handleKnownRequestError(
+      runtime,
+      response,
+      decision.path,
+      error,
+    );
+    if (handled) {
+      return;
+    }
     runtime.logger.error("intercept failed", {
       path: decision.path,
       error: error instanceof Error ? error.message : String(error),
@@ -324,6 +402,95 @@ async function handleRequest(
   proxyRequest(request, response, runtime.config, runtime.logger);
 }
 
+function authorizeRequest(
+  runtime: BridgeRuntime,
+  request: IncomingMessage,
+  response: ServerResponse,
+): boolean {
+  const token = runtime.config.authToken;
+  if (token === undefined) {
+    return true;
+  }
+  const authorization = headerValue(request.headers.authorization);
+  const bridgeToken = headerValue(request.headers["x-cursor-rpc-auth"]);
+  const authorized =
+    authorization === `Bearer ${token}` || bridgeToken === token;
+  if (authorized) {
+    return true;
+  }
+  response.writeHead(401, {
+    "content-type": "application/json",
+    "www-authenticate": "Bearer",
+  });
+  response.end(JSON.stringify({ error: "bridge authentication required" }));
+  return false;
+}
+
+function handleKnownRequestError(
+  runtime: BridgeRuntime,
+  response: ServerResponse,
+  pathName: string,
+  error: unknown,
+): boolean {
+  if (error instanceof RequestBodyTooLargeError) {
+    runtime.logger.warn("request body too large", {
+      path: pathName,
+      maxBytes: error.maxBytes,
+    });
+    writeErrorResponse(response, 413, "request body too large");
+    return true;
+  }
+  if (error instanceof UpstreamRequestTimeoutError) {
+    runtime.logger.warn("upstream request timed out", {
+      path: pathName,
+      timeoutMs: error.timeoutMs,
+    });
+    writeErrorResponse(response, 504, "upstream request timed out");
+    return true;
+  }
+  return false;
+}
+
+function writeErrorResponse(
+  response: ServerResponse,
+  statusCode: number,
+  message: string,
+): void {
+  if (response.headersSent) {
+    response.end(encodeEndStream({ error: message }));
+    return;
+  }
+  response.writeHead(statusCode, { "content-type": "application/json" });
+  response.end(JSON.stringify({ error: message }));
+}
+
+function headerValue(value: string | string[] | undefined): string {
+  if (value === undefined) {
+    return "";
+  }
+  return Array.isArray(value) ? (value[0] ?? "") : value;
+}
+
+function requestAbortSignal(
+  request: IncomingMessage,
+  response: ServerResponse,
+): AbortSignal {
+  const controller = new AbortController();
+  const abort = () => {
+    if (!controller.signal.aborted) {
+      controller.abort();
+    }
+  };
+  request.once("aborted", abort);
+  request.once("error", abort);
+  response.once("close", () => {
+    if (!response.writableEnded) {
+      abort();
+    }
+  });
+  return controller.signal;
+}
+
 async function handlePluginRoute(
   runtime: BridgeRuntime,
   request: IncomingMessage,
@@ -341,7 +508,19 @@ async function handlePluginRoute(
       );
       return false;
     }
-    return route.handle(request, response);
+    try {
+      return await route.handle(request, response);
+    } catch (error) {
+      runtime.logger.error("plugin route failed", {
+        path: route.path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      if (!response.headersSent) {
+        response.writeHead(502, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: "plugin route failed" }));
+      }
+      return true;
+    }
   }
   return false;
 }
@@ -356,7 +535,13 @@ async function runMetadataOnlyRequestMiddleware(
     }
     const requestMiddleware = middleware as RequestMiddleware;
     if (requestMiddleware.bodyAccess === "metadata-only") {
-      await requestMiddleware.run(request);
+      try {
+        await requestMiddleware.run(request);
+      } catch (error) {
+        runtime.logger.error("extension request middleware failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 }
@@ -376,6 +561,26 @@ async function loadExtension(pluginPath: string): Promise<CursorExtension> {
   return imported.default;
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
 async function handleAvailableModels(
   runtime: BridgeRuntime,
   request: IncomingMessage,
@@ -385,6 +590,15 @@ async function handleAvailableModels(
     request,
     runtime.config.maxInterceptBodyBytes,
   );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   const upstreamBody = await fetchUpstreamBuffer(
     request,
     body,
@@ -395,7 +609,6 @@ async function handleAvailableModels(
     });
     return undefined;
   });
-  const format = modelResponseFormatForRequest(request);
   const merged = mergeAvailableModelsWithFallback(
     runtime,
     upstreamMessagePayload(upstreamBody, format),
@@ -412,6 +625,15 @@ async function handleGetUsableModels(
     request,
     runtime.config.maxInterceptBodyBytes,
   );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   const upstreamBody = await fetchUpstreamBuffer(
     request,
     body,
@@ -422,7 +644,6 @@ async function handleGetUsableModels(
     });
     return undefined;
   });
-  const format = modelResponseFormatForRequest(request);
   const merged = mergeUsableModelsWithFallback(
     runtime,
     upstreamMessagePayload(upstreamBody, format),
@@ -445,6 +666,15 @@ async function handleGetDefaultModelForCli(
     request,
     runtime.config.maxInterceptBodyBytes,
   );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   const upstreamBody = await fetchUpstreamBuffer(
     request,
     body,
@@ -455,7 +685,6 @@ async function handleGetDefaultModelForCli(
     });
     return undefined;
   });
-  const format = modelResponseFormatForRequest(request);
   const merged = mergeDefaultModelForCliWithFallback(
     runtime,
     upstreamMessagePayload(upstreamBody, format),
@@ -478,6 +707,15 @@ async function handleGetDefaultModel(
     request,
     runtime.config.maxInterceptBodyBytes,
   );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   const upstreamBody = await fetchUpstreamBuffer(
     request,
     body,
@@ -488,7 +726,6 @@ async function handleGetDefaultModel(
     });
     return undefined;
   });
-  const format = modelResponseFormatForRequest(request);
   const payload = mergeDefaultModel(
     upstreamMessagePayload(upstreamBody, format),
     runtime.models,
@@ -507,8 +744,19 @@ async function handleNameAgent(
   request: IncomingMessage,
   response: ServerResponse,
 ): Promise<void> {
-  const format = modelResponseFormatForRequest(request);
-  await readRequestBody(request, runtime.config.maxInterceptBodyBytes);
+  const body = await readRequestBody(
+    request,
+    runtime.config.maxInterceptBodyBytes,
+  );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   writeModelResponse(
     response,
     buildLocalNameAgentResponse(),
@@ -562,6 +810,15 @@ async function handleGetServerConfig(
     request,
     runtime.config.maxInterceptBodyBytes,
   );
+  const format = await validatedRequestFormatOrPassThrough(
+    runtime,
+    request,
+    response,
+    body,
+  );
+  if (format === undefined) {
+    return;
+  }
   const upstreamBody = await fetchUpstreamBuffer(
     request,
     body,
@@ -572,7 +829,6 @@ async function handleGetServerConfig(
     });
     return undefined;
   });
-  const format = modelResponseFormatForRequest(request);
   const bridgeOrigin = agentRequestOrigin(request, runtime.config);
   const upstreamPayload = upstreamMessagePayload(upstreamBody, format);
   const payload = rewriteServerConfigWithFallback(
@@ -775,6 +1031,26 @@ function modelResponseFormatForRequest(
   return value?.includes("application/connect+proto") ? "connect" : "proto";
 }
 
+async function validatedRequestFormatOrPassThrough(
+  runtime: BridgeRuntime,
+  request: IncomingMessage,
+  response: ServerResponse,
+  body: Buffer,
+): Promise<ModelResponseFormat | undefined> {
+  const format = modelResponseFormatForRequest(request);
+  if (requestPayloadForFormat(body, format) !== undefined) {
+    return format;
+  }
+  await proxyBufferedRequest(
+    request,
+    response,
+    body,
+    runtime.config,
+    runtime.logger,
+  );
+  return undefined;
+}
+
 function upstreamMessagePayload(
   upstreamBody: Buffer | undefined,
   format: ModelResponseFormat,
@@ -863,7 +1139,9 @@ async function handleChat(
     return;
   }
 
-  await writeLocalChatResponse(response, decision, runtime.logger);
+  await writeLocalChatResponse(response, decision, runtime.logger, {
+    signal: requestAbortSignal(request, response),
+  });
 }
 
 async function handleAgentRun(
@@ -917,7 +1195,11 @@ async function handleAgentRun(
   const decision =
     requestId === undefined
       ? getLocalAgentRunDecisionFromPayloads(candidates, runtime)
-      : await waitForPendingAgentRun(runtime, requestId);
+      : await waitForPendingAgentRun(
+          runtime,
+          requestId,
+          requestAbortSignal(request, response),
+        );
   if (decision === undefined) {
     runtime.logger.warn("agent run did not match local model", {
       path,
@@ -943,7 +1225,9 @@ async function handleAgentRun(
     return;
   }
 
-  await writeLocalAgentRunResponse(response, decision, runtime.logger);
+  await writeLocalAgentRunResponse(response, decision, runtime.logger, {
+    signal: requestAbortSignal(request, response),
+  });
 }
 
 async function handleStreamingConnectAgentRun(
@@ -970,6 +1254,19 @@ async function handleStreamingConnectAgentRun(
       if (decision === undefined) {
         continue;
       }
+      if (!runtime.config.agentNativeContextEnabled) {
+        runtime.logger.info("skipped native agent context", {
+          model: decision.model.id,
+        });
+        await writeLocalAgentRunResponseWithCursorTools(
+          response,
+          decision,
+          runtime,
+          payloads,
+          requestAbortSignal(request, response),
+        );
+        return;
+      }
       pending = storePendingAgentContextRun(runtime, decision);
       response.write(createAgentRequestContextEnvelope(pending));
       continue;
@@ -984,6 +1281,7 @@ async function handleStreamingConnectAgentRun(
         contextDecision,
         runtime,
         payloads,
+        requestAbortSignal(request, response),
       );
       return;
     }
@@ -1003,10 +1301,13 @@ async function writeLocalAgentRunResponseWithCursorTools(
   decision: LocalAgentRunDecision,
   runtime: BridgeRuntime,
   payloads: AsyncIterator<Buffer>,
+  signal: AbortSignal,
 ): Promise<void> {
   const streamEvents = decision.model.provider.streamCompletionEvents;
   if (streamEvents === undefined) {
-    await writeLocalAgentRunResponse(response, decision, runtime.logger);
+    await writeLocalAgentRunResponse(response, decision, runtime.logger, {
+      signal,
+    });
     return;
   }
 
@@ -1021,6 +1322,7 @@ async function writeLocalAgentRunResponseWithCursorTools(
       decision.model.provider,
       messages,
       tools,
+      { signal },
     )) {
       if (event.type === "text") {
         outputCharacters += event.text.length;
@@ -1055,6 +1357,7 @@ async function writeLocalAgentRunResponseWithCursorTools(
         runtime,
         payloads,
         toolCall,
+        { signal },
       );
       messages.push({
         role: "tool",
@@ -1101,6 +1404,7 @@ function storePendingAgentContextRun(
   runtime: BridgeRuntime,
   decision: LocalAgentRunDecision,
 ): PendingAgentContextRun {
+  pruneStalePendingAgentContextRuns(runtime);
   const id = runtime.nextAgentExecId;
   runtime.nextAgentExecId += 1;
   const pending: PendingAgentContextRun = {
@@ -1110,6 +1414,10 @@ function storePendingAgentContextRun(
     createdAt: Date.now(),
   };
   runtime.pendingAgentContextRuns.set(agentContextKey(pending), pending);
+  prunePendingMapToLimit(
+    runtime.pendingAgentContextRuns,
+    MAX_PENDING_AGENT_CONTEXT_RUNS,
+  );
   runtime.logger.info("requested native agent context", {
     id: pending.id,
     execId: pending.execId,
@@ -1208,11 +1516,33 @@ function agentContextKey(value: { id: number; execId: string }): string {
 }
 
 function pruneStalePendingAgentContextRuns(runtime: BridgeRuntime): void {
-  const expiresBefore = Date.now() - 5 * 60_000;
+  const expiresBefore =
+    Date.now() -
+    (runtime.config.agentContextTimeoutMs ?? DEFAULT_AGENT_CONTEXT_TIMEOUT_MS);
   for (const [key, pending] of runtime.pendingAgentContextRuns) {
     if (pending.createdAt < expiresBefore) {
       runtime.pendingAgentContextRuns.delete(key);
     }
+  }
+}
+
+function prunePendingMapToLimit<T extends { createdAt: number }>(
+  pendingMap: Map<string, T>,
+  limit: number,
+): void {
+  while (pendingMap.size > limit) {
+    let oldestKey: string | undefined;
+    let oldestCreatedAt = Number.POSITIVE_INFINITY;
+    for (const [key, pending] of pendingMap) {
+      if (pending.createdAt < oldestCreatedAt) {
+        oldestKey = key;
+        oldestCreatedAt = pending.createdAt;
+      }
+    }
+    if (oldestKey === undefined) {
+      return;
+    }
+    pendingMap.delete(oldestKey);
   }
 }
 
@@ -1296,7 +1626,7 @@ async function handleBidiAppend(
     return;
   }
 
-  runtime.pendingAgentRuns.set(requestId, decision);
+  storePendingAgentRun(runtime, requestId, decision);
   writeModelResponse(
     response,
     Buffer.from(
@@ -1336,11 +1666,15 @@ function requestPayloadForFormat(
   if (format === "proto") {
     return body;
   }
-  const envelope = firstMessageEnvelope(body);
-  if (envelope === undefined || isCompressedEnvelope(envelope)) {
+  try {
+    const envelope = firstMessageEnvelope(body);
+    if (envelope === undefined || isCompressedEnvelope(envelope)) {
+      return undefined;
+    }
+    return envelope.payload;
+  } catch {
     return undefined;
   }
-  return envelope.payload;
 }
 
 function requestPayloadCandidatesForFormat(
@@ -1429,7 +1763,7 @@ async function readStreamingConnectPayloadCandidates(
       totalBytes += chunk.byteLength;
       if (totalBytes > maxBytes) {
         cleanup();
-        reject(new Error(`Request body exceeds ${maxBytes} bytes`));
+        reject(new RequestBodyTooLargeError(maxBytes));
         return;
       }
       const parsed = parseEnvelopes(Buffer.concat(chunks, totalBytes));
@@ -1459,7 +1793,7 @@ async function* connectPayloadStream(
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     totalBytes += buffer.byteLength;
     if (totalBytes > maxBytes) {
-      throw new Error(`Request body exceeds ${maxBytes} bytes`);
+      throw new RequestBodyTooLargeError(maxBytes);
     }
     buffered = Buffer.concat(
       [buffered, buffer],
@@ -1556,15 +1890,49 @@ function decodeHexPayload(data: string): Buffer | undefined {
 async function waitForPendingAgentRun(
   runtime: BridgeRuntime,
   requestId: string,
+  signal: AbortSignal,
 ): Promise<LocalAgentRunDecision | undefined> {
-  const deadline = Date.now() + 5_000;
+  const deadline =
+    Date.now() +
+    (runtime.config.agentRunSseWaitTimeoutMs ??
+      DEFAULT_AGENT_RUN_SSE_WAIT_TIMEOUT_MS);
   while (Date.now() < deadline) {
-    const decision = runtime.pendingAgentRuns.get(requestId);
-    if (decision !== undefined) {
+    if (signal.aborted) {
+      return undefined;
+    }
+    pruneStalePendingAgentRuns(runtime);
+    const pending = runtime.pendingAgentRuns.get(requestId);
+    if (pending !== undefined) {
       runtime.pendingAgentRuns.delete(requestId);
-      return decision;
+      return pending.decision;
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
+  pruneStalePendingAgentRuns(runtime);
   return undefined;
+}
+
+function storePendingAgentRun(
+  runtime: BridgeRuntime,
+  requestId: string,
+  decision: LocalAgentRunDecision,
+): void {
+  pruneStalePendingAgentRuns(runtime);
+  runtime.pendingAgentRuns.set(requestId, {
+    decision,
+    createdAt: Date.now(),
+  });
+  prunePendingMapToLimit(runtime.pendingAgentRuns, MAX_PENDING_AGENT_RUNS);
+}
+
+function pruneStalePendingAgentRuns(runtime: BridgeRuntime): void {
+  const expiresBefore =
+    Date.now() -
+    (runtime.config.agentRunSseWaitTimeoutMs ??
+      DEFAULT_AGENT_RUN_SSE_WAIT_TIMEOUT_MS);
+  for (const [key, pending] of runtime.pendingAgentRuns) {
+    if (pending.createdAt < expiresBefore) {
+      runtime.pendingAgentRuns.delete(key);
+    }
+  }
 }

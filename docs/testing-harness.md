@@ -92,6 +92,12 @@ pnpm test:harness -- \
 `all` runs the deterministic core suites. Desktop testing stays explicit because
 it launches Cursor.
 
+`pnpm release:check` does not run optional live suites. It reports MLX,
+real-client, and desktop live gates as `skipped_with_reason` unless an operator
+runs them explicitly with the prerequisites above. This keeps deterministic
+release readiness separate from final-gate validation on a machine with Cursor
+auth, Cursor desktop, and a running MLX backend.
+
 ## Artifacts
 
 Every run writes to `.cursor-rpc/test-runs/<timestamp>/` unless

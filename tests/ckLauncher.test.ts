@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   analyzeRouteInventoryLog,
+  bridgeProcessMatchesState,
   buildLocalDesktopModelEntry,
   buildCkRoutePlan,
   buildCkLaunchPlan,
@@ -533,6 +534,23 @@ describe("ck launcher", () => {
     ]);
     expect(report.failedRoutes).toHaveLength(1);
     expect(report.passThroughRoutes).toHaveLength(2);
+    expect(report.routeCategories).toEqual([
+      {
+        path: "/aiserver.v1.AiService/AvailableModels",
+        category: "model-metadata",
+        reason: "known model-list/default-model route",
+      },
+      {
+        path: "/some.other.Route/Broken",
+        category: "pass-through",
+        reason: "observed but intentionally forwarded upstream",
+      },
+      {
+        path: "/some.other.Route/Call",
+        category: "pass-through",
+        reason: "observed but intentionally forwarded upstream",
+      },
+    ]);
     expect(report.routeSummary).toContainEqual({
       path: "/aiserver.v1.AiService/AvailableModels",
       count: 1,
@@ -587,6 +605,22 @@ describe("ck launcher", () => {
       "No desktop route inventory observed yet. Per-instance routing may not affect this Cursor network path.",
       "Run `pnpm ck route` to print manual fallback routing and rollback commands.",
     ]);
+  });
+
+  it("matches ck-owned bridge processes before stopping stale state PIDs", () => {
+    expect(
+      bridgeProcessMatchesState("node /repo/dist/src/cli.js desktop-proxy", {}),
+    ).toBe(true);
+    expect(
+      bridgeProcessMatchesState("node /tmp/server.js", {
+        bridgeCommand: "node /repo/dist/src/cli.js desktop-proxy",
+      }),
+    ).toBe(false);
+    expect(
+      bridgeProcessMatchesState("node /repo/dist/src/cli.js desktop-proxy", {
+        bridgeCommand: "node /repo/dist/src/cli.js desktop-proxy",
+      }),
+    ).toBe(true);
   });
 
   it("builds non-mutating desktop route plans", async () => {

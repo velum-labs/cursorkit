@@ -11,6 +11,7 @@ export interface DesktopConnectProxyOptions {
   logPath?: string;
   passthrough?: boolean;
   cursorHostnames?: readonly string[];
+  headerTimeoutMs?: number;
 }
 
 export interface DesktopConnectProxy {
@@ -20,7 +21,14 @@ export interface DesktopConnectProxy {
 
 export interface DesktopConnectProxyEvent {
   message: "desktop connect proxy";
-  event: "listening" | "connect" | "http-rejected" | "upstream-error";
+  event:
+    | "listening"
+    | "connect"
+    | "http-rejected"
+    | "passthrough-blocked"
+    | "header-timeout"
+    | "upstream-error"
+    | "client-closed";
   host?: string;
   port?: number;
   targetHost?: string;
@@ -30,14 +38,19 @@ export interface DesktopConnectProxyEvent {
 }
 
 const CONNECT_LINE_PATTERN = /^CONNECT\s+([^\s]+)\s+HTTP\/\d(?:\.\d)?$/i;
+const DEFAULT_HEADER_TIMEOUT_MS = 5_000;
+const MAX_CONNECT_HEADER_BYTES = 32 * 1024;
 
 export async function startDesktopConnectProxy(
   options: DesktopConnectProxyOptions,
 ): Promise<DesktopConnectProxy> {
   const cursorHostnames = new Set(options.cursorHostnames ?? DESKTOP_HOSTNAMES);
   const passthrough = options.passthrough ?? true;
+  const activeSockets = new Set<net.Socket>();
   const server = net.createServer((client) => {
-    handleClient(client, options, cursorHostnames, passthrough);
+    activeSockets.add(client);
+    client.once("close", () => activeSockets.delete(client));
+    handleClient(client, options, cursorHostnames, passthrough, activeSockets);
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -60,6 +73,9 @@ export async function startDesktopConnectProxy(
     server,
     close: () =>
       new Promise<void>((resolve, reject) => {
+        for (const socket of activeSockets) {
+          socket.destroy();
+        }
         server.close((error) => {
           if (error !== undefined) {
             reject(error);
@@ -76,11 +92,57 @@ function handleClient(
   options: DesktopConnectProxyOptions,
   cursorHostnames: Set<string>,
   passthrough: boolean,
+  activeSockets: Set<net.Socket>,
 ): void {
-  client.once("data", (chunk) => {
-    const endOfHeaders = chunk.indexOf("\r\n\r\n");
-    const headerBytes =
-      endOfHeaders === -1 ? chunk : chunk.subarray(0, endOfHeaders + 4);
+  let upstream: net.Socket | undefined;
+  let buffered = Buffer.alloc(0);
+  let tunnelEstablished = false;
+  const headerTimer = setTimeout(() => {
+    logProxyEvent(options.logPath, {
+      message: "desktop connect proxy",
+      event: "header-timeout",
+    });
+    client.end("HTTP/1.1 408 Request Timeout\r\nConnection: close\r\n\r\n");
+  }, options.headerTimeoutMs ?? DEFAULT_HEADER_TIMEOUT_MS);
+  const cleanup = () => {
+    clearTimeout(headerTimer);
+    if (upstream !== undefined) {
+      upstream.destroy();
+    }
+    if (tunnelEstablished) {
+      logProxyEvent(options.logPath, {
+        message: "desktop connect proxy",
+        event: "client-closed",
+      });
+    }
+  };
+  client.once("close", cleanup);
+  client.on("error", () => {
+    upstream?.destroy();
+  });
+
+  client.on("data", function onData(chunk) {
+    buffered = Buffer.concat([buffered, chunk]);
+    if (buffered.length > MAX_CONNECT_HEADER_BYTES) {
+      clearTimeout(headerTimer);
+      client.off("data", onData);
+      logProxyEvent(options.logPath, {
+        message: "desktop connect proxy",
+        event: "http-rejected",
+        error: "connect header exceeded maximum size",
+      });
+      client.end(
+        "HTTP/1.1 431 Request Header Fields Too Large\r\nConnection: close\r\n\r\n",
+      );
+      return;
+    }
+    const endOfHeaders = buffered.indexOf("\r\n\r\n");
+    if (endOfHeaders === -1) {
+      return;
+    }
+    clearTimeout(headerTimer);
+    client.off("data", onData);
+    const headerBytes = buffered.subarray(0, endOfHeaders + 4);
     const firstLine = headerBytes.toString("utf8").split("\r\n")[0] ?? "";
     const match = CONNECT_LINE_PATTERN.exec(firstLine);
     if (match === null) {
@@ -97,6 +159,12 @@ function handleClient(
     const destination = parseConnectDestination(match[1]);
     const cursorBackend = cursorHostnames.has(destination.host);
     if (!cursorBackend && !passthrough) {
+      logProxyEvent(options.logPath, {
+        message: "desktop connect proxy",
+        event: "passthrough-blocked",
+        host: destination.host,
+        port: destination.port,
+      });
       client.end("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
       return;
     }
@@ -113,17 +181,23 @@ function handleClient(
       cursorBackend,
     });
 
-    const upstream = net.connect(targetPort, targetHost, () => {
-      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-      const remaining =
-        endOfHeaders === -1
-          ? Buffer.alloc(0)
-          : chunk.subarray(endOfHeaders + 4);
-      if (remaining.length > 0) {
-        upstream.write(remaining);
+    upstream = net.connect(targetPort, targetHost, () => {
+      if (upstream !== undefined) {
+        activeSockets.add(upstream);
+        upstream.once("close", () =>
+          activeSockets.delete(upstream as net.Socket),
+        );
       }
-      client.pipe(upstream);
-      upstream.pipe(client);
+      tunnelEstablished = true;
+      client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      const remaining = buffered.subarray(endOfHeaders + 4);
+      if (remaining.length > 0) {
+        upstream?.write(remaining);
+      }
+      if (upstream !== undefined) {
+        client.pipe(upstream);
+        upstream.pipe(client);
+      }
     });
     upstream.on("error", (error) => {
       logProxyEvent(options.logPath, {
@@ -137,9 +211,6 @@ function handleClient(
         error: error.message,
       });
       client.destroy(error);
-    });
-    client.on("error", () => {
-      upstream.destroy();
     });
   });
 }

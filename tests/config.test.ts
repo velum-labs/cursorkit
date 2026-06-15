@@ -11,6 +11,7 @@ describe("loadConfig", () => {
     expect(config.routeInventoryEnabled).toBe(false);
     expect(config.modelPayloadLogging).toBe("summary");
     expect(config.agentToolPolicy).toBe("safe");
+    expect(config.agentNativeContextEnabled).toBe(true);
     expect(config.tlsHostnames).toEqual(["localhost", "127.0.0.1", "::1"]);
   });
 
@@ -59,6 +60,46 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ BRIDGE_HOST: "0.0.0.0" })).toThrow(
       /Refusing to bind/,
     );
+  });
+
+  it("allows non-localhost binds with auth or explicit unsafe mode", () => {
+    expect(
+      loadConfig({
+        BRIDGE_HOST: "0.0.0.0",
+        BRIDGE_AUTH_TOKEN: "local-secret",
+      }),
+    ).toMatchObject({
+      host: "0.0.0.0",
+      authToken: "local-secret",
+      unsafeAllowNonLocalhost: false,
+    });
+    expect(
+      loadConfig({
+        BRIDGE_HOST: "0.0.0.0",
+        BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST: "true",
+      }),
+    ).toMatchObject({
+      host: "0.0.0.0",
+      unsafeAllowNonLocalhost: true,
+    });
+  });
+
+  it("parses runtime reliability timeout knobs", () => {
+    const config = loadConfig({
+      BRIDGE_UPSTREAM_REQUEST_TIMEOUT_MS: "10",
+      BRIDGE_AGENT_RUN_SSE_WAIT_TIMEOUT_MS: "20",
+      BRIDGE_AGENT_CONTEXT_TIMEOUT_MS: "30",
+      BRIDGE_AGENT_TOOL_RESULT_TIMEOUT_MS: "40",
+      BRIDGE_EXTENSION_SETUP_TIMEOUT_MS: "50",
+    });
+
+    expect(config).toMatchObject({
+      upstreamRequestTimeoutMs: 10,
+      agentRunSseWaitTimeoutMs: 20,
+      agentContextTimeoutMs: 30,
+      toolResultTimeoutMs: 40,
+      extensionSetupTimeoutMs: 50,
+    });
   });
 
   it("loads multiple local models from JSON", () => {
@@ -111,6 +152,14 @@ describe("loadConfig", () => {
     });
 
     expect(config.agentToolPolicy).toBe("all");
+  });
+
+  it("can disable native Cursor context explicitly", () => {
+    const config = loadConfig({
+      BRIDGE_AGENT_NATIVE_CONTEXT: "false",
+    });
+
+    expect(config.agentNativeContextEnabled).toBe(false);
   });
 
   it("rejects unknown local agent tool policies", () => {

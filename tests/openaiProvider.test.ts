@@ -99,6 +99,47 @@ describe("OpenAICompatibleProvider observability", () => {
     );
   });
 
+  it("does not log prompt previews in summary payload mode", async () => {
+    const server = http.createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        response.end('data: {"choices":[{"delta":{"content":"ok"}}]}\n\n');
+      });
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const logs: Array<{ message: string; metadata?: Record<string, unknown> }> =
+      [];
+    const logger: Logger = {
+      debug: (message, metadata) => logs.push({ message, metadata }),
+      info: (message, metadata) => logs.push({ message, metadata }),
+      warn: (message, metadata) => logs.push({ message, metadata }),
+      error: (message, metadata) => logs.push({ message, metadata }),
+    };
+    const provider = new OpenAICompatibleProvider(
+      {
+        id: "local-qwen",
+        displayName: "local-qwen",
+        providerModel: "mlx-community/Qwen3.5-4B-8bit",
+        baseUrl: `http://127.0.0.1:${port}/v1`,
+        apiKey: "",
+        contextTokenLimit: 128000,
+      },
+      logger,
+    );
+
+    for await (const _chunk of provider.streamCompletion([
+      { role: "user", content: "very sensitive prompt" },
+    ])) {
+      // Drain stream.
+    }
+
+    const serializedLogs = JSON.stringify(logs);
+    expect(serializedLogs).toContain("firstMessagePreviewChars");
+    expect(serializedLogs).not.toContain("very sensitive prompt");
+  });
+
   it("parses streamed OpenAI tool calls", async () => {
     const server = http.createServer((request, response) => {
       request.resume();

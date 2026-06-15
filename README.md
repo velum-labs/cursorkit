@@ -131,10 +131,14 @@ The current typed extension surface is deliberately narrow:
 - Cursor desktop app support starts in route-inventory mode so app-specific
   RPCs can be observed before adding typed interceptors.
 
-See `docs/plugin-authoring.md` and `examples/` for the experimental local plugin
-shape.
+See `docs/plugin-authoring.md` and the source-checkout `examples/` directory for
+the experimental local plugin shape. Examples are typechecked by
+`pnpm examples:check`, but they are intentionally excluded from packed tarballs.
 
 ## Release Gates
 
 This package remains private and local-only. See `docs/release-gates.md` for the
 checks required before sharing a tarball or changing the API stability posture.
+Use `pnpm baseline:check` to verify generated route/config/docs drift and
+`pnpm release:check` for the authoritative deterministic local release gate,
+including package artifact smoke validation.

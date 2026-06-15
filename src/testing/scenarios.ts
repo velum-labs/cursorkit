@@ -89,6 +89,75 @@ interface AgentRunDiagnosticSummary {
   injectedContextMessages: number;
 }
 
+interface DesktopPromptSubmissionEvidence {
+  promptPreview: string;
+  focused: boolean;
+  inserted: boolean;
+  sendAttempted: boolean;
+  submitted: boolean;
+  focusTarget?: string;
+  sendClickStatus?: string;
+  failureReason?: string;
+  editorSummary?: string;
+  placeholderSummary?: string;
+  composerHtml?: string;
+  controlSummary?: string;
+  editorTextAfterInsert?: string;
+  editorTextAfterSubmit?: string;
+  bodyTextAfterSubmitPreview?: string;
+}
+
+interface DesktopPickerDomEvidence {
+  workspaceOpened: boolean;
+  composerVisible: boolean;
+  modelPickerOpened: boolean;
+  modelTextSeen: boolean;
+  existingModelTextSeen: boolean;
+  bodyTextPreview: string;
+  pickerTextPreview: string;
+}
+
+interface DesktopSelectedModelEvidence {
+  requestedModel: string;
+  requestedDisplayName: string;
+  activeModelAlreadySelected: boolean;
+  selectedModelTextSeen: boolean;
+  selectionAction?: string;
+  activeComposerTextPreview: string;
+}
+
+interface DesktopVisibleResponseEvidence {
+  expectedMarker: string;
+  markerSeen: boolean;
+  modelErrorSeen: boolean;
+  bodyTextPreview: string;
+}
+
+interface DesktopCdpProbeResult {
+  available: boolean;
+  browser: string | undefined;
+  targets: Array<{ id?: string; type?: string; title?: string; url?: string }>;
+  bodyTextPreview?: string;
+  pickerTextPreview?: string;
+  signInRequired: boolean;
+  workspaceOpened: boolean;
+  composerVisible: boolean;
+  modelPickerOpened: boolean;
+  modelTextSeen: boolean;
+  existingModelTextSeen: boolean;
+  selectedModelTextSeen: boolean;
+  desktopPromptSubmitted: boolean;
+  desktopProbeTextSeen: boolean;
+  desktopModelErrorSeen: boolean;
+  actions: string[];
+  resourceUrls: string[];
+  pickerDomEvidence?: DesktopPickerDomEvidence;
+  selectedModelEvidence?: DesktopSelectedModelEvidence;
+  composerSubmissionEvidence?: DesktopPromptSubmissionEvidence;
+  visibleResponseEvidence?: DesktopVisibleResponseEvidence;
+  error?: string;
+}
+
 export function createScenarios(): Scenario[] {
   return [
     staticScenario(),
@@ -413,27 +482,21 @@ function desktopUiScenario(): Scenario {
                 context.options.env.BRIDGE_LOG_MODEL_PAYLOADS,
             }
           : {}),
+        BRIDGE_AGENT_NATIVE_CONTEXT: "false",
       };
       const commandLogPath = context.artifacts.writeText(
         "logs/desktop-ui-ck-live.log",
         "",
       );
       const log = fs.createWriteStream(commandLogPath, { flags: "w" });
+      const writeCommandLog = (chunk: Buffer) => {
+        if (!log.writableEnded && !log.destroyed) {
+          log.write(chunk);
+        }
+      };
       const ck = spawn(
         "pnpm",
-        [
-          "ck",
-          ...(context.options.useDefaultProfile
-            ? ["--use-default-profile"]
-            : []),
-          "--debug-port",
-          String(debugPort),
-          "--instance-id",
-          instanceId,
-          "--seed-auth-from-default",
-          "--timeout-ms",
-          String(Math.min(context.options.timeoutMs, 5_000)),
-        ],
+        desktopUiCkArgs(context.options, debugPort, instanceId),
         {
           cwd: context.options.cwd,
           env: {
@@ -441,11 +504,12 @@ function desktopUiScenario(): Scenario {
             ...scrubbedHarnessEnv(context.options.env),
             ...modelEnv,
           },
+          detached: true,
           stdio: ["ignore", "pipe", "pipe"],
         },
       );
-      ck.stdout?.on("data", (chunk: Buffer) => log.write(chunk));
-      ck.stderr?.on("data", (chunk: Buffer) => log.write(chunk));
+      ck.stdout?.on("data", writeCommandLog);
+      ck.stderr?.on("data", writeCommandLog);
       try {
         await waitForProcessOutput(ck, /bridge listening/, 15_000);
         await waitForDesktopWorkbenchReady(
@@ -493,12 +557,33 @@ function desktopUiScenario(): Scenario {
         const requiredCursorToolResultsSeen =
           scriptedBackend === undefined ||
           desktopCursorToolNamesSeen(ckLog, ["read_file", "list_dir", "grep"]);
+        const backendRequestEvidence = desktopBackendRequestEvidence(
+          ckLog,
+          effectiveBaseUrl,
+          modelBackendRequestSeen,
+          modelBackendResponseComplete,
+        );
+        const routeUncertaintyEvidence = {
+          observedPaths: routeInventory.observedPaths,
+          routeSummary: routeInventory.routeSummary,
+          routeCategories: routeInventory.routeCategories,
+          passThroughRoutes: routeInventory.passThroughRoutes,
+          failedRoutes: routeInventory.failedRoutes,
+        };
         const report = {
           debugPort,
           instanceId,
+          ckProfileMode: "isolated-seeded-from-default",
+          requestedDefaultProfile: context.options.useDefaultProfile,
           localModelSeedStatus,
           cdp,
           routeInventory,
+          routeUncertaintyEvidence,
+          pickerDomEvidence: cdp.pickerDomEvidence,
+          selectedModelEvidence: cdp.selectedModelEvidence,
+          composerSubmissionEvidence: cdp.composerSubmissionEvidence,
+          backendRequestEvidence,
+          visibleResponseEvidence: cdp.visibleResponseEvidence,
           modelBackendRequestSeen,
           modelBackendResponseComplete,
           cursorToolResultSeen,
@@ -508,6 +593,30 @@ function desktopUiScenario(): Scenario {
         const reportPath = context.artifacts.writeJson(
           "desktop-ui-cdp-report.json",
           report,
+        );
+        const pickerDomEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-picker-dom-evidence.json",
+          cdp.pickerDomEvidence ?? {},
+        );
+        const selectedModelEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-selected-model-evidence.json",
+          cdp.selectedModelEvidence ?? {},
+        );
+        const composerSubmissionEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-composer-submission-evidence.json",
+          cdp.composerSubmissionEvidence ?? {},
+        );
+        const backendRequestEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-mlx-backend-request-evidence.json",
+          backendRequestEvidence,
+        );
+        const visibleResponseEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-visible-response-evidence.json",
+          cdp.visibleResponseEvidence ?? {},
+        );
+        const routeUncertaintyEvidencePath = context.artifacts.writeJson(
+          "desktop-ui-route-uncertainty.json",
+          routeUncertaintyEvidence,
         );
         const desktopSendRoutesSeen = desktopSendRoutes(routeInventory);
         const ckBridgeLogArtifact = captureTextArtifactIfExists(
@@ -537,6 +646,7 @@ function desktopUiScenario(): Scenario {
           cdp.composerVisible &&
           cdp.modelPickerOpened &&
           cdp.modelTextSeen &&
+          cdp.selectedModelTextSeen &&
           (cdp.existingModelTextSeen ||
             cdp.desktopProbeTextSeen ||
             modelBackendRequestSeen) &&
@@ -545,7 +655,8 @@ function desktopUiScenario(): Scenario {
           (desktopSendRoutesSeen.length > 0 || modelBackendRequestSeen) &&
           modelBackendRequestSeen &&
           modelBackendResponseComplete &&
-          cursorToolResultSeen &&
+          cdp.desktopProbeTextSeen &&
+          (scriptedBackend === undefined || cursorToolResultSeen) &&
           requiredCursorToolResultsSeen;
         const failureCode = desktopUiFailureCode(
           cdp,
@@ -553,10 +664,15 @@ function desktopUiScenario(): Scenario {
           modelBackendRequestSeen,
           modelBackendResponseComplete,
         );
+        const status = passed
+          ? "passed"
+          : desktopUiSkipCode(failureCode) === undefined
+            ? "failed"
+            : "skipped";
         return {
           id: "desktop-ui-experimental",
           suite: "desktop-ui-experimental",
-          status: passed ? "passed" : "failed",
+          status,
           durationMs: Date.now() - started,
           message: passed
             ? "Cursor desktop model picker showed and used the configured local model"
@@ -570,6 +686,12 @@ function desktopUiScenario(): Scenario {
           artifacts: {
             commandLog: commandLogPath,
             report: reportPath,
+            pickerDomEvidence: pickerDomEvidencePath,
+            selectedModelEvidence: selectedModelEvidencePath,
+            composerSubmissionEvidence: composerSubmissionEvidencePath,
+            mlxBackendRequestEvidence: backendRequestEvidencePath,
+            visibleResponseEvidence: visibleResponseEvidencePath,
+            routeUncertainty: routeUncertaintyEvidencePath,
             ckBridgeLog: ckBridgeLogArtifact ?? ckLogPath,
             ...(ckConnectProxyLogArtifact !== undefined
               ? { ckConnectProxyLog: ckConnectProxyLogArtifact }
@@ -578,6 +700,8 @@ function desktopUiScenario(): Scenario {
           },
           details: {
             debugPort,
+            ckProfileMode: "isolated-seeded-from-default",
+            requestedDefaultProfile: context.options.useDefaultProfile,
             targetCount: cdp.targets.length,
             browser: cdp.browser,
             signInRequired: cdp.signInRequired,
@@ -586,6 +710,7 @@ function desktopUiScenario(): Scenario {
             modelPickerOpened: cdp.modelPickerOpened,
             modelTextSeen: cdp.modelTextSeen,
             existingModelTextSeen: cdp.existingModelTextSeen,
+            selectedModelTextSeen: cdp.selectedModelTextSeen,
             desktopPromptSubmitted: cdp.desktopPromptSubmitted,
             desktopProbeTextSeen: cdp.desktopProbeTextSeen,
             desktopModelErrorSeen: cdp.desktopModelErrorSeen,
@@ -603,13 +728,49 @@ function desktopUiScenario(): Scenario {
           },
         };
       } finally {
-        ck.kill("SIGTERM");
+        ck.stdout?.off("data", writeCommandLog);
+        ck.stderr?.off("data", writeCommandLog);
+        terminateProcessGroup(ck, "SIGTERM");
         cleanupIsolatedCursorProcesses(userDataDir);
         log.end();
         scriptedBackend?.server.close();
       }
     },
   };
+}
+
+export function desktopUiCkArgs(
+  options: Pick<HarnessOptions, "timeoutMs" | "useDefaultProfile">,
+  debugPort: number,
+  instanceId: string,
+): string[] {
+  // CDP attachment needs a fresh Electron profile; the default profile can hand
+  // off to an already-running Cursor process and drop the debug port.
+  return [
+    "ck",
+    "--debug-port",
+    String(debugPort),
+    "--instance-id",
+    instanceId,
+    "--seed-auth-from-default",
+    "--timeout-ms",
+    String(Math.min(options.timeoutMs, 5_000)),
+  ];
+}
+
+function terminateProcessGroup(
+  childProcess: ChildProcess,
+  signal: NodeJS.Signals,
+): void {
+  if (childProcess.pid === undefined || process.platform === "win32") {
+    childProcess.kill(signal);
+    return;
+  }
+  try {
+    process.kill(-childProcess.pid, signal);
+  } catch {
+    childProcess.kill(signal);
+  }
 }
 
 function captureCursorProfileLogs(
@@ -802,7 +963,7 @@ function desktopFailureCode(
 }
 
 function desktopUiFailureCode(
-  cdp: Awaited<ReturnType<typeof probeDesktopCdp>>,
+  cdp: DesktopCdpProbeResult,
   routeInventory: ReturnType<typeof analyzeRouteInventoryLog>,
   modelBackendRequestSeen: boolean,
   modelBackendResponseComplete: boolean,
@@ -813,8 +974,17 @@ function desktopUiFailureCode(
   if (cdp.signInRequired) {
     return "auth_profile_blocked";
   }
-  if (!cdp.workspaceOpened || !cdp.composerVisible || !cdp.modelPickerOpened) {
+  if (!cdp.workspaceOpened || !cdp.composerVisible) {
     return "not_available";
+  }
+  if (!cdp.modelPickerOpened || !cdp.modelTextSeen) {
+    return "desktop_picker_missing";
+  }
+  if (!cdp.selectedModelTextSeen) {
+    return "desktop_model_selection_missing";
+  }
+  if (!cdp.desktopPromptSubmitted) {
+    return "desktop_prompt_submission_failed";
   }
   if (cdp.desktopModelErrorSeen) {
     return "model_metadata_rejected";
@@ -826,16 +996,19 @@ function desktopUiFailureCode(
     return "extension_host_route_missing";
   }
   if (!modelBackendRequestSeen) {
-    return "backend_unreachable";
+    return "desktop_backend_request_missing";
   }
   if (!modelBackendResponseComplete) {
     return "local_completion_failed";
+  }
+  if (!cdp.desktopProbeTextSeen) {
+    return "desktop_visible_response_missing";
   }
   return "model_metadata_rejected";
 }
 
 function desktopUiFailureMessage(
-  cdp: Awaited<ReturnType<typeof probeDesktopCdp>>,
+  cdp: DesktopCdpProbeResult,
   routeInventory: ReturnType<typeof analyzeRouteInventoryLog>,
   modelBackendRequestSeen: boolean,
   modelBackendResponseComplete: boolean,
@@ -854,6 +1027,12 @@ function desktopUiFailureMessage(
   }
   if (!cdp.modelPickerOpened) {
     return "Cursor desktop opened, but the model picker did not open";
+  }
+  if (!cdp.modelTextSeen) {
+    return "Cursor desktop model picker opened, but the configured local model was not visible";
+  }
+  if (!cdp.selectedModelTextSeen) {
+    return "Cursor desktop model picker showed the local model, but the active composer did not show it as selected";
   }
   if (
     !cdp.existingModelTextSeen &&
@@ -880,7 +1059,38 @@ function desktopUiFailureMessage(
   if (!modelBackendResponseComplete) {
     return "Cursor desktop Agent execution reached the local OpenAI-compatible backend, but generation did not complete before validation cleanup";
   }
+  if (!cdp.desktopProbeTextSeen) {
+    return "Cursor desktop completed the local backend request, but the expected desktop-probe-ok marker was not visible in the UI";
+  }
   return "Cursor desktop model picker opened, but the configured local model was not visible";
+}
+
+function desktopUiSkipCode(code: FailureCode): FailureCode | undefined {
+  switch (code) {
+    case "not_available":
+    case "auth_profile_blocked":
+    case "backend_unreachable":
+      return code;
+    case "desktop_picker_missing":
+    case "desktop_model_selection_missing":
+    case "desktop_prompt_submission_failed":
+    case "desktop_backend_request_missing":
+    case "desktop_visible_response_missing":
+    case "route_missing":
+    case "model_route_missing":
+    case "extension_host_route_missing":
+    case "model_metadata_rejected":
+    case "local_completion_failed":
+    case "bridge_start_failed":
+    case "upstream_passthrough_failed":
+    case "command_failed":
+    case "timeout":
+      return undefined;
+    default: {
+      const exhaustive: never = code;
+      return exhaustive;
+    }
+  }
 }
 
 function desktopModelBackendRequestSeen(
@@ -904,6 +1114,58 @@ function desktopModelBackendResponseComplete(
     logText.includes(`${normalizedBaseUrl}/chat/completions`) &&
     logText.includes('"message":"served local agent run"')
   );
+}
+
+function desktopBackendRequestEvidence(
+  logText: string,
+  baseUrl: string,
+  requestSeen: boolean,
+  responseComplete: boolean,
+): {
+  baseUrl: string;
+  chatCompletionsUrl: string;
+  requestSeen: boolean;
+  responseComplete: boolean;
+  events: Array<Record<string, unknown>>;
+} {
+  const normalizedBaseUrl = baseUrl.replace(/\/$/, "");
+  return {
+    baseUrl: normalizedBaseUrl,
+    chatCompletionsUrl: `${normalizedBaseUrl}/chat/completions`,
+    requestSeen,
+    responseComplete,
+    events: parseJsonLogEvents(logText, [
+      "model backend request",
+      "model backend response complete",
+      "served local agent run",
+    ]),
+  };
+}
+
+function parseJsonLogEvents(
+  logText: string,
+  messages: string[],
+): Array<Record<string, unknown>> {
+  const messageSet = new Set(messages);
+  const events: Array<Record<string, unknown>> = [];
+  for (const line of logText.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+      if (
+        typeof parsed.message === "string" &&
+        messageSet.has(parsed.message)
+      ) {
+        events.push(parsed);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return events;
 }
 
 function desktopCursorToolResultSeen(logText: string): boolean {
@@ -1507,25 +1769,7 @@ async function probeDesktopCdp(
   port: number,
   timeoutMs: number,
   options: { displayName: string; model: string },
-): Promise<{
-  available: boolean;
-  browser: string | undefined;
-  targets: Array<{ id?: string; type?: string; title?: string; url?: string }>;
-  bodyTextPreview?: string;
-  pickerTextPreview?: string;
-  signInRequired: boolean;
-  workspaceOpened: boolean;
-  composerVisible: boolean;
-  modelPickerOpened: boolean;
-  modelTextSeen: boolean;
-  existingModelTextSeen: boolean;
-  desktopPromptSubmitted: boolean;
-  desktopProbeTextSeen: boolean;
-  desktopModelErrorSeen: boolean;
-  actions: string[];
-  resourceUrls: string[];
-  error?: string;
-}> {
+): Promise<DesktopCdpProbeResult> {
   const started = Date.now();
   let lastError = "";
   while (Date.now() - started < timeoutMs) {
@@ -1563,11 +1807,16 @@ async function probeDesktopCdp(
                 modelPickerOpened: false,
                 modelTextSeen: false,
                 existingModelTextSeen: false,
+                selectedModelTextSeen: false,
                 desktopPromptSubmitted: false,
                 desktopProbeTextSeen: false,
                 desktopModelErrorSeen: false,
                 actions: [] as string[],
                 resourceUrls: [] as string[],
+                pickerDomEvidence: undefined,
+                selectedModelEvidence: undefined,
+                composerSubmissionEvidence: undefined,
+                visibleResponseEvidence: undefined,
               };
         return {
           available: true,
@@ -1590,11 +1839,16 @@ async function probeDesktopCdp(
           modelPickerOpened: pickerProbe.modelPickerOpened,
           modelTextSeen: pickerProbe.modelTextSeen,
           existingModelTextSeen: pickerProbe.existingModelTextSeen,
+          selectedModelTextSeen: pickerProbe.selectedModelTextSeen,
           desktopPromptSubmitted: pickerProbe.desktopPromptSubmitted,
           desktopProbeTextSeen: pickerProbe.desktopProbeTextSeen,
           desktopModelErrorSeen: pickerProbe.desktopModelErrorSeen,
           actions: pickerProbe.actions,
           resourceUrls: pickerProbe.resourceUrls,
+          pickerDomEvidence: pickerProbe.pickerDomEvidence,
+          selectedModelEvidence: pickerProbe.selectedModelEvidence,
+          composerSubmissionEvidence: pickerProbe.composerSubmissionEvidence,
+          visibleResponseEvidence: pickerProbe.visibleResponseEvidence,
         };
       }
       lastError = `HTTP ${versionResponse.status}/${targetsResponse.status}`;
@@ -1613,6 +1867,7 @@ async function probeDesktopCdp(
     modelPickerOpened: false,
     modelTextSeen: false,
     existingModelTextSeen: false,
+    selectedModelTextSeen: false,
     desktopPromptSubmitted: false,
     desktopProbeTextSeen: false,
     desktopModelErrorSeen: false,
@@ -1686,11 +1941,16 @@ async function probeModelPickerDom(
   modelPickerOpened: boolean;
   modelTextSeen: boolean;
   existingModelTextSeen: boolean;
+  selectedModelTextSeen: boolean;
   desktopPromptSubmitted: boolean;
   desktopProbeTextSeen: boolean;
   desktopModelErrorSeen: boolean;
   actions: string[];
   resourceUrls: string[];
+  pickerDomEvidence: DesktopPickerDomEvidence;
+  selectedModelEvidence: DesktopSelectedModelEvidence;
+  composerSubmissionEvidence: DesktopPromptSubmissionEvidence;
+  visibleResponseEvidence: DesktopVisibleResponseEvidence;
 }> {
   const actions: string[] = [];
   let bodyText = await waitForCdpBodyText(webSocketDebuggerUrl, 15_000);
@@ -1707,11 +1967,42 @@ async function probeModelPickerDom(
       modelPickerOpened: false,
       modelTextSeen: false,
       existingModelTextSeen: false,
+      selectedModelTextSeen: false,
       desktopPromptSubmitted: false,
       desktopProbeTextSeen: false,
       desktopModelErrorSeen: false,
       actions,
       resourceUrls: [],
+      pickerDomEvidence: {
+        workspaceOpened: false,
+        composerVisible: false,
+        modelPickerOpened: false,
+        modelTextSeen: false,
+        existingModelTextSeen: false,
+        bodyTextPreview: bodyText.slice(0, 2_000),
+        pickerTextPreview: bodyText.slice(0, 4_000),
+      },
+      selectedModelEvidence: {
+        requestedModel: options.model,
+        requestedDisplayName: options.displayName,
+        activeModelAlreadySelected: false,
+        selectedModelTextSeen: false,
+        activeComposerTextPreview: bodyText.slice(0, 2_000),
+      },
+      composerSubmissionEvidence: {
+        promptPreview: "",
+        focused: false,
+        inserted: false,
+        sendAttempted: false,
+        submitted: false,
+        failureReason: "sign-in-required",
+      },
+      visibleResponseEvidence: {
+        expectedMarker: "desktop-probe-ok",
+        markerSeen: false,
+        modelErrorSeen: false,
+        bodyTextPreview: bodyText.slice(0, 2_000),
+      },
     };
   }
 
@@ -1743,8 +2034,9 @@ async function probeModelPickerDom(
     }
   }
 
-  const composerVisible =
-    composerBodyTextVisible(bodyText) && composerPromptVisible(bodyText);
+  let composerVisible =
+    (composerBodyTextVisible(bodyText) && composerPromptVisible(bodyText)) ||
+    (await desktopComposerDomVisible(webSocketDebuggerUrl));
   let pickerText = bodyText;
   const activeModelAlreadySelected = bodyText
     .toLowerCase()
@@ -1774,16 +2066,27 @@ async function probeModelPickerDom(
     existingModelTextSeen ||
     modelTextSeen;
   let afterPromptText = pickerText;
-  let desktopPromptSubmitted = false;
+  let composerSubmissionEvidence: DesktopPromptSubmissionEvidence = {
+    promptPreview: "",
+    focused: false,
+    inserted: false,
+    sendAttempted: false,
+    submitted: false,
+    failureReason: "model-not-visible",
+  };
+  let selectionAction: string | undefined;
+  let selectedModelTextSeen = activeModelAlreadySelected;
   if (modelTextSeen) {
     if (
       !activeModelAlreadySelected &&
       (await clickVisibleText(webSocketDebuggerUrl, options.displayName))
     ) {
-      actions.push(`selected:${options.displayName}`);
+      selectionAction = `selected:${options.displayName}`;
+      actions.push(selectionAction);
       await delay(750);
     } else if (activeModelAlreadySelected) {
-      actions.push(`selected-preseeded:${options.displayName}`);
+      selectionAction = `selected-preseeded:${options.displayName}`;
+      actions.push(selectionAction);
     }
     if (await clickVisibleText(webSocketDebuggerUrl, "Continue")) {
       actions.push("clicked:Continue");
@@ -1805,11 +2108,20 @@ async function probeModelPickerDom(
         actions.push(`clicked:${activeModel}`);
         await delay(750);
         if (await clickVisibleText(webSocketDebuggerUrl, options.displayName)) {
-          actions.push(`selected-active:${options.displayName}`);
+          selectionAction = `selected-active:${options.displayName}`;
+          actions.push(selectionAction);
           await delay(750);
         }
       }
     }
+    bodyText = await evaluateCdpString(
+      webSocketDebuggerUrl,
+      "document.body?.innerText ?? ''",
+    );
+    const lowerBodyText = bodyText.toLowerCase();
+    selectedModelTextSeen =
+      lowerBodyText.includes(options.displayName.toLowerCase()) ||
+      lowerBodyText.includes(options.model.toLowerCase());
     await cdpCommand(webSocketDebuggerUrl, "Input.dispatchKeyEvent", {
       type: "rawKeyDown",
       key: "Escape",
@@ -1826,12 +2138,20 @@ async function probeModelPickerDom(
     });
     await delay(500);
     bodyText = await ensureDesktopComposerOpen(webSocketDebuggerUrl, actions);
-    desktopPromptSubmitted = await submitDesktopComposerPrompt(
+    composerVisible =
+      composerVisible ||
+      (composerPromptVisible(bodyText) &&
+        (composerBodyTextVisible(bodyText) ||
+          bodyText.includes(options.displayName) ||
+          bodyText.includes(options.model))) ||
+      (await desktopComposerDomVisible(webSocketDebuggerUrl));
+    composerSubmissionEvidence = await submitDesktopComposerPrompt(
       webSocketDebuggerUrl,
-      "Use the read_file tool to read README.md, then reply with the marker formed by joining these words with hyphens: desktop probe ok. Also include one sentence about the project.",
+      "Reply with exactly: desktop-probe-ok",
       actions,
+      [options.displayName, options.model],
     );
-    if (desktopPromptSubmitted) {
+    if (composerSubmissionEvidence.submitted) {
       actions.push("submitted:desktop-probe");
       afterPromptText = await waitForDesktopPromptResult(
         webSocketDebuggerUrl,
@@ -1847,6 +2167,29 @@ async function probeModelPickerDom(
     webSocketDebuggerUrl,
     `performance.getEntriesByType("resource").map((entry) => entry.name).filter(Boolean).slice(-200)`,
   );
+  const pickerDomEvidence: DesktopPickerDomEvidence = {
+    workspaceOpened,
+    composerVisible,
+    modelPickerOpened,
+    modelTextSeen,
+    existingModelTextSeen,
+    bodyTextPreview: bodyText.slice(0, 2_000),
+    pickerTextPreview: pickerText.slice(0, 4_000),
+  };
+  const selectedModelEvidence: DesktopSelectedModelEvidence = {
+    requestedModel: options.model,
+    requestedDisplayName: options.displayName,
+    activeModelAlreadySelected,
+    selectedModelTextSeen,
+    ...(selectionAction !== undefined ? { selectionAction } : {}),
+    activeComposerTextPreview: bodyText.slice(0, 2_000),
+  };
+  const visibleResponseEvidence: DesktopVisibleResponseEvidence = {
+    expectedMarker: "desktop-probe-ok",
+    markerSeen: desktopProbeTextSeen,
+    modelErrorSeen: desktopModelErrorSeen,
+    bodyTextPreview: afterPromptText.slice(0, 4_000),
+  };
 
   return {
     bodyText,
@@ -1856,11 +2199,16 @@ async function probeModelPickerDom(
     modelPickerOpened,
     modelTextSeen,
     existingModelTextSeen,
-    desktopPromptSubmitted,
+    selectedModelTextSeen,
+    desktopPromptSubmitted: composerSubmissionEvidence.submitted,
     desktopProbeTextSeen,
     desktopModelErrorSeen,
     actions,
     resourceUrls,
+    pickerDomEvidence,
+    selectedModelEvidence,
+    composerSubmissionEvidence,
+    visibleResponseEvidence,
   };
 }
 
@@ -1978,15 +2326,23 @@ async function submitDesktopComposerPrompt(
   webSocketDebuggerUrl: string,
   prompt: string,
   actions: string[],
-): Promise<boolean> {
-  const focused = await evaluateCdpValue(
+  blockedControlTexts: string[] = [],
+): Promise<DesktopPromptSubmissionEvidence> {
+  const evidence: DesktopPromptSubmissionEvidence = {
+    promptPreview: prompt.slice(0, 500),
+    focused: false,
+    inserted: false,
+    sendAttempted: false,
+    submitted: false,
+  };
+  const focusResult = await evaluateCdpString(
     webSocketDebuggerUrl,
     `(() => {
       const monacoTextarea = document.querySelector('.composer-input-blur-wrapper textarea');
       if (monacoTextarea) {
         monacoTextarea.focus();
         monacoTextarea.click();
-        return true;
+        return 'monaco-textarea';
       }
       const candidates = [...document.querySelectorAll('textarea, input, [contenteditable="true"]')]
         .map((element) => ({ element, rect: element.getBoundingClientRect() }))
@@ -2001,26 +2357,32 @@ async function submitDesktopComposerPrompt(
         });
       const element = candidates.at(0)?.element;
       if (!element) {
-        return false;
+        return '';
       }
       element.click();
       element.focus();
-      return true;
+      return element.tagName.toLowerCase() + ':' + (element.getAttribute('contenteditable') || element.getAttribute('placeholder') || '');
     })()`,
   );
-  if (focused !== true) {
-    return false;
+  evidence.focused = focusResult.length > 0;
+  evidence.focusTarget = focusResult;
+  if (!evidence.focused) {
+    evidence.failureReason = "composer-focus-target-missing";
+    return evidence;
   }
   await clickComposerInputArea(webSocketDebuggerUrl);
-  actions.push(
-    `composer-editors:${(await describeComposerEditors(webSocketDebuggerUrl)).slice(0, 1200)}`,
-  );
-  actions.push(
-    `composer-placeholders:${(await describeComposerPlaceholders(webSocketDebuggerUrl)).slice(0, 1200)}`,
-  );
-  actions.push(
-    `composer-html:${(await describeComposerHtml(webSocketDebuggerUrl)).slice(0, 1200)}`,
-  );
+  evidence.editorSummary = (
+    await describeComposerEditors(webSocketDebuggerUrl)
+  ).slice(0, 1200);
+  evidence.placeholderSummary = (
+    await describeComposerPlaceholders(webSocketDebuggerUrl)
+  ).slice(0, 1200);
+  evidence.composerHtml = (
+    await describeComposerHtml(webSocketDebuggerUrl)
+  ).slice(0, 1200);
+  actions.push(`composer-editors:${evidence.editorSummary}`);
+  actions.push(`composer-placeholders:${evidence.placeholderSummary}`);
+  actions.push(`composer-html:${evidence.composerHtml}`);
   await cdpCommand(webSocketDebuggerUrl, "Input.insertText", { text: prompt });
   await delay(100);
   if (!(await composerEditorContains(webSocketDebuggerUrl, prompt))) {
@@ -2034,19 +2396,34 @@ async function submitDesktopComposerPrompt(
     );
   }
   await delay(250);
+  evidence.editorTextAfterInsert = (
+    await composerEditorText(webSocketDebuggerUrl)
+  ).slice(0, 500);
+  evidence.inserted = evidence.editorTextAfterInsert.includes(prompt);
   actions.push(
-    `composer-editor-after-insert:${(await composerEditorText(webSocketDebuggerUrl)).slice(0, 500)}`,
+    `composer-editor-after-insert:${evidence.editorTextAfterInsert}`,
   );
+  if (!evidence.inserted) {
+    evidence.failureReason = "composer-insert-verification-failed";
+    return evidence;
+  }
   await clickComposerInputArea(webSocketDebuggerUrl);
   const controlSummary = await describeComposerControls(webSocketDebuggerUrl);
+  evidence.controlSummary = controlSummary.slice(0, 1200);
   actions.push(`composer-controls:${controlSummary.slice(0, 1200)}`);
   const sendClickStatus = (await composerEditorContains(
     webSocketDebuggerUrl,
     prompt,
   ))
-    ? await clickComposerSendButton(webSocketDebuggerUrl, prompt)
+    ? await clickComposerSendButton(
+        webSocketDebuggerUrl,
+        prompt,
+        blockedControlTexts,
+      )
     : "missing-prompt";
   let clicked = sendClickStatus.startsWith("clicked");
+  evidence.sendAttempted = clicked;
+  evidence.sendClickStatus = sendClickStatus;
   actions.push(`send-clicked:${sendClickStatus}`);
   if (
     !clicked &&
@@ -2054,6 +2431,8 @@ async function submitDesktopComposerPrompt(
   ) {
     await dispatchEnter(webSocketDebuggerUrl, 4);
     clicked = true;
+    evidence.sendAttempted = true;
+    evidence.sendClickStatus = "cmd-enter";
     actions.push("send-fallback:cmd-enter");
   }
   await delay(750);
@@ -2077,6 +2456,8 @@ async function submitDesktopComposerPrompt(
   if (remainingEditorText.includes(prompt)) {
     await clickComposerInputArea(webSocketDebuggerUrl);
     await dispatchEnter(webSocketDebuggerUrl, 4);
+    evidence.sendAttempted = true;
+    evidence.sendClickStatus = "cmd-enter-after-click";
     actions.push("send-fallback:cmd-enter-after-click");
     await delay(750);
     text = await evaluateCdpString(
@@ -2085,12 +2466,19 @@ async function submitDesktopComposerPrompt(
     );
   }
   const finalEditorText = await composerEditorText(webSocketDebuggerUrl);
+  evidence.editorTextAfterSubmit = finalEditorText.slice(0, 500);
+  evidence.bodyTextAfterSubmitPreview = text.slice(0, 2_000);
   actions.push(`composer-editor-after-submit:${finalEditorText.slice(0, 500)}`);
-  return (
+  evidence.submitted =
     (clicked && !finalEditorText.includes(prompt)) ||
     text.includes("Taking longer than expected") ||
-    text.includes("desktop-probe-ok")
-  );
+    text.includes("desktop-probe-ok");
+  if (!evidence.submitted) {
+    evidence.failureReason = clicked
+      ? "composer-submit-did-not-clear-or-start"
+      : "composer-send-control-missing";
+  }
+  return evidence;
 }
 
 async function typeTextWithCharEvents(
@@ -2314,6 +2702,7 @@ async function dispatchEnter(
 async function clickComposerSendButton(
   webSocketDebuggerUrl: string,
   prompt: string,
+  blockedControlTexts: string[],
 ): Promise<string> {
   const directClick = await evaluateCdpString(
     webSocketDebuggerUrl,
@@ -2324,6 +2713,13 @@ async function clickComposerSendButton(
         return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
       };
       const prompt = ${JSON.stringify(prompt)};
+      const blockedControlTexts = ${JSON.stringify(blockedControlTexts)};
+      const isBlockedControlText = (text) => {
+        const normalized = text.toLowerCase();
+        return blockedControlTexts
+          .filter(Boolean)
+          .some((blockedText) => normalized.includes(blockedText.toLowerCase()));
+      };
       const editor = [...document.querySelectorAll('.aislash-editor-input, [contenteditable="true"], textarea')]
         .map((element) => ({ element, rect: element.getBoundingClientRect(), text: element.textContent || element.value || '' }))
         .filter(({ element, rect, text }) => visible(element) && text.includes(prompt) && rect.width > 20 && rect.height > 10)
@@ -2354,6 +2750,7 @@ async function clickComposerSendButton(
               rect.right <= wrapperRect.right + 8 &&
               rect.top >= wrapperRect.top &&
               rect.bottom <= wrapperRect.bottom + 8 &&
+              !isBlockedControlText(text) &&
               !/\\b(agent|model|local-qwen|gpt|composer|plan|build|context)\\b/i.test(text)
             )
             .sort((left, right) => {
@@ -2382,6 +2779,13 @@ async function clickComposerSendButton(
     webSocketDebuggerUrl,
     `(() => {
       const prompt = ${JSON.stringify(prompt)};
+      const blockedControlTexts = ${JSON.stringify(blockedControlTexts)};
+      const isBlockedControlText = (text) => {
+        const normalized = text.toLowerCase();
+        return blockedControlTexts
+          .filter(Boolean)
+          .some((blockedText) => normalized.includes(blockedText.toLowerCase()));
+      };
       const visible = (element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
@@ -2465,6 +2869,7 @@ async function clickComposerSendButton(
             rect.left >= wrapperRect.right - 140 &&
             rect.top >= wrapperRect.bottom - 80 &&
             rect.top <= wrapperRect.bottom + 12 &&
+            !isBlockedControlText(text) &&
             !/\\b(agent|model|local-qwen|gpt|composer|plan|build)\\b/i.test(text)
           )
           .sort((left, right) => right.rect.left - left.rect.left || right.rect.top - left.rect.top);
@@ -2576,6 +2981,31 @@ function desktopPickerHasBuiltInModel(text: string): boolean {
     "Gemini",
     "Codex",
   ].some((modelText) => text.includes(modelText));
+}
+
+async function desktopComposerDomVisible(
+  webSocketDebuggerUrl: string,
+): Promise<boolean> {
+  const visible = await evaluateCdpValue(
+    webSocketDebuggerUrl,
+    `(() => {
+      const isVisible = (element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return rect.width > 0 && rect.height > 0 && style.visibility !== 'hidden' && style.display !== 'none';
+      };
+      return [
+        '.composer-input-blur-wrapper .aislash-editor-input',
+        '.composer-input-blur-wrapper textarea',
+        '.composer-input-blur-wrapper',
+        '.composer-bar',
+      ].some((selector) => {
+        const element = document.querySelector(selector);
+        return element !== null && isVisible(element);
+      });
+    })()`,
+  );
+  return visible === true;
 }
 
 function composerBodyTextVisible(text: string): boolean {
@@ -2841,6 +3271,12 @@ function trafficFailureMessage(code: FailureCode): string {
       return "cursor-agent did not list or accept the local model";
     case "local_completion_failed":
       return "cursor-agent listed the model, but a normal prompt did not complete through the local path";
+    case "desktop_picker_missing":
+    case "desktop_model_selection_missing":
+    case "desktop_prompt_submission_failed":
+    case "desktop_backend_request_missing":
+    case "desktop_visible_response_missing":
+      return code;
     case "backend_unreachable":
     case "bridge_start_failed":
     case "upstream_passthrough_failed":
@@ -2906,6 +3342,12 @@ function acpFailureMessage(code: FailureCode): string {
       return "desktop extension-host agent traffic did not reach the bridge";
     case "local_completion_failed":
       return "ACP session prompt did not complete through the local path";
+    case "desktop_picker_missing":
+    case "desktop_model_selection_missing":
+    case "desktop_prompt_submission_failed":
+    case "desktop_backend_request_missing":
+    case "desktop_visible_response_missing":
+      return code;
     case "backend_unreachable":
     case "bridge_start_failed":
     case "model_metadata_rejected":

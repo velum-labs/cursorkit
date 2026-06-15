@@ -31,6 +31,35 @@ export type OpenAICompletionEvent =
   | { type: "text"; text: string }
   | { type: "tool_calls"; toolCalls: OpenAIToolCall[] };
 
+export type OpenAIBackendErrorCode =
+  | "http_error"
+  | "malformed_sse"
+  | "request_aborted"
+  | "request_timeout";
+
+export interface OpenAIStreamOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+export class OpenAIBackendError extends Error {
+  constructor(
+    readonly code: OpenAIBackendErrorCode,
+    message: string,
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = "OpenAIBackendError";
+  }
+}
+
+export class OpenAIStreamParseError extends OpenAIBackendError {
+  constructor(message: string, options?: ErrorOptions) {
+    super("malformed_sse", message, options);
+    this.name = "OpenAIStreamParseError";
+  }
+}
+
 interface OpenAIStreamChunk {
   choices?: Array<{
     delta?: {
@@ -51,6 +80,19 @@ interface OpenAIStreamToolCallDelta {
   };
 }
 
+interface RequestAbortContext {
+  signal: AbortSignal;
+  timedOut(): boolean;
+  dispose(): void;
+}
+
+interface OpenAIStreamParserState {
+  done: boolean;
+  toolCalls: Map<number, OpenAIToolCall>;
+}
+
+const DEFAULT_BACKEND_REQUEST_TIMEOUT_MS = 120_000;
+
 export class OpenAICompatibleProvider implements ModelProvider {
   readonly name = "openai-compatible";
 
@@ -62,8 +104,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
     },
   ) {}
 
-  async *streamCompletion(messages: ChatMessage[]): AsyncGenerator<string> {
-    for await (const event of this.streamCompletionEvents(messages)) {
+  async *streamCompletion(
+    messages: ChatMessage[],
+    options: OpenAIStreamOptions = {},
+  ): AsyncGenerator<string> {
+    for await (const event of this.streamCompletionEvents(
+      messages,
+      [],
+      options,
+    )) {
       if (event.type === "text") {
         yield event.text;
       }
@@ -73,6 +122,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
   async *streamCompletionEvents(
     messages: ChatMessage[],
     tools: OpenAIToolDefinition[] = [],
+    options: OpenAIStreamOptions = {},
   ): AsyncGenerator<OpenAICompletionEvent> {
     if (this.config.hardcodedResponse !== undefined) {
       this.logger?.info("model backend hardcoded response", {
@@ -91,11 +141,16 @@ export class OpenAICompatibleProvider implements ModelProvider {
       stream: true,
       ...(tools.length > 0 ? { tools } : {}),
     };
+    const requestTimeoutMs =
+      options.timeoutMs ??
+      this.config.requestTimeoutMs ??
+      DEFAULT_BACKEND_REQUEST_TIMEOUT_MS;
     this.logger?.info("model backend request", {
       modelId: this.config.id,
       providerModel: this.config.providerModel,
       url,
       stream: true,
+      requestTimeoutMs,
       toolCount: tools.length,
       toolNames: tools.map((tool) => tool.function.name),
       ...summarizeMessages(messages),
@@ -106,6 +161,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
         : {}),
     });
     const started = Date.now();
+    const abortContext = createRequestAbortContext(
+      requestTimeoutMs,
+      options.signal,
+    );
     let response: Response;
     try {
       response = await fetch(url, {
@@ -118,24 +177,35 @@ export class OpenAICompatibleProvider implements ModelProvider {
             : {}),
         },
         body: JSON.stringify(requestBody),
+        signal: abortContext.signal,
       });
     } catch (error) {
+      const classified = classifyBackendError(error, abortContext);
       this.logger?.warn("model backend request failed", {
         modelId: this.config.id,
         providerModel: this.config.providerModel,
         url,
         durationMs: Date.now() - started,
-        error: error instanceof Error ? error.message : String(error),
+        error: classified instanceof Error ? classified.message : String(error),
+        code:
+          classified instanceof OpenAIBackendError
+            ? classified.code
+            : undefined,
         cause:
           error instanceof Error && error.cause instanceof Error
             ? error.cause.message
             : undefined,
       });
-      throw error;
+      abortContext.dispose();
+      throw classified;
     }
 
     if (!response.ok || response.body === null) {
       const body = await response.text().catch(() => "");
+      const error = new OpenAIBackendError(
+        "http_error",
+        `Model backend returned ${response.status}: ${body}`,
+      );
       this.logger?.warn("model backend response failed", {
         modelId: this.config.id,
         providerModel: this.config.providerModel,
@@ -143,8 +213,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
         status: response.status,
         durationMs: Date.now() - started,
         bodyPreview: body.slice(0, 500),
+        code: error.code,
       });
-      throw new Error(`Model backend returned ${response.status}: ${body}`);
+      abortContext.dispose();
+      throw error;
     }
 
     let chunkCount = 0;
@@ -172,6 +244,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
         responseChars,
       });
     } catch (error) {
+      const classified = classifyBackendError(error, abortContext);
       this.logger?.warn("model backend stream failed", {
         modelId: this.config.id,
         providerModel: this.config.providerModel,
@@ -180,9 +253,15 @@ export class OpenAICompatibleProvider implements ModelProvider {
         durationMs: Date.now() - started,
         chunkCount,
         responseChars,
-        error: error instanceof Error ? error.message : String(error),
+        error: classified instanceof Error ? classified.message : String(error),
+        code:
+          classified instanceof OpenAIBackendError
+            ? classified.code
+            : undefined,
       });
-      throw error;
+      throw classified;
+    } finally {
+      abortContext.dispose();
     }
   }
 }
@@ -191,8 +270,8 @@ function summarizeMessages(messages: ChatMessage[]): {
   messageCount: number;
   messageRoles: string[];
   messageChars: number;
-  firstMessagePreview: string | undefined;
-  lastMessagePreview: string | undefined;
+  firstMessagePreviewChars: number | undefined;
+  lastMessagePreviewChars: number | undefined;
 } {
   return {
     messageCount: messages.length,
@@ -201,9 +280,15 @@ function summarizeMessages(messages: ChatMessage[]): {
       (total, message) => total + message.content.length,
       0,
     ),
-    firstMessagePreview: preview(messages[0]?.content),
-    lastMessagePreview: preview(messages.at(-1)?.content),
+    firstMessagePreviewChars: messagePreviewChars(messages[0]?.content),
+    lastMessagePreviewChars: messagePreviewChars(messages.at(-1)?.content),
   };
+}
+
+function messagePreviewChars(value: string | undefined): number | undefined {
+  return value === undefined
+    ? undefined
+    : value.replace(/\s+/g, " ").trim().slice(0, 500).length;
 }
 
 function preview(value: string | undefined): string | undefined {
@@ -218,42 +303,58 @@ export async function* parseOpenAIStream(
 ): AsyncGenerator<
   string | Extract<OpenAICompletionEvent, { type: "tool_calls" }>
 > {
-  const decoder = new TextDecoder();
+  const decoder = new TextDecoder("utf-8", { fatal: true });
   let buffer = "";
-  const toolCalls = new Map<number, OpenAIToolCall>();
+  const state: OpenAIStreamParserState = {
+    done: false,
+    toolCalls: new Map<number, OpenAIToolCall>(),
+  };
   for await (const chunk of stream) {
-    buffer += decoder.decode(chunk, { stream: true });
+    buffer += decodeStreamText(decoder, chunk, true);
     const lines = buffer.split(/\r?\n/);
     buffer = lines.pop() ?? "";
-    yield* parseSseLines(lines, toolCalls);
+    yield* parseSseLines(lines, state);
+    if (state.done) {
+      return;
+    }
   }
 
-  buffer += decoder.decode();
-  if (buffer.length > 0) {
-    yield* parseSseLines(buffer.split(/\r?\n/), toolCalls);
+  buffer += decodeStreamText(decoder, undefined, false);
+  if (buffer.length > 0 && !state.done) {
+    yield* parseSseLines(buffer.split(/\r?\n/), state);
   }
 }
 
 function* parseSseLines(
   lines: string[],
-  toolCalls: Map<number, OpenAIToolCall>,
+  state: OpenAIStreamParserState,
 ): Generator<string | Extract<OpenAICompletionEvent, { type: "tool_calls" }>> {
   for (const line of lines) {
     const trimmed = line.trim();
+    if (trimmed.length === 0 || trimmed.startsWith(":")) {
+      continue;
+    }
     if (!trimmed.startsWith("data:")) {
       continue;
     }
 
     const data = trimmed.slice("data:".length).trim();
+    if (data.length === 0) {
+      continue;
+    }
     if (data === "[DONE]") {
+      state.done = true;
       return;
     }
 
     let parsed: OpenAIStreamChunk;
     try {
       parsed = JSON.parse(data) as OpenAIStreamChunk;
-    } catch {
-      continue;
+    } catch (error) {
+      throw new OpenAIStreamParseError(
+        `OpenAI stream contained malformed JSON data: ${preview(data)}`,
+        error instanceof Error ? { cause: error } : undefined,
+      );
     }
     const content = parsed.choices?.[0]?.delta?.content;
     if (typeof content === "string" && content.length > 0) {
@@ -261,11 +362,17 @@ function* parseSseLines(
     }
     const deltas = parsed.choices?.[0]?.delta?.tool_calls;
     if (Array.isArray(deltas)) {
-      mergeToolCallDeltas(toolCalls, deltas as OpenAIStreamToolCallDelta[]);
+      mergeToolCallDeltas(
+        state.toolCalls,
+        deltas as OpenAIStreamToolCallDelta[],
+      );
     }
     if (parsed.choices?.[0]?.finish_reason === "tool_calls") {
-      yield { type: "tool_calls", toolCalls: Array.from(toolCalls.values()) };
-      toolCalls.clear();
+      yield {
+        type: "tool_calls",
+        toolCalls: Array.from(state.toolCalls.values()),
+      };
+      state.toolCalls.clear();
     }
   }
 }
@@ -297,4 +404,73 @@ function mergeToolCallDeltas(
     }
     toolCalls.set(index, current);
   }
+}
+
+function decodeStreamText(
+  decoder: TextDecoder,
+  chunk: Uint8Array | undefined,
+  stream: boolean,
+): string {
+  try {
+    return chunk === undefined
+      ? decoder.decode()
+      : decoder.decode(chunk, { stream });
+  } catch (error) {
+    throw new OpenAIStreamParseError(
+      "OpenAI stream contained malformed UTF-8",
+      error instanceof Error ? { cause: error } : undefined,
+    );
+  }
+}
+
+function createRequestAbortContext(
+  timeoutMs: number,
+  upstreamSignal: AbortSignal | undefined,
+): RequestAbortContext {
+  const controller = new AbortController();
+  let didTimeout = false;
+  const timer = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
+  const abortFromUpstream = (): void => controller.abort();
+  if (upstreamSignal !== undefined) {
+    if (upstreamSignal.aborted) {
+      controller.abort();
+    } else {
+      upstreamSignal.addEventListener("abort", abortFromUpstream, {
+        once: true,
+      });
+    }
+  }
+  return {
+    signal: controller.signal,
+    timedOut: () => didTimeout,
+    dispose: () => {
+      clearTimeout(timer);
+      upstreamSignal?.removeEventListener("abort", abortFromUpstream);
+    },
+  };
+}
+
+function classifyBackendError(
+  error: unknown,
+  abortContext: RequestAbortContext,
+): unknown {
+  if (error instanceof OpenAIBackendError) {
+    return error;
+  }
+  if (abortContext.signal.aborted) {
+    const code = abortContext.timedOut()
+      ? "request_timeout"
+      : "request_aborted";
+    return new OpenAIBackendError(
+      code,
+      code === "request_timeout"
+        ? "Model backend request timed out"
+        : "Model backend request was aborted",
+      error instanceof Error ? { cause: error } : undefined,
+    );
+  }
+  return error;
 }

@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "src/tools/baselineInventory.ts",
+  "suites": [
+    {
+      "id": "baseline-drift",
+      "command": "pnpm baseline:check",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": ["baseline-drift", "protocol", "final-gate"],
+      "releaseCheck": "required",
+      "prerequisites": ["node>=22", "pnpm install"],
+      "timeoutMs": 30000,
+      "artifactOutputs": [
+        "docs/route-contract-manifest.json",
+        "docs/implementation-inventory.json",
+        "docs/test-manifest.json",
+        "docs/release-summary.json"
+      ],
+      "completionCriteria": [
+        "Generated route/config/docs artifacts match committed files.",
+        "Every route in src/routes.ts has a route contract entry.",
+        "Every env var read by src/config.ts has a config inventory entry."
+      ]
+    },
+    {
+      "id": "build",
+      "command": "pnpm build",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": ["static", "final-gate"],
+      "prerequisites": ["node>=22", "pnpm install"],
+      "releaseCheck": "required",
+      "timeoutMs": 60000,
+      "artifactOutputs": [".cursor-rpc/release-check/release-summary.json"],
+      "completionCriteria": ["TypeScript build and declaration emit pass."]
+    },
+    {
+      "id": "unit-tests",
+      "command": "pnpm test",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": [
+        "protocol",
+        "mlx",
+        "tool",
+        "reliability-security",
+        "final-gate"
+      ],
+      "releaseCheck": "required",
+      "prerequisites": ["node>=22", "pnpm install"],
+      "timeoutMs": 120000,
+      "artifactOutputs": [".cursor-rpc/release-check/release-summary.json"],
+      "completionCriteria": [
+        "Protocol route shapes, fixture replay, MLX contract, tool runtime, desktop proxy, and reliability/security regression tests pass."
+      ]
+    },
+    {
+      "id": "format-check",
+      "command": "pnpm format:check",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": ["static", "final-gate"],
+      "releaseCheck": "required",
+      "prerequisites": ["node>=22", "pnpm install"],
+      "timeoutMs": 60000,
+      "artifactOutputs": [".cursor-rpc/release-check/release-summary.json"],
+      "completionCriteria": [
+        "Source, tests, docs, JSON, YAML, and examples formatting pass."
+      ]
+    },
+    {
+      "id": "examples-typecheck",
+      "command": "pnpm examples:check",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": ["packaging", "final-gate"],
+      "releaseCheck": "required",
+      "prerequisites": ["node>=22", "pnpm install", "pnpm build"],
+      "timeoutMs": 60000,
+      "artifactOutputs": [".cursor-rpc/release-check/release-summary.json"],
+      "completionCriteria": [
+        "Examples typecheck against the built package exports that tarball consumers use."
+      ]
+    },
+    {
+      "id": "pack-smoke",
+      "command": "pnpm pack && pnpm add --offline <tarball> && cursor-rpc --help",
+      "deterministic": true,
+      "status": "implemented",
+      "categories": ["packaging", "final-gate"],
+      "releaseCheck": "required",
+      "prerequisites": ["node>=22", "pnpm install", "pnpm build"],
+      "timeoutMs": 60000,
+      "artifactOutputs": [".cursor-rpc/release-check/release-summary.json"],
+      "completionCriteria": [
+        "Packed tarball contains required dist/src, proto, docs, README.md, and DISCLAIMER.md files.",
+        "Source examples are typechecked but intentionally excluded from the tarball.",
+        "A clean temporary project can install the tarball from the local pnpm store.",
+        "The packed cursor-rpc binary executes --help successfully."
+      ]
+    },
+    {
+      "id": "mlx-live",
+      "command": "pnpm test:harness -- --suite local-backend --base-url <mlx-url> --provider-model <mlx-model>",
+      "deterministic": false,
+      "status": "optional_live",
+      "categories": ["mlx"],
+      "releaseCheck": "reported_skipped_with_reason",
+      "prerequisites": ["Running MLX OpenAI-compatible backend"],
+      "timeoutMs": 30000,
+      "artifactOutputs": [".cursor-rpc/test-runs/*/local-backend-report.json"],
+      "completionCriteria": [
+        "/v1/models returns the configured provider model.",
+        "/v1/chat/completions returns a non-empty response."
+      ]
+    },
+    {
+      "id": "real-client-live",
+      "command": "pnpm test:harness -- --suite traffic,acp --base-url <mlx-url> --model <cursor-model> --provider-model <mlx-model>",
+      "deterministic": false,
+      "status": "optional_live",
+      "categories": ["protocol", "mlx", "tool"],
+      "releaseCheck": "reported_skipped_with_reason",
+      "prerequisites": [
+        "cursor-agent installed",
+        "Cursor auth available",
+        "Running MLX OpenAI-compatible backend"
+      ],
+      "timeoutMs": 120000,
+      "artifactOutputs": [".cursor-rpc/test-runs/*/summary.json"],
+      "completionCriteria": [
+        "CLI, ACP, and desktop flows report passed or skipped_with_reason."
+      ]
+    },
+    {
+      "id": "desktop-live",
+      "command": "pnpm test:harness -- --suite desktop-ui-experimental --include-experimental --base-url <mlx-url> --model <cursor-model> --provider-model <mlx-model>",
+      "deterministic": false,
+      "status": "optional_live",
+      "categories": ["desktop-optional-live"],
+      "releaseCheck": "reported_skipped_with_reason",
+      "prerequisites": [
+        "Cursor desktop installed",
+        "Cursor auth available",
+        "Running MLX OpenAI-compatible backend"
+      ],
+      "timeoutMs": 180000,
+      "artifactOutputs": [".cursor-rpc/test-runs/*/desktop-ui-report.json"],
+      "completionCriteria": [
+        "Desktop route inventory, picker visibility, selected local model, submitted prompt, MLX request, and visible response pass or report skipped_with_reason with an actionable prerequisite."
+      ]
+    }
+  ]
+}

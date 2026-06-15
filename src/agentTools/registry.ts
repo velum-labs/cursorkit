@@ -3,6 +3,7 @@ import type { ServerResponse } from "node:http";
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 
 import { encodeEnvelope } from "../connectEnvelope.js";
+import type { AgentToolPolicy } from "../config.js";
 import {
   AgentClientMessageSchema,
   AgentServerMessageSchema,
@@ -22,44 +23,157 @@ import {
 } from "../gen/agent/v1/agent_pb.js";
 import type { Logger } from "../logger.js";
 import type { OpenAIToolCall } from "../providers/openai.js";
+import { toolEnabledByPolicy } from "./policy.js";
 import {
   agentExecClientMessageFields,
+  type CursorToolError,
+  formatCursorToolError,
   formatCursorToolResult,
 } from "./results.js";
+import { CURSOR_TOOL_SURFACE } from "./surface.js";
 export { cursorOpenAITools } from "./schemas.js";
 export { agentExecClientMessageFields } from "./results.js";
 
 export interface CursorToolRuntime {
   logger: Logger;
   nextAgentExecId: number;
+  config: {
+    agentToolPolicy: AgentToolPolicy;
+    toolResultTimeoutMs?: number;
+  };
 }
+
+interface CursorToolExecutionOptions {
+  signal?: AbortSignal;
+}
+
+type OpenAIToolArgumentType = "string" | "integer" | "boolean" | "object";
+
+interface OpenAIToolArgumentSchema {
+  properties: Record<string, OpenAIToolArgumentType>;
+  required: string[];
+  nonEmpty?: string[];
+}
+
+const TOOL_ARGUMENT_SCHEMAS = {
+  read_file: {
+    properties: { path: "string", offset: "integer", limit: "integer" },
+    required: ["path"],
+    nonEmpty: ["path"],
+  },
+  list_dir: {
+    properties: { path: "string" },
+    required: ["path"],
+    nonEmpty: ["path"],
+  },
+  grep: {
+    properties: {
+      pattern: "string",
+      path: "string",
+      glob: "string",
+      head_limit: "integer",
+    },
+    required: ["pattern"],
+    nonEmpty: ["pattern"],
+  },
+  run_shell: {
+    properties: {
+      command: "string",
+      working_directory: "string",
+      timeout: "integer",
+      description: "string",
+    },
+    required: ["command"],
+    nonEmpty: ["command"],
+  },
+  write_file: {
+    properties: {
+      path: "string",
+      content: "string",
+      return_file_content_after_write: "boolean",
+    },
+    required: ["path", "content"],
+    nonEmpty: ["path"],
+  },
+  delete_path: {
+    properties: { path: "string" },
+    required: ["path"],
+    nonEmpty: ["path"],
+  },
+  fetch_url: {
+    properties: { url: "string" },
+    required: ["url"],
+    nonEmpty: ["url"],
+  },
+  mcp_tool: {
+    properties: {
+      provider_identifier: "string",
+      tool_name: "string",
+      name: "string",
+      arguments: "object",
+    },
+    required: ["provider_identifier", "tool_name"],
+    nonEmpty: ["provider_identifier", "tool_name"],
+  },
+} satisfies Record<string, OpenAIToolArgumentSchema>;
+
+type SupportedOpenAIToolName = keyof typeof TOOL_ARGUMENT_SCHEMAS;
+
+export type CursorToolValidationResult =
+  | {
+      ok: true;
+      name: SupportedOpenAIToolName;
+      args: Record<string, unknown>;
+    }
+  | { ok: false; error: CursorToolError };
 
 export async function executeCursorToolCall(
   response: ServerResponse,
   runtime: CursorToolRuntime,
   payloads: AsyncIterator<Buffer>,
   toolCall: OpenAIToolCall,
+  options: CursorToolExecutionOptions = {},
 ): Promise<string> {
-  const parsedArgs = parseToolArguments(toolCall);
+  const validation = validateCursorToolCall(
+    toolCall,
+    runtime.config.agentToolPolicy,
+  );
+  if (!validation.ok) {
+    runtime.logger.warn("rejected cursor tool call", {
+      toolCallId: toolCall.id,
+      toolName: toolCall.function.name,
+      errorCode: validation.error.code,
+      details: validation.error.details,
+    });
+    return formatCursorToolError(validation.error);
+  }
+
+  const parsedArgs = validation.args;
   const execId = `cursor-rpc-tool-${toolCall.id}`;
   const id = runtime.nextAgentExecId;
   runtime.nextAgentExecId += 1;
   const execServerMessage = cursorToolCallToExecServerMessage(
     id,
     execId,
-    toolCall,
+    validation.name,
+    toolCall.id,
     parsedArgs,
   );
   if (execServerMessage === undefined) {
-    return `Unsupported tool call: ${toolCall.function.name}`;
+    return formatCursorToolError({
+      code: "unsupported_tool",
+      toolName: toolCall.function.name,
+      toolCallId: toolCall.id,
+      message: `Unsupported tool call: ${toolCall.function.name}`,
+    });
   }
 
   runtime.logger.info("requested cursor tool execution", {
     id,
     execId,
     toolCallId: toolCall.id,
-    toolName: toolCall.function.name,
-    toolArgs: parsedArgs,
+    toolName: validation.name,
+    toolArgsSummary: summarizeToolArgs(parsedArgs),
   });
   response.write(
     encodeEnvelope(
@@ -72,7 +186,24 @@ export async function executeCursorToolCall(
     ),
   );
 
-  const result = await waitForCursorToolResult(payloads, id, execId);
+  let result: Awaited<ReturnType<typeof waitForCursorToolResult>>;
+  try {
+    result = await waitForCursorToolResult(
+      payloads,
+      id,
+      execId,
+      runtime.config.toolResultTimeoutMs ?? 120_000,
+      options.signal,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return formatCursorToolError({
+      code: "tool_result_timeout",
+      toolName: validation.name,
+      toolCallId: toolCall.id,
+      message,
+    });
+  }
   runtime.logger.info("received cursor tool result", {
     id,
     execId,
@@ -81,14 +212,75 @@ export async function executeCursorToolCall(
   return formatCursorToolResult(result);
 }
 
-function cursorToolCallToExecServerMessage(
+export function validateCursorToolCall(
+  toolCall: OpenAIToolCall,
+  policy: AgentToolPolicy,
+): CursorToolValidationResult {
+  const name = toolCall.function.name;
+  const schema = toolArgumentSchemaFor(name);
+  const surfaceEntry = CURSOR_TOOL_SURFACE.find(
+    (entry) => entry.openAIToolName === name,
+  );
+  if (schema === undefined || surfaceEntry === undefined) {
+    return {
+      ok: false,
+      error: {
+        code: "unsupported_tool",
+        toolName: name,
+        toolCallId: toolCall.id,
+        message: `Unsupported tool call: ${name}`,
+      },
+    };
+  }
+  if (!toolEnabledByPolicy(surfaceEntry, policy)) {
+    return {
+      ok: false,
+      error: {
+        code: "tool_not_enabled",
+        toolName: name,
+        toolCallId: toolCall.id,
+        message: `Tool ${name} is not enabled by the current Cursor tool policy.`,
+      },
+    };
+  }
+
+  const parsed = parseToolArguments(toolCall);
+  if (!parsed.ok) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_tool_arguments",
+        toolName: name,
+        toolCallId: toolCall.id,
+        message: parsed.message,
+      },
+    };
+  }
+
+  const details = validateToolArguments(parsed.args, schema);
+  if (details.length > 0) {
+    return {
+      ok: false,
+      error: {
+        code: "invalid_tool_arguments",
+        toolName: name,
+        toolCallId: toolCall.id,
+        message: `Invalid arguments for ${name}.`,
+        details,
+      },
+    };
+  }
+
+  return { ok: true, name: name as SupportedOpenAIToolName, args: parsed.args };
+}
+
+export function cursorToolCallToExecServerMessage(
   id: number,
   execId: string,
-  toolCall: OpenAIToolCall,
+  name: SupportedOpenAIToolName,
+  toolCallId: string,
   args: Record<string, unknown>,
 ): ReturnType<typeof create<typeof ExecServerMessageSchema>> | undefined {
-  const name = normalizeToolName(toolCall.function.name);
-  const toolCallId = toolCall.id;
   if (name === "read_file") {
     return create(ExecServerMessageSchema, {
       id,
@@ -202,6 +394,8 @@ async function waitForCursorToolResult(
   payloads: AsyncIterator<Buffer>,
   id: number,
   execId: string,
+  timeoutMs: number,
+  signal: AbortSignal | undefined,
 ): Promise<
   NonNullable<
     ReturnType<
@@ -210,11 +404,15 @@ async function waitForCursorToolResult(
   >
 > {
   const started = Date.now();
-  while (Date.now() - started < 120_000) {
+  while (Date.now() - started < timeoutMs) {
+    if (signal?.aborted === true) {
+      throw new Error(`Aborted waiting for Cursor tool result ${execId}`);
+    }
+    const remainingMs = Math.max(1, timeoutMs - (Date.now() - started));
     const next = await Promise.race([
       payloads.next(),
       new Promise<{ done: true; value?: undefined }>((resolve) =>
-        setTimeout(() => resolve({ done: true }), 120_000),
+        setTimeout(() => resolve({ done: true }), remainingMs),
       ),
     ]);
     if (next.done === true || next.value === undefined) {
@@ -237,31 +435,141 @@ async function waitForCursorToolResult(
   throw new Error(`Timed out waiting for Cursor tool result ${execId}`);
 }
 
-function parseToolArguments(toolCall: OpenAIToolCall): Record<string, unknown> {
+export function summarizeToolArgs(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  const summary: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === "string") {
+      summary[key] = { type: "string", chars: value.length };
+      continue;
+    }
+    if (typeof value === "number" || typeof value === "boolean") {
+      summary[key] = value;
+      continue;
+    }
+    if (value !== null && typeof value === "object") {
+      summary[key] = {
+        type: Array.isArray(value) ? "array" : "object",
+        keys: Array.isArray(value) ? value.length : Object.keys(value).sort(),
+      };
+      continue;
+    }
+    summary[key] = value;
+  }
+  return summary;
+}
+
+function parseToolArguments(
+  toolCall: OpenAIToolCall,
+):
+  | { ok: true; args: Record<string, unknown> }
+  | { ok: false; message: string } {
   try {
     const parsed = JSON.parse(toolCall.function.arguments) as unknown;
-    return parsed !== null &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
+    if (
+      parsed === null ||
+      typeof parsed !== "object" ||
+      Array.isArray(parsed)
+    ) {
+      return {
+        ok: false,
+        message: "Tool arguments must be a JSON object.",
+      };
+    }
+    return { ok: true, args: parsed as Record<string, unknown> };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      message: `Tool arguments are not valid JSON: ${message}`,
+    };
   }
 }
 
-function normalizeToolName(name: string): string {
-  const normalized = name.replace(/[-\s]/g, "_").toLowerCase();
-  if (["readfile", "read_file", "read"].includes(normalized)) {
-    return "read_file";
+function toolArgumentSchemaFor(
+  name: string,
+): OpenAIToolArgumentSchema | undefined {
+  if (Object.hasOwn(TOOL_ARGUMENT_SCHEMAS, name)) {
+    return TOOL_ARGUMENT_SCHEMAS[name as SupportedOpenAIToolName];
   }
-  if (["ls", "list", "list_dir", "list_directory"].includes(normalized)) {
-    return "list_dir";
+  return undefined;
+}
+
+function validateToolArguments(
+  args: Record<string, unknown>,
+  schema: OpenAIToolArgumentSchema,
+): string[] {
+  const details: string[] = [];
+  for (const key of Object.keys(args)) {
+    if (!Object.hasOwn(schema.properties, key)) {
+      details.push(`Unknown argument "${key}".`);
+    }
   }
-  if (["grep", "search"].includes(normalized)) {
-    return "grep";
+  for (const key of schema.required) {
+    if (args[key] === undefined) {
+      details.push(`Missing required argument "${key}".`);
+    }
   }
-  return normalized;
+  for (const [key, expectedType] of Object.entries(schema.properties)) {
+    const value = args[key];
+    if (value === undefined) {
+      continue;
+    }
+    if (!valueMatchesToolArgumentType(value, expectedType)) {
+      details.push(
+        `Argument "${key}" must be ${toolArgumentTypeDescription(expectedType)}.`,
+      );
+      continue;
+    }
+    if (
+      schema.nonEmpty?.includes(key) === true &&
+      typeof value === "string" &&
+      value.trim().length === 0
+    ) {
+      details.push(`Argument "${key}" must not be empty.`);
+    }
+  }
+  return details;
+}
+
+function valueMatchesToolArgumentType(
+  value: unknown,
+  type: OpenAIToolArgumentType,
+): boolean {
+  switch (type) {
+    case "string":
+      return typeof value === "string";
+    case "integer":
+      return typeof value === "number" && Number.isInteger(value);
+    case "boolean":
+      return typeof value === "boolean";
+    case "object":
+      return (
+        value !== null && typeof value === "object" && !Array.isArray(value)
+      );
+    default: {
+      const exhaustive: never = type;
+      return exhaustive;
+    }
+  }
+}
+
+function toolArgumentTypeDescription(type: OpenAIToolArgumentType): string {
+  switch (type) {
+    case "string":
+      return "a string";
+    case "integer":
+      return "an integer";
+    case "boolean":
+      return "a boolean";
+    case "object":
+      return "an object";
+    default: {
+      const exhaustive: never = type;
+      return exhaustive;
+    }
+  }
 }
 
 function stringArg(args: Record<string, unknown>, key: string): string {

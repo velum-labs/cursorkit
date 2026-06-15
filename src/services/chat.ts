@@ -12,6 +12,7 @@ import {
 } from "../gen/aiserver/v1/aiserver_pb.js";
 import type { Logger } from "../logger.js";
 import type { ModelRegistry, RegisteredModel } from "../models/registry.js";
+import type { OpenAIStreamOptions } from "../providers/openai.js";
 import { cursorRequestToOpenAI } from "../translation.js";
 
 export interface LocalChatDecision {
@@ -36,6 +37,7 @@ export async function writeLocalChatResponse(
   response: ServerResponse,
   decision: LocalChatDecision,
   logger: Logger,
+  options: OpenAIStreamOptions = {},
 ): Promise<void> {
   response.statusCode = 200;
   response.setHeader("content-type", "application/connect+proto");
@@ -45,6 +47,7 @@ export async function writeLocalChatResponse(
   try {
     for await (const text of decision.model.provider.streamCompletion(
       messages,
+      options,
     )) {
       response.write(
         encodeEnvelope(
@@ -71,10 +74,14 @@ export async function writeLocalChatResponse(
       model: decision.model.id,
       error: error instanceof Error ? error.message : String(error),
     });
-    if (!response.headersSent) {
-      response.statusCode = 502;
-      response.setHeader("content-type", "application/json");
-    }
-    response.end(JSON.stringify({ error: "local model failed" }));
+    endLocalChatFailure(response);
   }
+}
+
+function endLocalChatFailure(response: ServerResponse): void {
+  if (!response.headersSent) {
+    response.statusCode = 200;
+    response.setHeader("content-type", "application/connect+proto");
+  }
+  response.end(encodeEndStream({ error: "local model failed" }));
 }

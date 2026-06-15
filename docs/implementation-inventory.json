@@ -1,0 +1,603 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "src/tools/baselineInventory.ts",
+  "sources": ["docs/service-manifest.json", "src/routes.ts", "src/config.ts"],
+  "routes": [
+    {
+      "path": "/aiserver.v1.AiService/AvailableModels",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AiService",
+      "method": "AvailableModels",
+      "inputType": "AvailableModelsRequest",
+      "outputType": "AvailableModelsResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Merge conservative local model entries with upstream models.",
+      "uncertainty": "Model metadata fields beyond local id/display/context remain fixture-gated."
+    },
+    {
+      "path": "/aiserver.v1.AiService/GetUsableModels",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AiService",
+      "method": "GetUsableModels",
+      "inputType": "AgentV1_GetUsableModelsRequest",
+      "outputType": "AgentV1_GetUsableModelsResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Cursor Agent CLI reads this route for its model picker; merge local model entries with upstream usable models.",
+      "uncertainty": "Desktop model picker usage must be confirmed by route inventory before adding desktop-specific assumptions."
+    },
+    {
+      "path": "/aiserver.v1.AiService/GetDefaultModelForCli",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AiService",
+      "method": "GetDefaultModelForCli",
+      "inputType": "AgentV1_GetDefaultModelForCliRequest",
+      "outputType": "AgentV1_GetDefaultModelForCliResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Preserve upstream's CLI default model when present; otherwise provide the first registered local model.",
+      "uncertainty": "Client-specific default selection remains gated by observed CLI/ACP traffic."
+    },
+    {
+      "path": "/aiserver.v1.AiService/GetDefaultModel",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AiService",
+      "method": "GetDefaultModel",
+      "inputType": "GetDefaultModelRequest",
+      "outputType": "GetDefaultModelResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Return the first registered local model as a fallback default for non-CLI callers.",
+      "uncertainty": "Desktop reliance on this route is not yet proven by captured traffic."
+    },
+    {
+      "path": "/aiserver.v1.AiService/NameAgent",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AiService",
+      "method": "NameAgent",
+      "inputType": "AgentV1_NameAgentRequest",
+      "outputType": "AgentV1_NameAgentResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Provide a local fallback name for Cursor Agent sessions.",
+      "uncertainty": "Exact naming behavior can be refined once real client naming fixtures are replayed."
+    },
+    {
+      "path": "/aiserver.v1.ServerConfigService/GetServerConfig",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "ServerConfigService",
+      "method": "GetServerConfig",
+      "inputType": "GetServerConfigRequest",
+      "outputType": "GetServerConfigResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Rewrite agent URLs to the bridge origin and force HTTP/2 off for local bridge compatibility.",
+      "uncertainty": "Additional desktop server-config fields stay pass-through until captured fixtures prove they are needed."
+    },
+    {
+      "path": "/auth/full_stripe_profile",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "protoBacked": false,
+      "supportLevel": "implemented",
+      "expectedMethods": ["GET", "POST"],
+      "expectedContentTypes": ["application/json", "none"],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Provide a local desktop auth-profile shim for Cursor desktop experiments.",
+      "uncertainty": "HTTP auth profile routes are not proto-backed; exact desktop expectations remain traffic-gated."
+    },
+    {
+      "path": "/auth/stripe_profile",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "protoBacked": false,
+      "supportLevel": "implemented",
+      "expectedMethods": ["GET", "POST"],
+      "expectedContentTypes": ["application/json", "none"],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Provide a local desktop auth-profile shim for Cursor desktop experiments.",
+      "uncertainty": "HTTP auth profile routes are not proto-backed; exact desktop expectations remain traffic-gated."
+    },
+    {
+      "path": "/agent.v1.AgentService/Run",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "agent.v1",
+      "service": "AgentService",
+      "method": "Run",
+      "inputType": "AgentClientMessage",
+      "outputType": "AgentServerMessage",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "conditional",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "needs-captured-fixture",
+      "testStatus": "partial-tests-present",
+      "realClientEvidence": "traffic-gated",
+      "reason": "Handle local Agent Run requests when the selected model is registered locally; otherwise preserve upstream behavior.",
+      "uncertainty": "Connect/native streaming shape needs broader fixture replay before this becomes fully fixture-backed."
+    },
+    {
+      "path": "/agent.v1.AgentService/RunSSE",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "agent.v1",
+      "service": "AgentService",
+      "method": "RunSSE",
+      "inputType": "AiserverV1_BidiRequestId",
+      "outputType": "AgentServerMessage",
+      "serverStreaming": true,
+      "protoBacked": true,
+      "supportLevel": "conditional",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "needs-captured-fixture",
+      "testStatus": "partial-tests-present",
+      "realClientEvidence": "traffic-gated",
+      "reason": "Serve Cursor Agent local-model runs when paired with a matching BidiAppend payload.",
+      "uncertainty": "Bidi request-id flow and payload framing need captured fixture replay across CLI and ACP."
+    },
+    {
+      "path": "/aiserver.v1.BidiService/BidiAppend",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "BidiService",
+      "method": "BidiAppend",
+      "inputType": "BidiAppendRequest",
+      "outputType": "BidiAppendResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "conditional",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "needs-captured-fixture",
+      "testStatus": "partial-tests-present",
+      "realClientEvidence": "traffic-gated",
+      "reason": "Decode Cursor Agent client messages and register pending local-model runs.",
+      "uncertainty": "Observed payload encodings include surprising nested forms; unsupported forms must pass through."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithTools",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithTools",
+      "inputType": "StreamUnifiedChatRequestWithTools",
+      "outputType": "StreamUnifiedChatResponseWithTools",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "conditional",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "needs-captured-fixture",
+      "testStatus": "partial-tests-present",
+      "realClientEvidence": "traffic-gated",
+      "reason": "Handle requests only when selected model is registered locally; otherwise pass upstream.",
+      "uncertainty": "SSE, Poll, and idempotent chat variants stay pass-through until observed and decoded."
+    },
+    {
+      "path": "/aiserver.v1.AnalyticsService/UploadIssueTrace",
+      "policy": "intercept",
+      "owner": "bridge-core",
+      "packageName": "aiserver.v1",
+      "service": "AnalyticsService",
+      "method": "UploadIssueTrace",
+      "inputType": "UploadIssueTraceRequest",
+      "outputType": "UploadIssueTraceResponse",
+      "serverStreaming": false,
+      "protoBacked": true,
+      "supportLevel": "implemented",
+      "expectedMethods": ["POST"],
+      "expectedContentTypes": [
+        "application/proto",
+        "application/connect+proto"
+      ],
+      "fixtureStatus": "synthetic-or-unit-covered",
+      "testStatus": "focused-tests-present",
+      "realClientEvidence": "cli-or-unit-evidence",
+      "reason": "Acknowledge issue-trace uploads locally to avoid forwarding sensitive diagnostic blobs during local experiments.",
+      "uncertainty": "Full payload redaction and fixture coverage remain part of the reliability/security workstream."
+    }
+  ],
+  "config": {
+    "envVars": [
+      {
+        "name": "BRIDGE_AGENT_CONTEXT_TIMEOUT_MS",
+        "category": "reliability",
+        "defaultValue": "undefined",
+        "description": "Optional timeout for gathering agent context before local model execution."
+      },
+      {
+        "name": "BRIDGE_AGENT_NATIVE_CONTEXT",
+        "category": "agent-tools",
+        "defaultValue": "true",
+        "description": "Controls whether local agent runs include native Cursor context gathered before model execution."
+      },
+      {
+        "name": "BRIDGE_AGENT_PUBLIC_ORIGIN",
+        "category": "desktop",
+        "defaultValue": "undefined",
+        "description": "Public origin advertised to Cursor Agent clients when different from the bridge public origin."
+      },
+      {
+        "name": "BRIDGE_AGENT_RUN_SSE_WAIT_TIMEOUT_MS",
+        "category": "reliability",
+        "defaultValue": "undefined",
+        "description": "Optional timeout for waiting on pending Agent RunSSE/Bidi state."
+      },
+      {
+        "name": "BRIDGE_AGENT_TOOL_POLICY",
+        "category": "agent-tools",
+        "defaultValue": "safe",
+        "description": "Controls whether local agent runs advertise only safe tools or the approved extended tool set."
+      },
+      {
+        "name": "BRIDGE_AGENT_TOOL_RESULT_TIMEOUT_MS",
+        "category": "reliability",
+        "defaultValue": "undefined",
+        "description": "Optional timeout for waiting on Cursor exec tool results during local agent runs."
+      },
+      {
+        "name": "BRIDGE_AUTH_TOKEN",
+        "category": "safety",
+        "defaultValue": "undefined",
+        "requiredWhen": "BRIDGE_HOST is non-localhost unless BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST=true",
+        "description": "Bearer token required to protect non-localhost bridge binds unless explicitly bypassed."
+      },
+      {
+        "name": "BRIDGE_CAPTURE_DIR",
+        "category": "capture",
+        "defaultValue": "fixtures/captures",
+        "description": "Directory for traffic captures when capture mode is enabled."
+      },
+      {
+        "name": "BRIDGE_CAPTURE_ENABLED",
+        "category": "capture",
+        "defaultValue": "false",
+        "description": "Enables explicit traffic capture hooks; route inventory is separate."
+      },
+      {
+        "name": "BRIDGE_CERT_PATH",
+        "category": "tls",
+        "defaultValue": "undefined",
+        "requiredWhen": "BRIDGE_USE_TLS=true and generated certs are not used",
+        "description": "Path to TLS certificate material."
+      },
+      {
+        "name": "BRIDGE_DESKTOP_AGENT_HTTP_PORT",
+        "category": "desktop",
+        "defaultValue": "undefined",
+        "description": "Optional secondary HTTP listener port for desktop agent compatibility experiments."
+      },
+      {
+        "name": "BRIDGE_DESKTOP_MODE",
+        "category": "desktop",
+        "defaultValue": "false",
+        "description": "Enables desktop proxy defaults, including upstream, public origin, TLS hostnames, and route inventory."
+      },
+      {
+        "name": "BRIDGE_EXTENSION_SETUP_TIMEOUT_MS",
+        "category": "reliability",
+        "defaultValue": "undefined",
+        "description": "Optional timeout for local extension/plugin setup during bridge startup."
+      },
+      {
+        "name": "BRIDGE_FAIL_OPEN",
+        "category": "safety",
+        "defaultValue": "true",
+        "description": "Controls whether typed intercept failures return explicit bridge errors after consuming request bodies."
+      },
+      {
+        "name": "BRIDGE_HARDCODED_RESPONSE",
+        "category": "model",
+        "defaultValue": "undefined",
+        "description": "Optional fixed local model response for deterministic experiments."
+      },
+      {
+        "name": "BRIDGE_HOST",
+        "category": "core",
+        "defaultValue": "127.0.0.1",
+        "description": "Bridge bind host."
+      },
+      {
+        "name": "BRIDGE_KEY_PATH",
+        "category": "tls",
+        "defaultValue": "undefined",
+        "requiredWhen": "BRIDGE_USE_TLS=true and generated certs are not used",
+        "description": "Path to TLS private key material."
+      },
+      {
+        "name": "BRIDGE_LOG_LEVEL",
+        "category": "diagnostics",
+        "defaultValue": "info",
+        "description": "Bridge log level: debug, info, warn, or error."
+      },
+      {
+        "name": "BRIDGE_LOG_MODEL_PAYLOADS",
+        "category": "diagnostics",
+        "defaultValue": "summary",
+        "description": "Controls local model payload logging; full payload logging is explicit opt-in."
+      },
+      {
+        "name": "BRIDGE_MAX_INTERCEPT_BODY_BYTES",
+        "category": "safety",
+        "defaultValue": "52428800",
+        "description": "Maximum buffered body size for typed intercept routes."
+      },
+      {
+        "name": "BRIDGE_MODELS_JSON",
+        "category": "model",
+        "defaultValue": "undefined",
+        "description": "JSON array of local model registrations with Cursor-facing and provider-facing IDs."
+      },
+      {
+        "name": "BRIDGE_PLUGIN_PATH",
+        "category": "plugins",
+        "defaultValue": "undefined",
+        "description": "Experimental local plugin module path."
+      },
+      {
+        "name": "BRIDGE_PORT",
+        "category": "core",
+        "defaultValue": "9443",
+        "description": "Bridge bind port."
+      },
+      {
+        "name": "BRIDGE_PUBLIC_ORIGIN",
+        "category": "desktop",
+        "defaultValue": "desktop mode: https://api2.cursor.sh; otherwise undefined",
+        "description": "Public origin advertised in rewritten server config responses."
+      },
+      {
+        "name": "BRIDGE_ROUTE_INVENTORY",
+        "category": "diagnostics",
+        "defaultValue": "desktop mode: true; otherwise false",
+        "description": "Enables redacted method/path/content-type/status/framing route inventory logs."
+      },
+      {
+        "name": "BRIDGE_TLS_HOSTNAMES",
+        "category": "tls",
+        "defaultValue": "desktop mode: api2.cursor.sh,api3.cursor.sh,agent.api5.cursor.sh,agentn.api5.cursor.sh,agentn.global.api5.cursor.sh,localhost,127.0.0.1,::1; otherwise localhost,127.0.0.1,::1",
+        "description": "Comma-separated hostnames/IPs for generated TLS certificate SANs."
+      },
+      {
+        "name": "BRIDGE_UNSAFE_ALLOW_NON_LOCALHOST",
+        "category": "safety",
+        "defaultValue": "false",
+        "description": "Required override before binding the bridge to anything other than localhost."
+      },
+      {
+        "name": "BRIDGE_UPSTREAM_REQUEST_TIMEOUT_MS",
+        "category": "reliability",
+        "defaultValue": "undefined",
+        "description": "Optional timeout for pass-through requests to Cursor upstream services."
+      },
+      {
+        "name": "BRIDGE_USE_TLS",
+        "category": "tls",
+        "defaultValue": "false",
+        "description": "Runs the bridge over HTTPS when enabled."
+      },
+      {
+        "name": "CURSOR_UPSTREAM_BASE_URL",
+        "category": "upstream",
+        "defaultValue": "desktop mode: https://api2.cursor.sh; otherwise undefined",
+        "description": "Logical Cursor upstream base URL for pass-through traffic."
+      },
+      {
+        "name": "CURSOR_UPSTREAM_CONNECT_HOST",
+        "category": "upstream",
+        "defaultValue": "undefined",
+        "description": "Optional physical upstream host/IP while preserving logical Host and TLS SNI."
+      },
+      {
+        "name": "CURSOR_UPSTREAM_CONNECT_PORT",
+        "category": "upstream",
+        "defaultValue": "undefined",
+        "description": "Optional physical upstream port paired with CURSOR_UPSTREAM_CONNECT_HOST."
+      },
+      {
+        "name": "MODEL_API_KEY",
+        "category": "model",
+        "defaultValue": "",
+        "description": "API key sent to the OpenAI-compatible local model backend."
+      },
+      {
+        "name": "MODEL_BASE_URL",
+        "category": "model",
+        "defaultValue": "http://localhost:8080/v1",
+        "description": "OpenAI-compatible local model endpoint."
+      },
+      {
+        "name": "MODEL_CONTEXT_TOKEN_LIMIT",
+        "category": "model",
+        "defaultValue": "128000",
+        "description": "Advertised local model context window."
+      },
+      {
+        "name": "MODEL_NAME",
+        "category": "model",
+        "defaultValue": "local-model",
+        "description": "Default Cursor-facing local model ID."
+      },
+      {
+        "name": "MODEL_PROVIDER_MODEL",
+        "category": "model",
+        "defaultValue": "MODEL_NAME",
+        "description": "Provider-facing model ID sent to the local backend when different from MODEL_NAME."
+      },
+      {
+        "name": "MODEL_REQUEST_TIMEOUT_MS",
+        "category": "model",
+        "defaultValue": "undefined",
+        "description": "Optional request deadline for OpenAI-compatible local model backend calls."
+      }
+    ]
+  },
+  "uncertaintyRegister": [
+    {
+      "path": "/agent.v1.AgentService/RunPoll",
+      "packageName": "agent.v1",
+      "service": "AgentService",
+      "method": "RunPoll",
+      "inputType": "AiserverV1_BidiPollRequest",
+      "outputType": "AiserverV1_BidiPollResponse",
+      "serverStreaming": true,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible alternate Agent transport; leave pass-through until real traffic proves request-id and poll framing."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithToolsSSE",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithToolsSSE",
+      "inputType": "BidiRequestId",
+      "outputType": "StreamUnifiedChatResponseWithTools",
+      "serverStreaming": true,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible Chat SSE variant; leave pass-through until content type, request-id flow, and response shape are captured."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithToolsPoll",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithToolsPoll",
+      "inputType": "BidiPollRequest",
+      "outputType": "BidiPollResponse",
+      "serverStreaming": true,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible Chat poll variant; leave pass-through until BidiPollRequest/BidiPollResponse framing is captured."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithToolsIdempotent",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithToolsIdempotent",
+      "inputType": "StreamUnifiedChatRequestWithToolsIdempotent",
+      "outputType": "StreamUnifiedChatResponseWithToolsIdempotent",
+      "serverStreaming": false,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible idempotent Chat route; leave pass-through until observed traffic proves it is needed."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithToolsIdempotentSSE",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithToolsIdempotentSSE",
+      "inputType": "BidiRequestId",
+      "outputType": "StreamUnifiedChatResponseWithToolsIdempotent",
+      "serverStreaming": true,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible idempotent Chat SSE route; leave pass-through until observed and decoded."
+    },
+    {
+      "path": "/aiserver.v1.ChatService/StreamUnifiedChatWithToolsIdempotentPoll",
+      "packageName": "aiserver.v1",
+      "service": "ChatService",
+      "method": "StreamUnifiedChatWithToolsIdempotentPoll",
+      "inputType": "BidiPollRequest",
+      "outputType": "BidiPollResponse",
+      "serverStreaming": true,
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Proto-visible idempotent Chat poll route; leave pass-through until observed and decoded."
+    },
+    {
+      "path": "desktop-route-set",
+      "policy": "pass-through",
+      "supportLevel": "observe-first",
+      "uncertainty": "Cursor desktop route set remains uncertain; use redacted route inventory before adding desktop-only interceptors."
+    }
+  ]
+}

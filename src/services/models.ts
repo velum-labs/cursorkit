@@ -67,7 +67,7 @@ export function mergeAvailableModels(
         isUserAdded: true,
         parameterDefinitions: localParameterDefinitions(),
         legacySlugs: [model.id],
-        idAliases: [model.id],
+        idAliases: uniqueStrings([model.id, model.displayName]),
         namedModelSectionIndex: 1,
         visibleInRoutedModelView: true,
         vendorName: "local",
@@ -217,7 +217,7 @@ function localCliModelDetails(model: RegisteredModel) {
     displayModelId: model.id,
     displayName: model.displayName,
     displayNameShort: model.displayName,
-    aliases: [model.id],
+    aliases: uniqueStrings([model.id, model.displayName]),
     maxMode: false,
     apiKeyCredentials: create(AgentV1_ApiKeyCredentialsSchema, {
       apiKey: model.apiKey,
@@ -335,4 +335,8 @@ function localParameterValues(isMaxMode: boolean) {
       value: "false",
     }),
   ];
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.length > 0)));
 }

@@ -17,7 +17,7 @@ import {
 } from "../gen/agent/v1/agent_pb.js";
 import type { Logger } from "../logger.js";
 import type { ModelRegistry, RegisteredModel } from "../models/registry.js";
-import type { ChatMessage } from "../providers/openai.js";
+import type { ChatMessage, OpenAIStreamOptions } from "../providers/openai.js";
 
 export interface LocalAgentRunDecision {
   model: RegisteredModel;
@@ -193,6 +193,7 @@ export async function writeLocalAgentRunResponse(
   response: ServerResponse,
   decision: LocalAgentRunDecision,
   logger: Logger,
+  options: OpenAIStreamOptions = {},
 ): Promise<void> {
   response.statusCode = 200;
   if (!response.headersSent) {
@@ -203,6 +204,7 @@ export async function writeLocalAgentRunResponse(
   try {
     for await (const text of decision.model.provider.streamCompletion(
       decision.messages,
+      options,
     )) {
       outputCharacters += text.length;
       response.write(
@@ -241,12 +243,16 @@ export async function writeLocalAgentRunResponse(
       model: decision.model.id,
       error: error instanceof Error ? error.message : String(error),
     });
-    if (!response.headersSent) {
-      response.statusCode = 502;
-      response.setHeader("content-type", "application/json");
-    }
-    response.end(JSON.stringify({ error: "local agent run failed" }));
+    endLocalAgentRunFailure(response);
   }
+}
+
+function endLocalAgentRunFailure(response: ServerResponse): void {
+  if (!response.headersSent) {
+    response.statusCode = 200;
+    response.setHeader("content-type", "application/connect+proto");
+  }
+  response.end(encodeEndStream({ error: "local agent run failed" }));
 }
 
 export function buildAgentRunDiagnostics(

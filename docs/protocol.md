@@ -5,23 +5,32 @@ This document records the transport assumptions that the bridge is allowed to re
 See `docs/learnings.md` for the broader set of implementation observations,
 debugging lessons, and known unknowns behind these protocol rules.
 See `docs/protocol-surface-audit.md` for the gap analysis between the full proto
-surface and the routes currently implemented by the bridge.
+surface and the routes currently implemented by the bridge. The generated
+baseline files `docs/route-contract-manifest.json`,
+`docs/implementation-inventory.json`, `docs/test-manifest.json`, and
+`docs/release-summary.json` are checked by `pnpm baseline:check`.
 
 ## Current Verified Surface
 
 - The default proto files are package-preserving outputs under `proto/`.
 - `docs/service-manifest.json` and `docs/type-manifest-summary.json` are generated from the full default proto files.
 - Runtime interception is allowlisted in `src/routes.ts`.
+- The route/proto contract manifest is generated from `docs/service-manifest.json`, `src/routes.ts`, and `src/config.ts`.
 - Cursor Agent CLI model-listing RPCs use raw `application/proto` framing, not Connect envelopes. Model interceptors must preserve the incoming protobuf framing.
-- The initial interceptable routes are:
+- The current interceptable routes are:
   - `/aiserver.v1.AiService/AvailableModels`
   - `/aiserver.v1.AiService/GetUsableModels`
   - `/aiserver.v1.AiService/GetDefaultModelForCli`
+  - `/aiserver.v1.AiService/GetDefaultModel`
   - `/aiserver.v1.AiService/NameAgent`
   - `/aiserver.v1.ServerConfigService/GetServerConfig`
+  - `/auth/full_stripe_profile`
+  - `/auth/stripe_profile`
+  - `/agent.v1.AgentService/Run`
   - `/agent.v1.AgentService/RunSSE`
   - `/aiserver.v1.BidiService/BidiAppend`
   - `/aiserver.v1.ChatService/StreamUnifiedChatWithTools`
+  - `/aiserver.v1.AnalyticsService/UploadIssueTrace`
 - Cursor desktop app support is observe-first. Desktop mode enables redacted route inventory logging, but it does not add desktop-only interceptors until traffic proves the exact RPC and framing.
 
 ## Transport Behavior To Capture

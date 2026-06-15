@@ -28,6 +28,21 @@ const HOP_BY_HOP_HEADERS = new Set([
 const gunzipAsync = promisify(gunzip);
 const inflateAsync = promisify(inflate);
 const brotliDecompressAsync = promisify(brotliDecompress);
+const DEFAULT_UPSTREAM_REQUEST_TIMEOUT_MS = 120_000;
+
+export class RequestBodyTooLargeError extends Error {
+  constructor(readonly maxBytes: number) {
+    super(`Request body exceeds limit of ${maxBytes} bytes`);
+    this.name = "RequestBodyTooLargeError";
+  }
+}
+
+export class UpstreamRequestTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`Upstream request timed out after ${timeoutMs}ms`);
+    this.name = "UpstreamRequestTimeoutError";
+  }
+}
 
 export type UpstreamRequestOptions = RequestOptions & {
   servername?: string;
@@ -43,7 +58,7 @@ export async function readRequestBody(
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.length;
     if (total > maxBytes) {
-      throw new Error(`Request body exceeds limit of ${maxBytes} bytes`);
+      throw new RequestBodyTooLargeError(maxBytes);
     }
     chunks.push(buffer);
   }
@@ -59,6 +74,9 @@ export function proxyRequest(
   const upstreamUrl = upstreamRequestUrl(request, config);
   const options = upstreamRequestOptions(request, config, upstreamUrl);
   const client = upstreamUrl.protocol === "https:" ? https : http;
+  const timeoutMs =
+    config.upstreamRequestTimeoutMs ?? DEFAULT_UPSTREAM_REQUEST_TIMEOUT_MS;
+  let settled = false;
   const upstreamRequest = client.request(
     {
       ...options,
@@ -80,15 +98,35 @@ export function proxyRequest(
   );
 
   upstreamRequest.on("error", (error) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    const timedOut = error instanceof UpstreamRequestTimeoutError;
     logger.error("upstream proxy request failed", {
       url: upstreamUrl.toString(),
       error: error.message,
+      code: timedOut ? "upstream_timeout" : "upstream_request_failed",
       requestHeaders: redactHeaders(request.headers),
     });
-    if (!response.headersSent) {
-      response.writeHead(502, { "content-type": "application/json" });
+    if (!response.headersSent && !response.destroyed) {
+      response.writeHead(timedOut ? 504 : 502, {
+        "content-type": "application/json",
+      });
     }
-    response.end(JSON.stringify({ error: "upstream request failed" }));
+    if (!response.destroyed) {
+      response.end(
+        JSON.stringify({
+          error: timedOut
+            ? "upstream request timed out"
+            : "upstream request failed",
+        }),
+      );
+    }
+  });
+
+  upstreamRequest.setTimeout(timeoutMs, () => {
+    upstreamRequest.destroy(new UpstreamRequestTimeoutError(timeoutMs));
   });
 
   request.on("aborted", () => {
@@ -97,6 +135,11 @@ export function proxyRequest(
 
   request.on("error", (error) => {
     upstreamRequest.destroy(error);
+  });
+  response.on("close", () => {
+    if (!response.writableEnded) {
+      upstreamRequest.destroy(new Error("downstream response closed"));
+    }
   });
   request.pipe(upstreamRequest);
 }
@@ -200,7 +243,33 @@ async function requestUpstreamBuffer(
   const client = upstreamUrl.protocol === "https:" ? https : http;
 
   return new Promise((resolve, reject) => {
-    const upstreamRequest = client.request(
+    const timeoutMs =
+      config.upstreamRequestTimeoutMs ?? DEFAULT_UPSTREAM_REQUEST_TIMEOUT_MS;
+    let settled = false;
+    const canObserveRequest =
+      typeof request.on === "function" && typeof request.off === "function";
+    const cleanup = () => {
+      if (canObserveRequest) {
+        request.off("aborted", onRequestAborted);
+        request.off("error", onRequestError);
+      }
+    };
+    const finish = (callback: () => void): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      callback();
+    };
+    let upstreamRequest: http.ClientRequest;
+    const onRequestAborted = () => {
+      upstreamRequest.destroy(new Error("client aborted request"));
+    };
+    const onRequestError = (error: Error) => {
+      upstreamRequest.destroy(error);
+    };
+    upstreamRequest = client.request(
       {
         ...options,
         method: request.method,
@@ -209,15 +278,26 @@ async function requestUpstreamBuffer(
         const chunks: Buffer[] = [];
         upstreamResponse.on("data", (chunk: Buffer) => chunks.push(chunk));
         upstreamResponse.on("end", () => {
-          resolve({
-            statusCode: upstreamResponse.statusCode ?? 502,
-            headers: responseHeaders(upstreamResponse.headers),
-            body: Buffer.concat(chunks),
+          finish(() => {
+            resolve({
+              statusCode: upstreamResponse.statusCode ?? 502,
+              headers: responseHeaders(upstreamResponse.headers),
+              body: Buffer.concat(chunks),
+            });
           });
         });
       },
     );
-    upstreamRequest.on("error", reject);
+    upstreamRequest.on("error", (error) => {
+      finish(() => reject(error));
+    });
+    upstreamRequest.setTimeout(timeoutMs, () => {
+      upstreamRequest.destroy(new UpstreamRequestTimeoutError(timeoutMs));
+    });
+    if (canObserveRequest) {
+      request.on("aborted", onRequestAborted);
+      request.on("error", onRequestError);
+    }
     upstreamRequest.end(body);
   });
 }

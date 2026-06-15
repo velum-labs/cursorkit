@@ -1,32 +1,38 @@
 # Protocol Surface Audit
 
 The repo has the full generated Cursor proto, but runtime coverage is still a
-small allowlist. This file separates schema visibility from implemented mod
-surface.
+small allowlist. This file separates schema visibility from implemented bridge
+surface. The machine-readable baseline is generated in
+`docs/route-contract-manifest.json` and `docs/implementation-inventory.json`.
 
 ## Implemented Interceptors
 
 - Model discovery:
   `/aiserver.v1.AiService/AvailableModels`,
   `/aiserver.v1.AiService/GetUsableModels`,
-  `/aiserver.v1.AiService/GetDefaultModelForCli`
+  `/aiserver.v1.AiService/GetDefaultModelForCli`,
+  `/aiserver.v1.AiService/GetDefaultModel`
 - Session naming/config:
   `/aiserver.v1.AiService/NameAgent`,
   `/aiserver.v1.ServerConfigService/GetServerConfig`
 - Agent run path:
+  `/agent.v1.AgentService/Run`,
   `/agent.v1.AgentService/RunSSE`,
   `/aiserver.v1.BidiService/BidiAppend`
 - Chat path:
   `/aiserver.v1.ChatService/StreamUnifiedChatWithTools`
+- Desktop/auth diagnostics:
+  `/auth/full_stripe_profile`, `/auth/stripe_profile`,
+  `/aiserver.v1.AnalyticsService/UploadIssueTrace`
 
 Everything else is byte-preserving pass-through unless a plugin explicitly owns a
 route.
 
 ## High-Value Gaps
 
-- `agent.v1.AgentService/Run` and `RunPoll`: alternative agent transports. The
-  current bridge only handles the `RunSSE` plus `BidiAppend` flow observed in
-  CLI/ACP traffic.
+- `agent.v1.AgentService/RunPoll`: alternate agent transport. The current bridge
+  has conditional local handling for `Run` and `RunSSE`, but poll semantics stay
+  pass-through until observed and decoded.
 - `agent.v1.ControlService/*`: filesystem, shell, diff, artifact, skill reload,
   and plugin reload APIs. This is the major missing surface for local models to
   truly use Cursor tools.

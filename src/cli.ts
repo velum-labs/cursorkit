@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import fs from "node:fs";
+import type { Server } from "node:http";
 import path from "node:path";
 
 import { loadConfig } from "./config.js";
@@ -68,7 +69,7 @@ async function main(argv: string[]): Promise<void> {
   switch (command) {
     case "serve": {
       const runtime = await createBridgeRuntime(config, logger);
-      await startServer(runtime);
+      installGracefulShutdown(await startServer(runtime), logger);
       break;
     }
     case "doctor": {
@@ -89,7 +90,7 @@ async function main(argv: string[]): Promise<void> {
     }
     case "desktop-proxy": {
       const runtime = await createBridgeRuntime(config, logger);
-      await startServer(runtime);
+      installGracefulShutdown(await startServer(runtime), logger);
       break;
     }
     case "desktop-doctor": {
@@ -151,6 +152,14 @@ async function doctor(config: ReturnType<typeof loadConfig>): Promise<void> {
     config.captureEnabled ? `enabled -> ${config.captureDir}` : "disabled",
   ]);
   checks.push(["fail-open", String(config.failOpen)]);
+  checks.push([
+    "auth",
+    config.authToken === undefined ? "disabled" : "enabled",
+  ]);
+  checks.push([
+    "non-localhost unsafe mode",
+    String(config.unsafeAllowNonLocalhost),
+  ]);
 
   if (config.useTls) {
     const tls = await loadTlsMaterial(config);
@@ -176,6 +185,45 @@ async function doctor(config: ReturnType<typeof loadConfig>): Promise<void> {
       "warning: capture mode treats traffic as sensitive; sanitize before committing fixtures",
     );
   }
+  if (config.modelPayloadLogging === "full") {
+    console.warn(
+      "warning: BRIDGE_LOG_MODEL_PAYLOADS=full may log prompt and tool payloads; use only for local debugging",
+    );
+  }
+  if (config.unsafeAllowNonLocalhost) {
+    console.warn(
+      "warning: non-localhost unsafe mode exposes the bridge without built-in auth",
+    );
+  }
+}
+
+function installGracefulShutdown(
+  server: Server,
+  logger: ReturnType<typeof createLogger>,
+): void {
+  let shuttingDown = false;
+  const shutdown = (signal: NodeJS.Signals): void => {
+    if (shuttingDown) {
+      logger.warn("forcing bridge shutdown", { signal });
+      process.exit(1);
+    }
+    shuttingDown = true;
+    logger.info("shutting down bridge", { signal });
+    const forceTimer = setTimeout(() => {
+      logger.error("bridge shutdown timed out", { signal });
+      process.exit(1);
+    }, 5_000);
+    server.close((error) => {
+      clearTimeout(forceTimer);
+      if (error !== undefined) {
+        logger.error("bridge shutdown failed", { error: error.message });
+        process.exitCode = 1;
+      }
+      process.exit();
+    });
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 }
 
 async function desktopCert(): Promise<void> {

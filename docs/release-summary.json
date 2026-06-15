@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "src/tools/baselineInventory.ts",
+  "phase": "baseline-drift",
+  "status": "ci-release-scaffolded",
+  "deterministicGate": "pnpm release:check",
+  "categories": [
+    {
+      "id": "baseline-drift",
+      "deterministicSuites": ["baseline-drift"],
+      "optionalLiveSuites": [],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "static",
+      "deterministicSuites": ["build", "format-check"],
+      "optionalLiveSuites": [],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "protocol",
+      "deterministicSuites": ["baseline-drift", "unit-tests"],
+      "optionalLiveSuites": ["real-client-live"],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "mlx",
+      "deterministicSuites": ["unit-tests"],
+      "optionalLiveSuites": ["mlx-live", "real-client-live"],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "tool",
+      "deterministicSuites": ["unit-tests"],
+      "optionalLiveSuites": ["real-client-live"],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "desktop-optional-live",
+      "deterministicSuites": [],
+      "optionalLiveSuites": ["desktop-live"],
+      "releaseCheckStatus": "skipped_with_reason_until_prerequisites_available"
+    },
+    {
+      "id": "reliability-security",
+      "deterministicSuites": ["unit-tests"],
+      "optionalLiveSuites": [],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "packaging",
+      "deterministicSuites": ["examples-typecheck", "pack-smoke"],
+      "optionalLiveSuites": [],
+      "releaseCheckStatus": "required"
+    },
+    {
+      "id": "final-gate",
+      "deterministicSuites": [
+        "baseline-drift",
+        "build",
+        "unit-tests",
+        "format-check",
+        "examples-typecheck",
+        "pack-smoke"
+      ],
+      "optionalLiveSuites": [],
+      "releaseCheckStatus": "required"
+    }
+  ],
+  "metrics": {
+    "routeContractCoverage": "13/13",
+    "interceptRouteCount": 13,
+    "protoBackedRouteCount": 11,
+    "configEnvVarCount": 38,
+    "uncertaintyCount": 7,
+    "implementedDeterministicSuites": 6,
+    "placeholderSuites": 0,
+    "optionalLiveSuites": 3
+  },
+  "remainingBlockers": [
+    "Captured fixture replay for conditional intercept routes.",
+    "Live cursor-agent, ACP, and desktop acceptance gates.",
+    "Final reliability/security hardening validation.",
+    "Final full-gate run with optional live MLX and desktop prerequisites available."
+  ]
+}
