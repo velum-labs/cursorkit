@@ -25,6 +25,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm codegen
       - run: git diff --exit-code -- src/gen
+      - run: pnpm model-fusion:openapi:check
+      - run: pnpm model-fusion:protocol:check
+      - run: pnpm release:publish:check
       - run: pnpm build
       - run: pnpm test
       - run: pnpm format:check

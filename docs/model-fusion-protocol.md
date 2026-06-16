@@ -24,6 +24,14 @@ Cursor adapter seam until those packages are published.
   `harness-run-result.v1`.
 - OpenAPI 3.1 describes the v1 HTTP/JSON service surfaces and should reference
   or embed those JSON Schema record contracts.
+- Service/API clients and request/response models should be generated from
+  OpenAPI specs. The TypeScript package should use generated OpenAPI
+  client/types, for example `openapi-typescript` paired with `openapi-fetch`.
+  Python should use generated OpenAPI client/models, for example
+  `openapi-python-client`.
+- Durable record validators and record types should be generated from the JSON
+  Schema bundle. Python packages should expose JSON Schema/Pydantic validators,
+  for example via `datamodel-code-generator` where appropriate.
 - Protobuf/Buf is reserved for later internal streaming, Connect, or gRPC paths
   if a service boundary hardens. It is not required for v1 package or HTTP/JSON
   consumption in cursorkit.
@@ -44,6 +52,13 @@ Fusionkit should own the canonical OpenAPI 3.1 source and generated SDK package.
 The local mirror exists so cursorkit can review the HTTP/JSON seam without
 blocking on a published package.
 
+The local OpenAPI mirror generates TypeScript request/response types at
+`src/gen/model_fusion/cursor_harness_openapi.ts` using `openapi-typescript`.
+This is a temporary consumer-side compatibility artifact, not a replacement for
+the fusionkit-owned generated protocol package. Cursorkit's local JSON record
+validators remain temporary fixture validators with schema-bundle provenance
+until fusionkit publishes generated JSON Schema validators/types.
+
 ## Drift checks
 
 Run:
@@ -59,6 +74,8 @@ The check verifies:
 - committed model-fusion JSON fixtures use the same schema bundle hash;
 - the Cursor harness OpenAPI 3.1 compatibility mirror exists and exposes
   `POST /model-fusion/v1/cursor-harness:run`;
+- `corepack pnpm model-fusion:openapi:check` regenerates the OpenAPI TypeScript
+  artifact and fails if it drifts;
 - the Python packaging plan remains documented until fusionkit publishes a
   private PyPI-compatible wheel.
 - the docs state the corrected v1 decision: JSON Schema for durable records,
@@ -80,7 +97,11 @@ PR:
 - publish `velum-model-fusion-protocol` wheels through a private
   PyPI-compatible index, or use GitHub Releases wheels plus `uv` git dependencies
   as a short-term bridge;
-- generate TypeScript and Python SDKs from fusionkit JSON Schema/OpenAPI
-  contracts;
+- generate TypeScript OpenAPI client/types with `openapi-typescript` plus
+  `openapi-fetch` from fusionkit OpenAPI contracts;
+- generate TypeScript durable-record validators/types from the fusionkit JSON
+  Schema bundle;
+- generate Python OpenAPI client/models and JSON Schema/Pydantic validators from
+  fusionkit contracts;
 - publish JSON Schema bundle metadata with generated packages so consumers can
   verify schema bundle hashes instead of copying validators by hand.

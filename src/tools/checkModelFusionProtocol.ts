@@ -14,6 +14,31 @@ type ProtocolOriginManifest = {
     openapi?: string;
     localCursorkitStatus?: string;
   };
+  codegen?: {
+    typescript?: {
+      openapi?: {
+        generator?: string;
+        generatedTypes?: string;
+        clientRuntime?: string;
+        driftCheck?: string;
+      };
+      jsonSchema?: {
+        source?: string;
+        targetPackage?: string;
+        localStatus?: string;
+      };
+    };
+    python?: {
+      openapi?: {
+        preferredGenerators?: string[];
+        targetPackage?: string;
+      };
+      jsonSchema?: {
+        preferredGenerators?: string[];
+        targetPackage?: string;
+      };
+    };
+  };
   protobufBuf?: {
     v1Required?: boolean;
     status?: string;
@@ -36,6 +61,7 @@ type ProtocolOriginManifest = {
   serviceBoundaries?: Array<{
     service?: string;
     openapi?: string;
+    generatedTypescript?: string;
     canonicalSource?: string;
   }>;
   followUpWorkOutsideCursorkit?: string[];
@@ -46,6 +72,8 @@ const ORIGIN_MANIFEST_PATH = "docs/model-fusion-protocol-origin.json";
 const PROTOCOL_DOC_PATH = "docs/model-fusion-protocol.md";
 const CURSOR_HARNESS_OPENAPI_PATH =
   "docs/model-fusion-cursor-harness.openapi.yaml";
+const CURSOR_HARNESS_OPENAPI_TS_PATH =
+  "src/gen/model_fusion/cursor_harness_openapi.ts";
 const CONTRACT_FIXTURE_ROOT = "fixtures/model-fusion-contract";
 const CURSOR_HARNESS_PROTO_PATH = "proto/model_fusion/v1/cursor_harness.proto";
 const CURSOR_HARNESS_TS_PATH = "src/gen/model_fusion/v1/cursor_harness_pb.ts";
@@ -58,6 +86,7 @@ export function checkModelFusionProtocol(): string[] {
   }
   checkFixtureBundleHashes(errors);
   checkCursorHarnessOpenApi(errors);
+  checkGeneratedOpenApiTypes(errors);
   checkNoV1ProtoMirror(errors);
   checkProtocolDocs(errors);
   return errors;
@@ -124,6 +153,7 @@ function checkManifest(
       `${ORIGIN_MANIFEST_PATH}: persistedRecordFormat.sourceOfTruth must be json-schema`,
     );
   }
+  checkCodegenConfig(manifest, errors);
   for (const schema of [
     "harness-run-request.v1",
     "harness-run-result.v1",
@@ -183,6 +213,11 @@ function checkManifest(
       `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi OpenAPI path must be ${CURSOR_HARNESS_OPENAPI_PATH}`,
     );
   }
+  if (cursorBoundary?.generatedTypescript !== CURSOR_HARNESS_OPENAPI_TS_PATH) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi generatedTypescript path must be ${CURSOR_HARNESS_OPENAPI_TS_PATH}`,
+    );
+  }
   if (cursorBoundary?.canonicalSource !== "fusionkit") {
     errors.push(
       `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi canonicalSource must be fusionkit`,
@@ -193,7 +228,10 @@ function checkManifest(
     "OpenAPI 3.1 source",
     "@velum/model-fusion-protocol",
     "velum-model-fusion-protocol wheels",
-    "SDKs from fusionkit JSON Schema/OpenAPI",
+    "TS OpenAPI client/types",
+    "TS durable-record validators/types",
+    "Python OpenAPI client/models",
+    "JSON Schema/Pydantic validators",
     "JSON Schema bundle metadata",
   ]) {
     if (!followUps.some((item) => item.includes(expected))) {
@@ -201,6 +239,63 @@ function checkManifest(
         `${ORIGIN_MANIFEST_PATH}: followUpWorkOutsideCursorkit must mention ${expected}`,
       );
     }
+  }
+}
+
+function checkCodegenConfig(
+  manifest: ProtocolOriginManifest,
+  errors: string[],
+): void {
+  const tsOpenApi = manifest.codegen?.typescript?.openapi;
+  if (tsOpenApi?.generator !== "openapi-typescript") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript OpenAPI generator must be openapi-typescript`,
+    );
+  }
+  if (tsOpenApi?.generatedTypes !== CURSOR_HARNESS_OPENAPI_TS_PATH) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript OpenAPI generatedTypes must be ${CURSOR_HARNESS_OPENAPI_TS_PATH}`,
+    );
+  }
+  if (tsOpenApi?.clientRuntime !== "openapi-fetch") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript OpenAPI clientRuntime must be openapi-fetch`,
+    );
+  }
+  if (tsOpenApi?.driftCheck !== "corepack pnpm model-fusion:openapi:check") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript OpenAPI driftCheck must be corepack pnpm model-fusion:openapi:check`,
+    );
+  }
+  const tsJsonSchema = manifest.codegen?.typescript?.jsonSchema;
+  if (tsJsonSchema?.source !== "fusionkit JSON Schema bundle") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript JSON Schema source must be fusionkit JSON Schema bundle`,
+    );
+  }
+  if (tsJsonSchema?.targetPackage !== "@velum/model-fusion-protocol") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript JSON Schema targetPackage must be @velum/model-fusion-protocol`,
+    );
+  }
+  if (!tsJsonSchema?.localStatus?.includes("temporary fixture validators")) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript JSON Schema localStatus must mark local validators temporary`,
+    );
+  }
+  const pyOpenApi = manifest.codegen?.python?.openapi;
+  if (!pyOpenApi?.preferredGenerators?.includes("openapi-python-client")) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: Python OpenAPI generators must include openapi-python-client`,
+    );
+  }
+  const pyJsonSchema = manifest.codegen?.python?.jsonSchema;
+  if (
+    !pyJsonSchema?.preferredGenerators?.includes("datamodel-code-generator")
+  ) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: Python JSON Schema generators must include datamodel-code-generator`,
+    );
   }
 }
 
@@ -241,6 +336,26 @@ function checkCursorHarnessOpenApi(errors: string[]): void {
   }
 }
 
+function checkGeneratedOpenApiTypes(errors: string[]): void {
+  const generated = readRequiredText(CURSOR_HARNESS_OPENAPI_TS_PATH, errors);
+  if (generated === undefined) {
+    return;
+  }
+  for (const expected of [
+    "This file was auto-generated by openapi-typescript",
+    '"/model-fusion/v1/cursor-harness:run"',
+    "runCursorHarness",
+    "CursorHarnessRunRequest",
+    "CursorHarnessRunResult",
+    "CursorRunRequestV1",
+    "HarnessRunResultV1",
+  ]) {
+    if (!generated.includes(expected)) {
+      errors.push(`${CURSOR_HARNESS_OPENAPI_TS_PATH}: missing ${expected}`);
+    }
+  }
+}
+
 function checkNoV1ProtoMirror(errors: string[]): void {
   for (const relativePath of [
     CURSOR_HARNESS_PROTO_PATH,
@@ -264,8 +379,14 @@ function checkProtocolDocs(errors: string[]): void {
     "fusionkit",
     "@velum/model-fusion-protocol",
     "OpenAPI 3.1 is the source of truth",
+    "Service/API clients and request/response models should be generated from OpenAPI specs",
+    "Durable record validators and record types should be generated from the JSON Schema bundle",
     "JSON Schema remains the persisted audit and benchmark record format",
     "Protobuf/Buf is reserved for later internal streaming",
+    "openapi-typescript",
+    "openapi-fetch",
+    "openapi-python-client",
+    "datamodel-code-generator",
     "Cloudsmith",
     "CodeArtifact",
     "Gemfury",

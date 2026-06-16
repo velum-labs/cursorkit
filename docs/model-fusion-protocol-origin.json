@@ -11,6 +11,31 @@
     "openapi": "v1-http-json-source-of-truth",
     "localCursorkitStatus": "temporary-compatibility-mirror"
   },
+  "codegen": {
+    "typescript": {
+      "openapi": {
+        "generator": "openapi-typescript",
+        "generatedTypes": "src/gen/model_fusion/cursor_harness_openapi.ts",
+        "clientRuntime": "openapi-fetch",
+        "driftCheck": "corepack pnpm model-fusion:openapi:check"
+      },
+      "jsonSchema": {
+        "source": "fusionkit JSON Schema bundle",
+        "targetPackage": "@velum/model-fusion-protocol",
+        "localStatus": "temporary fixture validators with schema bundle provenance until generated validators are published"
+      }
+    },
+    "python": {
+      "openapi": {
+        "preferredGenerators": ["openapi-python-client"],
+        "targetPackage": "velum-model-fusion-protocol"
+      },
+      "jsonSchema": {
+        "preferredGenerators": ["datamodel-code-generator"],
+        "targetPackage": "velum-model-fusion-protocol"
+      }
+    }
+  },
   "persistedRecordFormat": {
     "sourceOfTruth": "json-schema",
     "notes": "JSON Schema remains the persisted audit and benchmark record format."
@@ -56,6 +81,7 @@
       "consumer": "fusionkit",
       "status": "local-openapi-compatibility-mirror",
       "openapi": "docs/model-fusion-cursor-harness.openapi.yaml",
+      "generatedTypescript": "src/gen/model_fusion/cursor_harness_openapi.ts",
       "canonicalSource": "fusionkit",
       "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
     },
@@ -82,7 +108,9 @@
     "Move the canonical Cursor harness OpenAPI 3.1 source to fusionkit-owned protocol source.",
     "Publish @velum/model-fusion-protocol for TypeScript consumers.",
     "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
-    "Generate SDKs from fusionkit JSON Schema/OpenAPI contracts.",
+    "Generate TS OpenAPI client/types with openapi-typescript plus openapi-fetch from fusionkit OpenAPI contracts.",
+    "Generate TS durable-record validators/types from the fusionkit JSON Schema bundle.",
+    "Generate Python OpenAPI client/models and JSON Schema/Pydantic validators from fusionkit contracts.",
     "Publish JSON Schema bundle metadata with generated packages so consumers can verify schema bundle hashes."
   ]
 }
