@@ -17,6 +17,10 @@
     "./providers/openai": {
       "types": "./dist/src/providers/openai.d.ts",
       "import": "./dist/src/providers/openai.js"
+    },
+    "./model-fusion": {
+      "types": "./dist/src/modelFusion/index.d.ts",
+      "import": "./dist/src/modelFusion/index.js"
     }
   },
   "scripts": {

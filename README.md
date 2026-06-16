@@ -57,6 +57,11 @@ The committed `fixtures/model-fusion-contract/` records are synthetic
 compatibility fixtures for the model-fusion roadmap. They validate Cursor-specific
 `cursor-run-*` records and generic `harness-run-*` records locally without adding
 `handoffkit` as a runtime dependency or changing live Cursor routing behavior.
+The importable `cursor-rpc/model-fusion` subpath exposes the same fixture-backed
+surface as a small structural API: `cursorHarness(...)` and
+`runCursorCandidate(...)` produce Cursor-specific records plus mapped generic
+harness results. It does not own fan-out, judge synthesis, lifecycle, receipts,
+or live Cursor tool-call replay.
 
 `ck` is the recommended desktop test launcher. It starts the desktop bridge plus
 a local HTTP CONNECT proxy, opens an isolated Cursor profile with
