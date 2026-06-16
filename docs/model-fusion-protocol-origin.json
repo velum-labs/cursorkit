@@ -9,15 +9,15 @@
   "serviceIdl": {
     "sourceOfTruth": "openapi-3.1",
     "openapi": "v1-http-json-source-of-truth",
-    "localCursorkitStatus": "temporary-compatibility-mirror"
+    "localCursorkitStatus": "blocked-waiting-for-generated-protocol-package"
   },
   "codegen": {
     "typescript": {
       "openapi": {
         "generator": "openapi-typescript",
-        "generatedTypes": "src/gen/model_fusion/cursor_harness_openapi.ts",
+        "generatedTypes": "@velum/model-fusion-protocol",
         "clientRuntime": "openapi-fetch",
-        "driftCheck": "corepack pnpm model-fusion:openapi:check"
+        "driftCheck": "corepack pnpm model-fusion:protocol:check"
       },
       "jsonSchema": {
         "source": "fusionkit JSON Schema bundle",
@@ -57,7 +57,8 @@
       "name": "@velum/model-fusion-protocol",
       "registry": "npm-or-github-packages",
       "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
-      "consumerPlan": "Replace local cursorkit model-fusion contract mirrors with generated imports from this package once fusionkit publishes it."
+      "consumerPlan": "Cursorkit must consume generated OpenAPI clients/types and JSON Schema validators from this package once fusionkit publishes it.",
+      "currentStatus": "blocked-missing-registry-package"
     },
     "python": {
       "name": "velum-model-fusion-protocol",
@@ -79,9 +80,7 @@
       "service": "CursorHarnessHttpApi",
       "owner": "cursorkit",
       "consumer": "fusionkit",
-      "status": "local-openapi-compatibility-mirror",
-      "openapi": "docs/model-fusion-cursor-harness.openapi.yaml",
-      "generatedTypescript": "src/gen/model_fusion/cursor_harness_openapi.ts",
+      "status": "blocked-waiting-for-generated-protocol-package",
       "canonicalSource": "fusionkit",
       "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
     },
@@ -103,6 +102,16 @@
   "driftChecks": {
     "cursorkit": "corepack pnpm model-fusion:protocol:check",
     "fusionkitTarget": "Generate TS and Python bindings from fusionkit JSON Schema/OpenAPI contracts and verify schema bundle hashes before publish."
+  },
+  "mergeBlocker": {
+    "status": "blocked",
+    "reason": "@velum/model-fusion-protocol is not published in the configured registry yet, so cursorkit cannot consume generated OpenAPI client/types or JSON Schema validators.",
+    "requiredBeforeReady": [
+      "Publish @velum/model-fusion-protocol from fusionkit.",
+      "Add @velum/model-fusion-protocol as a dependency or devDependency in cursorkit.",
+      "Replace local model-fusion contract mirrors with generated package imports where applicable.",
+      "Verify the package schema bundle hash matches this manifest."
+    ]
   },
   "followUpWorkOutsideCursorkit": [
     "Move the canonical Cursor harness OpenAPI 3.1 source to fusionkit-owned protocol source.",

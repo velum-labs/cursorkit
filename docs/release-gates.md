@@ -16,7 +16,6 @@ Before publishing or sharing a tarball, all gates must pass:
 
 - `pnpm install --frozen-lockfile`
 - `pnpm release:publish:check`
-- `pnpm model-fusion:openapi:check`
 - `pnpm release:check`
 - `pnpm baseline:check`
 - `pnpm build`
@@ -50,13 +49,14 @@ Safety guards:
     `@velum/model-fusion-protocol`;
   - the pinned model-fusion protocol schema bundle hash to match the local
     JSON Schema/OpenAPI protocol manifest.
-- `pnpm model-fusion:openapi:check` regenerates the Cursor harness OpenAPI
-  TypeScript request/response types with `openapi-typescript` and fails if the
-  generated artifact differs from the checked-in file.
-- Durable record validators/types must come from the fusionkit JSON Schema
-  bundle in the generated protocol package. Cursorkit's local record validators
-  are temporary fixture validators with schema-bundle provenance until that
-  package is published.
+- Model-fusion service clients/types must come from the generated
+  `@velum/model-fusion-protocol` OpenAPI package once fusionkit publishes it.
+- Durable record validators/types must come from the fusionkit JSON Schema bundle
+  in the generated protocol package. Cursorkit's local record validators are
+  temporary fixture validators with schema-bundle provenance until that package
+  is published.
+- If `@velum/model-fusion-protocol` is not published, this remains a documented
+  blocker and the PR must stay draft.
 - Protobuf/Buf remains outside the v1 release path; the release check expects
   JSON Schema durable records and OpenAPI 3.1 HTTP/API contracts.
 

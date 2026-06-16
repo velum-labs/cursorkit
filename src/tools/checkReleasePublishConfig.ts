@@ -23,8 +23,6 @@ type PackageJson = {
     contracts?: string;
     origin?: string;
   };
-  scripts?: Record<string, string>;
-  devDependencies?: Record<string, string>;
 };
 
 type ProtocolOriginManifest = {
@@ -67,7 +65,6 @@ export function checkReleasePublishConfig(repoRoot = process.cwd()): string[] {
   }
 
   checkPackageMetadata(packageJson, errors);
-  checkCodegenMetadata(packageJson, errors);
   checkProtocolPin(packageJson, protocolOrigin, errors);
   return errors;
 }
@@ -98,33 +95,6 @@ function checkPackageMetadata(
         `${PACKAGE_JSON_PATH}: publishable GitHub Packages npm packages must use the @velum scope`,
       );
     }
-  }
-}
-
-function checkCodegenMetadata(
-  packageJson: PackageJson,
-  errors: string[],
-): void {
-  if (packageJson.devDependencies?.["openapi-typescript"] === undefined) {
-    errors.push(
-      `${PACKAGE_JSON_PATH}: devDependencies.openapi-typescript is required for OpenAPI type generation`,
-    );
-  }
-  if (
-    packageJson.scripts?.["model-fusion:openapi:generate"] !==
-    "openapi-typescript docs/model-fusion-cursor-harness.openapi.yaml -o src/gen/model_fusion/cursor_harness_openapi.ts"
-  ) {
-    errors.push(
-      `${PACKAGE_JSON_PATH}: model-fusion:openapi:generate must regenerate Cursor harness OpenAPI types`,
-    );
-  }
-  if (
-    packageJson.scripts?.["model-fusion:openapi:check"] !==
-    "pnpm model-fusion:openapi:generate && prettier --write src/gen/model_fusion/cursor_harness_openapi.ts && git diff --exit-code -- src/gen/model_fusion/cursor_harness_openapi.ts"
-  ) {
-    errors.push(
-      `${PACKAGE_JSON_PATH}: model-fusion:openapi:check must regenerate, format, and diff generated OpenAPI types`,
-    );
   }
 }
 
