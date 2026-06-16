@@ -7,11 +7,6 @@ import {
   ChatService,
   StreamUnifiedChatRequestWithToolsSchema,
 } from "../src/gen/aiserver/v1/aiserver_pb.js";
-import {
-  CursorHarnessRunRequestSchema,
-  CursorHarnessRunResultSchema,
-  CursorHarnessService,
-} from "../src/gen/model_fusion/v1/cursor_harness_pb.js";
 
 describe("generated proto surface", () => {
   it("generates service descriptors for typed Cursor services", () => {
@@ -23,14 +18,6 @@ describe("generated proto surface", () => {
     expect(
       ChatService.methods.some(
         (method) => method.name === "StreamUnifiedChatWithTools",
-      ),
-    ).toBe(true);
-    expect(CursorHarnessService.typeName).toBe(
-      "model_fusion.v1.CursorHarnessService",
-    );
-    expect(
-      CursorHarnessService.methods.some(
-        (method) => method.name === "RunCursorHarness",
       ),
     ).toBe(true);
   });
@@ -53,49 +40,5 @@ describe("generated proto surface", () => {
     expect(chat.streamUnifiedChatRequest?.modelDetails?.modelName).toBe(
       "local-model",
     );
-  });
-
-  it("round-trips model-fusion Cursor harness transport envelopes", () => {
-    const request = create(CursorHarnessRunRequestSchema, {
-      cursorRunRequestJson: JSON.stringify({
-        schema: "cursor-run-request.v1",
-      }),
-      harnessRunRequestJson: JSON.stringify({
-        schema: "harness-run-request.v1",
-      }),
-      candidateId: "candidate-one",
-      workspacePath: "/tmp/workspace",
-    });
-    const result = create(CursorHarnessRunResultSchema, {
-      cursorRunResultJson: JSON.stringify({
-        schema: "cursor-run-result.v1",
-      }),
-      harnessRunResultJson: JSON.stringify({
-        schema: "harness-run-result.v1",
-      }),
-      artifacts: [
-        {
-          artifactId: "artifact-one",
-          kind: "transcript",
-          uri: "cursor-bridge://agent-run/candidate-one/transcript.json",
-          sha256:
-            "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          redactionStatus: "redacted",
-        },
-      ],
-    });
-    const decodedRequest = fromBinary(
-      CursorHarnessRunRequestSchema,
-      toBinary(CursorHarnessRunRequestSchema, request),
-    );
-    const decodedResult = fromBinary(
-      CursorHarnessRunResultSchema,
-      toBinary(CursorHarnessRunResultSchema, result),
-    );
-
-    expect(JSON.parse(decodedRequest.cursorRunRequestJson)).toEqual({
-      schema: "cursor-run-request.v1",
-    });
-    expect(decodedResult.artifacts[0]?.artifactId).toBe("artifact-one");
   });
 });

@@ -12,8 +12,11 @@ type ProtocolOriginManifest = {
   serviceIdl?: {
     sourceOfTruth?: string;
     openapi?: string;
-    handAuthoredOpenapi?: boolean;
     localCursorkitStatus?: string;
+  };
+  protobufBuf?: {
+    v1Required?: boolean;
+    status?: string;
   };
   persistedRecordFormat?: {
     sourceOfTruth?: string;
@@ -32,8 +35,7 @@ type ProtocolOriginManifest = {
   };
   serviceBoundaries?: Array<{
     service?: string;
-    proto?: string;
-    generatedTypescript?: string;
+    openapi?: string;
     canonicalSource?: string;
   }>;
   followUpWorkOutsideCursorkit?: string[];
@@ -42,6 +44,8 @@ type ProtocolOriginManifest = {
 const ROOT = process.cwd();
 const ORIGIN_MANIFEST_PATH = "docs/model-fusion-protocol-origin.json";
 const PROTOCOL_DOC_PATH = "docs/model-fusion-protocol.md";
+const CURSOR_HARNESS_OPENAPI_PATH =
+  "docs/model-fusion-cursor-harness.openapi.yaml";
 const CONTRACT_FIXTURE_ROOT = "fixtures/model-fusion-contract";
 const CURSOR_HARNESS_PROTO_PATH = "proto/model_fusion/v1/cursor_harness.proto";
 const CURSOR_HARNESS_TS_PATH = "src/gen/model_fusion/v1/cursor_harness_pb.ts";
@@ -53,7 +57,8 @@ export function checkModelFusionProtocol(): string[] {
     checkManifest(manifest, errors);
   }
   checkFixtureBundleHashes(errors);
-  checkCursorHarnessIdl(errors);
+  checkCursorHarnessOpenApi(errors);
+  checkNoV1ProtoMirror(errors);
   checkProtocolDocs(errors);
   return errors;
 }
@@ -91,19 +96,27 @@ function checkManifest(
       `${ORIGIN_MANIFEST_PATH}: schemaBundleHash ${manifest.schemaBundleHash} does not match MODEL_FUSION_SCHEMA_BUNDLE_HASH ${MODEL_FUSION_SCHEMA_BUNDLE_HASH}`,
     );
   }
-  if (manifest.serviceIdl?.sourceOfTruth !== "protobuf-buf") {
+  if (manifest.serviceIdl?.sourceOfTruth !== "openapi-3.1") {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: serviceIdl.sourceOfTruth must be protobuf-buf`,
+      `${ORIGIN_MANIFEST_PATH}: serviceIdl.sourceOfTruth must be openapi-3.1`,
     );
   }
-  if (manifest.serviceIdl?.openapi !== "generated-from-protobuf-only") {
+  if (manifest.serviceIdl?.openapi !== "v1-http-json-source-of-truth") {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: serviceIdl.openapi must be generated-from-protobuf-only`,
+      `${ORIGIN_MANIFEST_PATH}: serviceIdl.openapi must be v1-http-json-source-of-truth`,
     );
   }
-  if (manifest.serviceIdl?.handAuthoredOpenapi !== false) {
+  if (manifest.protobufBuf?.v1Required !== false) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: serviceIdl.handAuthoredOpenapi must be false`,
+      `${ORIGIN_MANIFEST_PATH}: protobufBuf.v1Required must be false`,
+    );
+  }
+  if (
+    manifest.protobufBuf?.status !==
+    "reserved-for-future-internal-streaming-connect-grpc"
+  ) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: protobufBuf.status must reserve protobuf/Buf for future internal streaming/Connect/gRPC`,
     );
   }
   if (manifest.persistedRecordFormat?.sourceOfTruth !== "json-schema") {
@@ -130,10 +143,10 @@ function checkManifest(
   }
   if (
     manifest.packages?.typescript?.generatedFrom !==
-    "fusionkit protobuf/Buf IDL and JSON Schema bundle"
+    "fusionkit JSON Schema and OpenAPI 3.1 contracts"
   ) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: TypeScript package must be generated from fusionkit protobuf/Buf IDL and JSON Schema bundle`,
+      `${ORIGIN_MANIFEST_PATH}: TypeScript package must be generated from fusionkit JSON Schema and OpenAPI 3.1 contracts`,
     );
   }
   const pythonIndexes =
@@ -156,35 +169,31 @@ function checkManifest(
   }
   if (
     manifest.packages?.python?.generatedFrom !==
-    "fusionkit protobuf/Buf IDL and JSON Schema bundle"
+    "fusionkit JSON Schema and OpenAPI 3.1 contracts"
   ) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: Python package must be generated from fusionkit protobuf/Buf IDL and JSON Schema bundle`,
+      `${ORIGIN_MANIFEST_PATH}: Python package must be generated from fusionkit JSON Schema and OpenAPI 3.1 contracts`,
     );
   }
   const cursorBoundary = manifest.serviceBoundaries?.find(
-    (boundary) => boundary.service === "model_fusion.v1.CursorHarnessService",
+    (boundary) => boundary.service === "CursorHarnessHttpApi",
   );
-  if (cursorBoundary?.proto !== CURSOR_HARNESS_PROTO_PATH) {
+  if (cursorBoundary?.openapi !== CURSOR_HARNESS_OPENAPI_PATH) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: CursorHarnessService proto path must be ${CURSOR_HARNESS_PROTO_PATH}`,
-    );
-  }
-  if (cursorBoundary?.generatedTypescript !== CURSOR_HARNESS_TS_PATH) {
-    errors.push(
-      `${ORIGIN_MANIFEST_PATH}: CursorHarnessService generated TypeScript path must be ${CURSOR_HARNESS_TS_PATH}`,
+      `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi OpenAPI path must be ${CURSOR_HARNESS_OPENAPI_PATH}`,
     );
   }
   if (cursorBoundary?.canonicalSource !== "fusionkit") {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: CursorHarnessService canonicalSource must be fusionkit`,
+      `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi canonicalSource must be fusionkit`,
     );
   }
   const followUps = manifest.followUpWorkOutsideCursorkit ?? [];
   for (const expected of [
-    "OpenAPI from protobuf/Buf IDL",
+    "OpenAPI 3.1 source",
     "@velum/model-fusion-protocol",
     "velum-model-fusion-protocol wheels",
+    "SDKs from fusionkit JSON Schema/OpenAPI",
     "JSON Schema bundle metadata",
   ]) {
     if (!followUps.some((item) => item.includes(expected))) {
@@ -209,33 +218,38 @@ function checkFixtureBundleHashes(errors: string[]): void {
   }
 }
 
-function checkCursorHarnessIdl(errors: string[]): void {
-  const proto = readRequiredText(CURSOR_HARNESS_PROTO_PATH, errors);
-  const generated = readRequiredText(CURSOR_HARNESS_TS_PATH, errors);
-  if (proto !== undefined) {
-    for (const expected of [
-      "package model_fusion.v1;",
-      "service CursorHarnessService",
-      "rpc RunCursorHarness",
-      "cursor_run_request_json",
-      "harness_run_result_json",
-    ]) {
-      if (!proto.includes(expected)) {
-        errors.push(`${CURSOR_HARNESS_PROTO_PATH}: missing ${expected}`);
-      }
+function checkCursorHarnessOpenApi(errors: string[]): void {
+  const openApi = readRequiredText(CURSOR_HARNESS_OPENAPI_PATH, errors);
+  if (openApi === undefined) {
+    return;
+  }
+  for (const expected of [
+    "openapi: 3.1.0",
+    "/model-fusion/v1/cursor-harness:run",
+    "operationId: runCursorHarness",
+    "CursorHarnessRunRequest",
+    "CursorHarnessRunResult",
+    "CursorRunRequestV1",
+    "CursorRunResultV1",
+    "HarnessRunRequestV1",
+    "HarnessRunResultV1",
+    "x-model-fusion-origin: fusionkit",
+  ]) {
+    if (!openApi.includes(expected)) {
+      errors.push(`${CURSOR_HARNESS_OPENAPI_PATH}: missing ${expected}`);
     }
   }
-  if (generated !== undefined) {
-    for (const expected of [
-      "file_model_fusion_v1_cursor_harness",
-      "CursorHarnessRunRequestSchema",
-      "CursorHarnessRunResultSchema",
-      "CursorHarnessService",
-      "runCursorHarness",
-    ]) {
-      if (!generated.includes(expected)) {
-        errors.push(`${CURSOR_HARNESS_TS_PATH}: missing ${expected}`);
-      }
+}
+
+function checkNoV1ProtoMirror(errors: string[]): void {
+  for (const relativePath of [
+    CURSOR_HARNESS_PROTO_PATH,
+    CURSOR_HARNESS_TS_PATH,
+  ]) {
+    if (fs.existsSync(resolvePath(relativePath))) {
+      errors.push(
+        `${relativePath}: protobuf/Buf is not a required v1 model-fusion path; remove or keep out of the v1 guard`,
+      );
     }
   }
 }
@@ -249,17 +263,16 @@ function checkProtocolDocs(errors: string[]): void {
   for (const expected of [
     "fusionkit",
     "@velum/model-fusion-protocol",
-    "Protobuf/Buf is the source of truth",
-    "OpenAPI must be generated",
-    "Do not hand-author OpenAPI",
+    "OpenAPI 3.1 is the source of truth",
     "JSON Schema remains the persisted audit and benchmark record format",
+    "Protobuf/Buf is reserved for later internal streaming",
     "Cloudsmith",
     "CodeArtifact",
     "Gemfury",
     "GitHub Releases wheels",
     "uv",
     "HarnessExecutorService",
-    "CursorHarnessService",
+    "Cursor harness OpenAPI",
     "MlxProviderService",
     "Benchmark execution",
     "Follow-up outside cursorkit",

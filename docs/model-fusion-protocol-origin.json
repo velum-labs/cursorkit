@@ -4,17 +4,21 @@
   "origin": {
     "repo": "fusionkit",
     "status": "contract-idl-origin",
-    "notes": "fusionkit remains the source of truth for model-fusion protobuf/Buf IDL and persisted JSON Schema contracts until stable generated packages are published."
+    "notes": "fusionkit remains the source of truth for model-fusion JSON Schema durable records and OpenAPI 3.1 HTTP/service contracts until stable generated packages are published."
   },
   "serviceIdl": {
-    "sourceOfTruth": "protobuf-buf",
-    "openapi": "generated-from-protobuf-only",
-    "handAuthoredOpenapi": false,
+    "sourceOfTruth": "openapi-3.1",
+    "openapi": "v1-http-json-source-of-truth",
     "localCursorkitStatus": "temporary-compatibility-mirror"
   },
   "persistedRecordFormat": {
     "sourceOfTruth": "json-schema",
-    "notes": "JSON Schema remains the persisted audit and benchmark record format; protobuf carries validated JSON records across service and SDK boundaries."
+    "notes": "JSON Schema remains the persisted audit and benchmark record format."
+  },
+  "protobufBuf": {
+    "v1Required": false,
+    "status": "reserved-for-future-internal-streaming-connect-grpc",
+    "notes": "Do not require protobuf/Buf for v1 package or HTTP/JSON service consumption."
   },
   "schemaBundleHash": "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
   "persistedJsonSchemas": [
@@ -27,14 +31,14 @@
     "typescript": {
       "name": "@velum/model-fusion-protocol",
       "registry": "npm-or-github-packages",
-      "generatedFrom": "fusionkit protobuf/Buf IDL and JSON Schema bundle",
+      "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
       "consumerPlan": "Replace local cursorkit model-fusion contract mirrors with generated imports from this package once fusionkit publishes it."
     },
     "python": {
       "name": "velum-model-fusion-protocol",
       "preferredPrivateIndexes": ["Cloudsmith", "CodeArtifact", "Gemfury"],
       "shortTermOptions": ["GitHub Releases wheels", "uv git deps"],
-      "generatedFrom": "fusionkit protobuf/Buf IDL and JSON Schema bundle",
+      "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
       "consumerPlan": "Python consumers should use a private PyPI-compatible index; GitHub Packages alone is not sufficient for Python packages."
     }
   },
@@ -47,12 +51,11 @@
       "purpose": "Coding task execution handoff from benchmark orchestration to executor harnesses."
     },
     {
-      "service": "model_fusion.v1.CursorHarnessService",
+      "service": "CursorHarnessHttpApi",
       "owner": "cursorkit",
       "consumer": "fusionkit",
-      "status": "local-proto-mirror",
-      "proto": "proto/model_fusion/v1/cursor_harness.proto",
-      "generatedTypescript": "src/gen/model_fusion/v1/cursor_harness_pb.ts",
+      "status": "local-openapi-compatibility-mirror",
+      "openapi": "docs/model-fusion-cursor-harness.openapi.yaml",
       "canonicalSource": "fusionkit",
       "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
     },
@@ -73,13 +76,13 @@
   ],
   "driftChecks": {
     "cursorkit": "corepack pnpm model-fusion:protocol:check",
-    "fusionkitTarget": "Generate TS and Python bindings from fusionkit IDL and verify schema bundle hashes before publish."
+    "fusionkitTarget": "Generate TS and Python bindings from fusionkit JSON Schema/OpenAPI contracts and verify schema bundle hashes before publish."
   },
   "followUpWorkOutsideCursorkit": [
-    "Move the model_fusion.v1 CursorHarnessService source proto to fusionkit-owned protocol source.",
+    "Move the canonical Cursor harness OpenAPI 3.1 source to fusionkit-owned protocol source.",
     "Publish @velum/model-fusion-protocol for TypeScript consumers.",
     "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
-    "Generate OpenAPI from protobuf/Buf IDL in fusionkit; do not hand-author OpenAPI in consumers.",
+    "Generate SDKs from fusionkit JSON Schema/OpenAPI contracts.",
     "Publish JSON Schema bundle metadata with generated packages so consumers can verify schema bundle hashes."
   ]
 }

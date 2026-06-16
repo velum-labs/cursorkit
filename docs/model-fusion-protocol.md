@@ -1,11 +1,11 @@
 # Model Fusion Protocol Consumption
 
-`fusionkit` remains the model-fusion contract and IDL origin. Protobuf/Buf is the
-source of truth for service and SDK boundaries; OpenAPI must be generated from
-that IDL rather than hand-authored in consumers. Cursorkit should consume stable
+`fusionkit` remains the model-fusion contract origin. For v1, JSON Schema is the
+source of truth for durable audit and benchmark records, and OpenAPI 3.1 is the
+source of truth for HTTP/JSON service APIs. Cursorkit should consume stable
 generated artifacts from fusionkit instead of copying contract shapes across
-repositories. This repo keeps a narrow compatibility mirror only for the Cursor
-adapter seam until those packages are published.
+repositories. This repo keeps a narrow OpenAPI compatibility mirror only for the
+Cursor adapter seam until those packages are published.
 
 ## Package targets
 
@@ -16,33 +16,33 @@ adapter seam until those packages are published.
   Releases wheels or `uv` git dependencies; GitHub Packages alone is not enough
   for Python package consumption.
 
-## JSON records vs service IDL
+## Durable records vs service APIs
 
 - JSON Schema remains the persisted audit and benchmark record format for records
   such as
   `cursor-run-request.v1`, `cursor-run-result.v1`, `harness-run-request.v1`, and
   `harness-run-result.v1`.
-- Protobuf/Buf IDL is the source of truth for service, transport, and generated
-  SDK boundaries. It should carry validated JSON records across services rather
-  than replacing those persisted audit records.
-- OpenAPI, when needed, must be generated from the protobuf/Buf source of truth.
-  Do not hand-author OpenAPI for model-fusion protocol boundaries in cursorkit.
+- OpenAPI 3.1 describes the v1 HTTP/JSON service surfaces and should reference
+  or embed those JSON Schema record contracts.
+- Protobuf/Buf is reserved for later internal streaming, Connect, or gRPC paths
+  if a service boundary hardens. It is not required for v1 package or HTTP/JSON
+  consumption in cursorkit.
 
 ## Service boundaries
 
 The minimum model-fusion protocol surface is:
 
 - `HarnessExecutorService`: fusionkit to handoffkit coding-task execution.
-- `CursorHarnessService`: fusionkit to cursorkit adapter output.
+- `CursorHarnessHttpApi`: fusionkit to cursorkit adapter output over HTTP/JSON.
 - `MlxProviderService`: provider capability and model-call metadata.
 - Benchmark execution/join envelopes: fusionkit benchmark orchestration and eval
   joins.
 
-This repo implements only the cursorkit-relevant `CursorHarnessService`
-compatibility mirror in `proto/model_fusion/v1/cursor_harness.proto`. Fusionkit
-should own the canonical source proto. The generated TypeScript binding is
-checked in at `src/gen/model_fusion/v1/cursor_harness_pb.ts` so cursorkit has a
-typed seam until it can import the package generated from fusionkit.
+This repo implements only the cursorkit-relevant Cursor harness OpenAPI
+compatibility mirror in `docs/model-fusion-cursor-harness.openapi.yaml`.
+Fusionkit should own the canonical OpenAPI 3.1 source and generated SDK package.
+The local mirror exists so cursorkit can review the HTTP/JSON seam without
+blocking on a published package.
 
 ## Drift checks
 
@@ -57,30 +57,30 @@ The check verifies:
 - the local schema bundle hash matches
   `docs/model-fusion-protocol-origin.json`;
 - committed model-fusion JSON fixtures use the same schema bundle hash;
-- the Cursor harness proto and generated TypeScript binding exist and expose
-  `model_fusion.v1.CursorHarnessService`;
+- the Cursor harness OpenAPI 3.1 compatibility mirror exists and exposes
+  `POST /model-fusion/v1/cursor-harness:run`;
 - the Python packaging plan remains documented until fusionkit publishes a
   private PyPI-compatible wheel.
-- the docs state the canonical .proto/OpenAPI decision: Buf/protobuf is source of
-  truth and OpenAPI is generated-only.
+- the docs state the corrected v1 decision: JSON Schema for durable records,
+  OpenAPI 3.1 for HTTP/JSON APIs, and protobuf/Buf future-facing only.
 
 When `@velum/model-fusion-protocol` and the Python wheel are available, replace
-local contract mirrors with package imports and keep this check as the guard that
-the consumed package version, generated bindings, and JSON schema bundle hash
-agree.
+local contract mirrors with generated package imports and keep this check as the
+guard that the consumed package version, OpenAPI/JSON Schema contracts, and JSON
+schema bundle hash agree.
 
 ## Follow-up outside cursorkit
 
 These items belong in fusionkit or the shared release infrastructure, not in this
 PR:
 
-- move the canonical `model_fusion.v1.CursorHarnessService` proto into
-  fusionkit-owned protocol source;
+- move the canonical Cursor harness OpenAPI 3.1 source into fusionkit-owned
+  protocol source;
 - publish `@velum/model-fusion-protocol` for TypeScript consumers;
 - publish `velum-model-fusion-protocol` wheels through a private
   PyPI-compatible index, or use GitHub Releases wheels plus `uv` git dependencies
   as a short-term bridge;
-- generate OpenAPI from protobuf/Buf IDL in fusionkit if REST documentation or
-  clients are needed;
+- generate TypeScript and Python SDKs from fusionkit JSON Schema/OpenAPI
+  contracts;
 - publish JSON Schema bundle metadata with generated packages so consumers can
   verify schema bundle hashes instead of copying validators by hand.

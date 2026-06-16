@@ -1,0 +1,162 @@
+openapi: 3.1.0
+info:
+  title: Model Fusion Cursor Harness API
+  version: 0.1.0
+  summary: Cursor harness HTTP/JSON compatibility seam
+  description: >
+    Fusionkit owns the canonical v1 OpenAPI 3.1 and JSON Schema contracts. This
+    cursorkit document is a narrow compatibility mirror for the Cursor harness
+    HTTP/JSON seam until generated protocol packages are published.
+x-model-fusion-origin: fusionkit
+x-cursorkit-status: compatibility-mirror
+paths:
+  /model-fusion/v1/cursor-harness:run:
+    post:
+      operationId: runCursorHarness
+      summary: Run a Cursor-backed model-fusion candidate.
+      description: >
+        Accepts validated cursor-run-request.v1 and harness-run-request.v1 JSON
+        records and returns validated cursor-run-result.v1 and
+        harness-run-result.v1 JSON records. JSON Schema remains the durable
+        audit and benchmark record format.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CursorHarnessRunRequest"
+      responses:
+        "200":
+          description: Cursor harness execution result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CursorHarnessRunResult"
+        "400":
+          description: Invalid request or unsupported capability request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelFusionError"
+        "502":
+          description: Cursor adapter execution failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModelFusionError"
+components:
+  schemas:
+    CursorHarnessRunRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - cursor_run_request
+        - harness_run_request
+        - candidate_id
+      properties:
+        cursor_run_request:
+          $ref: "#/components/schemas/CursorRunRequestV1"
+        harness_run_request:
+          $ref: "#/components/schemas/HarnessRunRequestV1"
+        candidate_id:
+          type: string
+          minLength: 1
+        workspace_path:
+          type: string
+          minLength: 1
+        timeout_ms:
+          type: integer
+          minimum: 1
+    CursorHarnessRunResult:
+      type: object
+      additionalProperties: false
+      required:
+        - cursor_run_result
+        - harness_run_result
+      properties:
+        cursor_run_result:
+          $ref: "#/components/schemas/CursorRunResultV1"
+        harness_run_result:
+          $ref: "#/components/schemas/HarnessRunResultV1"
+        artifacts:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactRef"
+    CursorRunRequestV1:
+      type: object
+      description: >
+        cursor-run-request.v1 persisted JSON record. Canonical JSON Schema lives
+        in fusionkit and should be consumed through generated packages.
+      required: [schema, schema_version, cursor_run_id, harness_request_id]
+      properties:
+        schema:
+          const: cursor-run-request.v1
+        schema_version:
+          const: v1
+      additionalProperties: true
+    CursorRunResultV1:
+      type: object
+      description: >
+        cursor-run-result.v1 persisted JSON record. Canonical JSON Schema lives
+        in fusionkit and should be consumed through generated packages.
+      required: [schema, schema_version, cursor_run_id, harness_request_id]
+      properties:
+        schema:
+          const: cursor-run-result.v1
+        schema_version:
+          const: v1
+      additionalProperties: true
+    HarnessRunRequestV1:
+      type: object
+      description: >
+        harness-run-request.v1 persisted JSON record. Canonical JSON Schema
+        lives in fusionkit and should be consumed through generated packages.
+      required: [schema, schema_version, request_id, harness_kind]
+      properties:
+        schema:
+          const: harness-run-request.v1
+        schema_version:
+          const: v1
+      additionalProperties: true
+    HarnessRunResultV1:
+      type: object
+      description: >
+        harness-run-result.v1 persisted JSON record. Canonical JSON Schema lives
+        in fusionkit and should be consumed through generated packages.
+      required: [schema, schema_version, result_id, request_id, harness_kind]
+      properties:
+        schema:
+          const: harness-run-result.v1
+        schema_version:
+          const: v1
+      additionalProperties: true
+    ArtifactRef:
+      type: object
+      additionalProperties: false
+      required: [artifact_id, kind, hash]
+      properties:
+        artifact_id:
+          type: string
+          minLength: 1
+        kind:
+          type: string
+        uri:
+          type: string
+        hash:
+          type: string
+          pattern: "^sha256:[0-9a-f]{64}$"
+        redaction_status:
+          type: string
+          enum: [synthetic, redacted, raw]
+    ModelFusionError:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+        diagnostics:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
