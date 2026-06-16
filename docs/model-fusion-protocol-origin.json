@@ -9,7 +9,7 @@
   "serviceIdl": {
     "sourceOfTruth": "openapi-3.1",
     "openapi": "v1-http-json-source-of-truth",
-    "localCursorkitStatus": "blocked-waiting-for-generated-protocol-package"
+    "localCursorkitStatus": "consumes-published-protocol-package"
   },
   "codegen": {
     "typescript": {
@@ -27,11 +27,15 @@
     },
     "python": {
       "openapi": {
-        "preferredGenerators": ["openapi-python-client"],
+        "preferredGenerators": [
+          "openapi-python-client"
+        ],
         "targetPackage": "velum-model-fusion-protocol"
       },
       "jsonSchema": {
-        "preferredGenerators": ["datamodel-code-generator"],
+        "preferredGenerators": [
+          "datamodel-code-generator"
+        ],
         "targetPackage": "velum-model-fusion-protocol"
       }
     }
@@ -57,13 +61,20 @@
       "name": "@velum-labs/model-fusion-protocol",
       "registry": "npm-or-github-packages",
       "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
-      "consumerPlan": "Cursorkit must consume generated OpenAPI clients/types and JSON Schema validators from this package once fusionkit publishes it.",
-      "currentStatus": "blocked-missing-registry-package"
+      "consumerPlan": "Cursorkit consumes the published package and verifies package metadata, version, and schema bundle hash before merge/release.",
+      "currentStatus": "published-consumed"
     },
     "python": {
       "name": "velum-model-fusion-protocol",
-      "preferredPrivateIndexes": ["Cloudsmith", "CodeArtifact", "Gemfury"],
-      "shortTermOptions": ["GitHub Releases wheels", "uv git deps"],
+      "preferredPrivateIndexes": [
+        "Cloudsmith",
+        "CodeArtifact",
+        "Gemfury"
+      ],
+      "shortTermOptions": [
+        "GitHub Releases wheels",
+        "uv git deps"
+      ],
       "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
       "consumerPlan": "Python consumers should use a private PyPI-compatible index; GitHub Packages alone is not sufficient for Python packages."
     }
@@ -80,7 +91,7 @@
       "service": "CursorHarnessHttpApi",
       "owner": "cursorkit",
       "consumer": "fusionkit",
-      "status": "blocked-waiting-for-generated-protocol-package",
+      "status": "consumes-published-protocol-package",
       "canonicalSource": "fusionkit",
       "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
     },
@@ -103,19 +114,9 @@
     "cursorkit": "corepack pnpm model-fusion:protocol:check",
     "fusionkitTarget": "Generate TS and Python bindings from fusionkit JSON Schema/OpenAPI contracts and verify schema bundle hashes before publish."
   },
-  "mergeBlocker": {
-    "status": "blocked",
-    "reason": "@velum-labs/model-fusion-protocol is not published in the configured registry yet, so cursorkit cannot consume generated OpenAPI client/types or JSON Schema validators.",
-    "requiredBeforeReady": [
-      "Publish @velum-labs/model-fusion-protocol from fusionkit.",
-      "Add @velum-labs/model-fusion-protocol as a dependency or devDependency in cursorkit.",
-      "Replace local model-fusion contract mirrors with generated package imports where applicable.",
-      "Verify the package schema bundle hash matches this manifest."
-    ]
-  },
   "followUpWorkOutsideCursorkit": [
-    "Move the canonical Cursor harness OpenAPI 3.1 source to fusionkit-owned protocol source.",
-    "Publish @velum-labs/model-fusion-protocol for TypeScript consumers.",
+    "Move the canonical Cursor harness OpenAPI 3.1 source into fusionkit-owned protocol source.",
+    "Maintain @velum-labs/model-fusion-protocol releases for TypeScript consumers.",
     "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
     "Generate TS OpenAPI client/types with openapi-typescript plus openapi-fetch from fusionkit OpenAPI contracts.",
     "Generate TS durable-record validators/types from the fusionkit JSON Schema bundle.",

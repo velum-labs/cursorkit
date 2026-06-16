@@ -269,6 +269,7 @@ function checkPackageConsumptionOrBlocker(
         `${PACKAGE_JSON_PATH}: modelFusionProtocol.version must match consumed ${PROTOCOL_PACKAGE_NAME} version`,
       );
     }
+    checkInstalledProtocolPackageMetadata(manifest, pin, errors);
     return;
   }
 
@@ -303,6 +304,50 @@ function checkPackageConsumptionOrBlocker(
         `${ORIGIN_MANIFEST_PATH}: mergeBlocker.requiredBeforeReady must mention ${expected}`,
       );
     }
+  }
+}
+
+function checkInstalledProtocolPackageMetadata(
+  manifest: ProtocolOriginManifest,
+  pin: PackageJson["modelFusionProtocol"] | undefined,
+  errors: string[],
+): void {
+  const packageMetadataPath = resolvePath(
+    "node_modules/@velum-labs/model-fusion-protocol/protocol-package.json",
+  );
+  let metadata: {
+    package_name?: string;
+    version?: string;
+    schema_bundle_hash?: string;
+  };
+  try {
+    metadata = JSON.parse(fs.readFileSync(packageMetadataPath, "utf8")) as {
+      package_name?: string;
+      version?: string;
+      schema_bundle_hash?: string;
+    };
+  } catch (error) {
+    errors.push(
+      `${PROTOCOL_PACKAGE_NAME}: installed protocol-package.json is required: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return;
+  }
+  if (metadata.package_name !== PROTOCOL_PACKAGE_NAME) {
+    errors.push(
+      `${PROTOCOL_PACKAGE_NAME}: protocol-package.json package_name must be ${PROTOCOL_PACKAGE_NAME}`,
+    );
+  }
+  if (metadata.version !== pin?.version) {
+    errors.push(
+      `${PROTOCOL_PACKAGE_NAME}: protocol-package.json version must match ${PACKAGE_JSON_PATH} modelFusionProtocol.version`,
+    );
+  }
+  if (metadata.schema_bundle_hash !== manifest.schemaBundleHash) {
+    errors.push(
+      `${PROTOCOL_PACKAGE_NAME}: protocol-package.json schema_bundle_hash must match ${ORIGIN_MANIFEST_PATH}`,
+    );
   }
 }
 
@@ -353,8 +398,8 @@ function checkProtocolDocs(errors: string[]): void {
     "openapi-fetch",
     "openapi-python-client",
     "datamodel-code-generator",
-    "Current blocker",
-    "not published",
+    "Published package consumption",
+    "installed as a cursorkit dev dependency",
     "Cloudsmith",
     "CodeArtifact",
     "Gemfury",

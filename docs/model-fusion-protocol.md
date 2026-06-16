@@ -4,14 +4,15 @@
 source of truth for durable audit and benchmark records, and OpenAPI 3.1 is the
 source of truth for HTTP/JSON service APIs. Cursorkit should consume stable
 generated artifacts from fusionkit instead of copying contract shapes across
-repositories. This PR must stay draft until `@velum-labs/model-fusion-protocol` is
-published and cursorkit consumes it, or until the missing package is explicitly
-accepted as a blocker.
+repositories. Cursorkit consumes the published
+`@velum-labs/model-fusion-protocol` package and verifies its protocol metadata
+against the local schema-bundle pin.
 
 ## Package targets
 
-- TypeScript consumers should depend on `@velum-labs/model-fusion-protocol` from npm
-  or GitHub Packages once fusionkit publishes it.
+- TypeScript consumers should depend on `@velum-labs/model-fusion-protocol` from
+  GitHub Packages. Cursorkit pins version `0.1.0` as a dev dependency and checks
+  its `protocol-package.json` metadata.
 - Python consumers need a private PyPI-compatible path. Preferred options are
   Cloudsmith, CodeArtifact, or Gemfury. Short-term fallback options are GitHub
   Releases wheels or `uv` git dependencies; GitHub Packages alone is not enough
@@ -47,27 +48,21 @@ The minimum model-fusion protocol surface is:
 - Benchmark execution/join envelopes: fusionkit benchmark orchestration and eval
   joins.
 
-Cursorkit does not own the v1 model-fusion OpenAPI source. Fusionkit should own
-the canonical OpenAPI 3.1 source and generated SDK package. Until
-`@velum-labs/model-fusion-protocol` exists, cursorkit may keep fixture-only local
-validators with schema-bundle provenance, but must not treat local OpenAPI,
-protobuf, or hand-written service types as the merge-ready model-fusion
-contract.
+Cursorkit does not own the v1 model-fusion OpenAPI source. Fusionkit owns the
+canonical OpenAPI 3.1 source and generated SDK package. Cursorkit consumes the
+published package for protocol metadata and keeps fixture-only local validators
+with schema-bundle provenance until the runtime adapter is switched to generated
+package imports.
 
-## Current blocker
+## Published package consumption
 
-`@velum-labs/model-fusion-protocol` is not published in the configured registry yet.
-This blocks merge-ready cross-repo protocol consumption because cursorkit cannot
-consume generated OpenAPI client/types or JSON Schema validators from fusionkit.
+`@velum-labs/model-fusion-protocol@0.1.0` is published in GitHub Packages and is
+installed as a cursorkit dev dependency. The protocol check reads the installed
+package's `protocol-package.json` and verifies:
 
-Before this PR is marked ready:
-
-1. Publish `@velum-labs/model-fusion-protocol` from fusionkit.
-2. Add the package as a dependency or devDependency in cursorkit.
-3. Replace local model-fusion contract mirrors with generated package imports
-   where applicable.
-4. Verify the consumed package schema bundle hash matches
-   `MODEL_FUSION_SCHEMA_BUNDLE_HASH`.
+1. package name is `@velum-labs/model-fusion-protocol`;
+2. package version matches `package.json#modelFusionProtocol.version`;
+3. schema bundle hash matches `MODEL_FUSION_SCHEMA_BUNDLE_HASH`.
 
 ## Drift checks
 
@@ -83,19 +78,16 @@ The check verifies:
   `docs/model-fusion-protocol-origin.json`;
 - committed model-fusion JSON fixtures use the same schema bundle hash;
 - local OpenAPI/protobuf mirrors are not present as the v1 contract path;
-- if `@velum-labs/model-fusion-protocol` is present in package metadata, the package
-  pin and schema bundle hash match the local manifest;
-- if `@velum-labs/model-fusion-protocol` is absent, the missing package is documented
-  as an explicit merge blocker;
+- `@velum-labs/model-fusion-protocol` is installed and its package metadata,
+  version, and schema bundle hash match the local manifest;
 - the Python packaging plan remains documented until fusionkit publishes a
   private PyPI-compatible wheel.
 - the docs state the corrected v1 decision: JSON Schema for durable records,
   OpenAPI 3.1 for HTTP/JSON APIs, and protobuf/Buf future-facing only.
 
-When `@velum-labs/model-fusion-protocol` and the Python wheel are available, replace
-local contract mirrors with generated package imports and keep this check as the
-guard that the consumed package version, OpenAPI/JSON Schema contracts, and JSON
-schema bundle hash agree.
+When the runtime adapter moves from fixture validators to generated package
+imports, keep this check as the guard that the consumed package version,
+OpenAPI/JSON Schema contracts, and JSON schema bundle hash agree.
 
 ## Follow-up outside cursorkit
 
@@ -104,7 +96,7 @@ PR:
 
 - move the canonical Cursor harness OpenAPI 3.1 source into fusionkit-owned
   protocol source;
-- publish `@velum-labs/model-fusion-protocol` for TypeScript consumers;
+- maintain the `@velum-labs/model-fusion-protocol` TypeScript package release;
 - publish `velum-model-fusion-protocol` wheels through a private
   PyPI-compatible index, or use GitHub Releases wheels plus `uv` git dependencies
   as a short-term bridge;

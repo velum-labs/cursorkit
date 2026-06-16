@@ -55,8 +55,8 @@ Safety guards:
   in the generated protocol package. Cursorkit's local record validators are
   temporary fixture validators with schema-bundle provenance until that package
   is published.
-- If `@velum-labs/model-fusion-protocol` is not published, this remains a documented
-  blocker and the PR must stay draft.
+- `@velum-labs/model-fusion-protocol` must be installable from GitHub Packages,
+  and its installed protocol metadata must match the pinned schema bundle hash.
 - Protobuf/Buf remains outside the v1 release path; the release check expects
   JSON Schema durable records and OpenAPI 3.1 HTTP/API contracts.
 
