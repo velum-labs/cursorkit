@@ -6,23 +6,37 @@ import { MODEL_FUSION_SCHEMA_BUNDLE_HASH } from "../fixtures/modelFusion.js";
 
 type ProtocolOriginManifest = {
   schemaVersion: number;
+  canonicalSpec?: string;
   schemaBundleHash: string;
   persistedJsonSchemas: string[];
+  serviceIdl?: {
+    sourceOfTruth?: string;
+    openapi?: string;
+    handAuthoredOpenapi?: boolean;
+    localCursorkitStatus?: string;
+  };
+  persistedRecordFormat?: {
+    sourceOfTruth?: string;
+  };
   packages?: {
     typescript?: {
       name?: string;
       registry?: string;
+      generatedFrom?: string;
     };
     python?: {
       preferredPrivateIndexes?: string[];
       shortTermOptions?: string[];
+      generatedFrom?: string;
     };
   };
   serviceBoundaries?: Array<{
     service?: string;
     proto?: string;
     generatedTypescript?: string;
+    canonicalSource?: string;
   }>;
+  followUpWorkOutsideCursorkit?: string[];
 };
 
 const ROOT = process.cwd();
@@ -64,9 +78,37 @@ function checkManifest(
   if (manifest.schemaVersion !== 1) {
     errors.push(`${ORIGIN_MANIFEST_PATH}: schemaVersion must be 1`);
   }
+  if (
+    manifest.canonicalSpec !==
+    "https://github.com/velum-labs/openclaw-shared/blob/main/spec/2026-06-16-model-fusion-protocol-packaging-spec.md"
+  ) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: canonicalSpec must point at the shared protocol packaging spec`,
+    );
+  }
   if (manifest.schemaBundleHash !== MODEL_FUSION_SCHEMA_BUNDLE_HASH) {
     errors.push(
       `${ORIGIN_MANIFEST_PATH}: schemaBundleHash ${manifest.schemaBundleHash} does not match MODEL_FUSION_SCHEMA_BUNDLE_HASH ${MODEL_FUSION_SCHEMA_BUNDLE_HASH}`,
+    );
+  }
+  if (manifest.serviceIdl?.sourceOfTruth !== "protobuf-buf") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: serviceIdl.sourceOfTruth must be protobuf-buf`,
+    );
+  }
+  if (manifest.serviceIdl?.openapi !== "generated-from-protobuf-only") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: serviceIdl.openapi must be generated-from-protobuf-only`,
+    );
+  }
+  if (manifest.serviceIdl?.handAuthoredOpenapi !== false) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: serviceIdl.handAuthoredOpenapi must be false`,
+    );
+  }
+  if (manifest.persistedRecordFormat?.sourceOfTruth !== "json-schema") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: persistedRecordFormat.sourceOfTruth must be json-schema`,
     );
   }
   for (const schema of [
@@ -84,6 +126,14 @@ function checkManifest(
   if (manifest.packages?.typescript?.name !== "@velum/model-fusion-protocol") {
     errors.push(
       `${ORIGIN_MANIFEST_PATH}: TypeScript package target must be @velum/model-fusion-protocol`,
+    );
+  }
+  if (
+    manifest.packages?.typescript?.generatedFrom !==
+    "fusionkit protobuf/Buf IDL and JSON Schema bundle"
+  ) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: TypeScript package must be generated from fusionkit protobuf/Buf IDL and JSON Schema bundle`,
     );
   }
   const pythonIndexes =
@@ -104,6 +154,14 @@ function checkManifest(
       `${ORIGIN_MANIFEST_PATH}: Python short-term plan must include GitHub Releases wheels and uv git deps`,
     );
   }
+  if (
+    manifest.packages?.python?.generatedFrom !==
+    "fusionkit protobuf/Buf IDL and JSON Schema bundle"
+  ) {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: Python package must be generated from fusionkit protobuf/Buf IDL and JSON Schema bundle`,
+    );
+  }
   const cursorBoundary = manifest.serviceBoundaries?.find(
     (boundary) => boundary.service === "model_fusion.v1.CursorHarnessService",
   );
@@ -116,6 +174,24 @@ function checkManifest(
     errors.push(
       `${ORIGIN_MANIFEST_PATH}: CursorHarnessService generated TypeScript path must be ${CURSOR_HARNESS_TS_PATH}`,
     );
+  }
+  if (cursorBoundary?.canonicalSource !== "fusionkit") {
+    errors.push(
+      `${ORIGIN_MANIFEST_PATH}: CursorHarnessService canonicalSource must be fusionkit`,
+    );
+  }
+  const followUps = manifest.followUpWorkOutsideCursorkit ?? [];
+  for (const expected of [
+    "OpenAPI from protobuf/Buf IDL",
+    "@velum/model-fusion-protocol",
+    "velum-model-fusion-protocol wheels",
+    "JSON Schema bundle metadata",
+  ]) {
+    if (!followUps.some((item) => item.includes(expected))) {
+      errors.push(
+        `${ORIGIN_MANIFEST_PATH}: followUpWorkOutsideCursorkit must mention ${expected}`,
+      );
+    }
   }
 }
 
@@ -173,6 +249,10 @@ function checkProtocolDocs(errors: string[]): void {
   for (const expected of [
     "fusionkit",
     "@velum/model-fusion-protocol",
+    "Protobuf/Buf is the source of truth",
+    "OpenAPI must be generated",
+    "Do not hand-author OpenAPI",
+    "JSON Schema remains the persisted audit and benchmark record format",
     "Cloudsmith",
     "CodeArtifact",
     "Gemfury",
@@ -182,7 +262,7 @@ function checkProtocolDocs(errors: string[]): void {
     "CursorHarnessService",
     "MlxProviderService",
     "Benchmark execution",
-    "JSON Schema remains the persisted audit format",
+    "Follow-up outside cursorkit",
   ]) {
     if (!normalizedDoc.includes(expected)) {
       errors.push(`${PROTOCOL_DOC_PATH}: missing ${expected}`);

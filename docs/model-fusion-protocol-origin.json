@@ -1,9 +1,20 @@
 {
   "schemaVersion": 1,
+  "canonicalSpec": "https://github.com/velum-labs/openclaw-shared/blob/main/spec/2026-06-16-model-fusion-protocol-packaging-spec.md",
   "origin": {
     "repo": "fusionkit",
     "status": "contract-idl-origin",
-    "notes": "fusionkit remains the source of truth for model-fusion contracts and service IDL until stable generated packages are published."
+    "notes": "fusionkit remains the source of truth for model-fusion protobuf/Buf IDL and persisted JSON Schema contracts until stable generated packages are published."
+  },
+  "serviceIdl": {
+    "sourceOfTruth": "protobuf-buf",
+    "openapi": "generated-from-protobuf-only",
+    "handAuthoredOpenapi": false,
+    "localCursorkitStatus": "temporary-compatibility-mirror"
+  },
+  "persistedRecordFormat": {
+    "sourceOfTruth": "json-schema",
+    "notes": "JSON Schema remains the persisted audit and benchmark record format; protobuf carries validated JSON records across service and SDK boundaries."
   },
   "schemaBundleHash": "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
   "persistedJsonSchemas": [
@@ -16,12 +27,14 @@
     "typescript": {
       "name": "@velum/model-fusion-protocol",
       "registry": "npm-or-github-packages",
+      "generatedFrom": "fusionkit protobuf/Buf IDL and JSON Schema bundle",
       "consumerPlan": "Replace local cursorkit model-fusion contract mirrors with generated imports from this package once fusionkit publishes it."
     },
     "python": {
       "name": "velum-model-fusion-protocol",
       "preferredPrivateIndexes": ["Cloudsmith", "CodeArtifact", "Gemfury"],
       "shortTermOptions": ["GitHub Releases wheels", "uv git deps"],
+      "generatedFrom": "fusionkit protobuf/Buf IDL and JSON Schema bundle",
       "consumerPlan": "Python consumers should use a private PyPI-compatible index; GitHub Packages alone is not sufficient for Python packages."
     }
   },
@@ -40,6 +53,7 @@
       "status": "local-proto-mirror",
       "proto": "proto/model_fusion/v1/cursor_harness.proto",
       "generatedTypescript": "src/gen/model_fusion/v1/cursor_harness_pb.ts",
+      "canonicalSource": "fusionkit",
       "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
     },
     {
@@ -60,5 +74,12 @@
   "driftChecks": {
     "cursorkit": "corepack pnpm model-fusion:protocol:check",
     "fusionkitTarget": "Generate TS and Python bindings from fusionkit IDL and verify schema bundle hashes before publish."
-  }
+  },
+  "followUpWorkOutsideCursorkit": [
+    "Move the model_fusion.v1 CursorHarnessService source proto to fusionkit-owned protocol source.",
+    "Publish @velum/model-fusion-protocol for TypeScript consumers.",
+    "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
+    "Generate OpenAPI from protobuf/Buf IDL in fusionkit; do not hand-author OpenAPI in consumers.",
+    "Publish JSON Schema bundle metadata with generated packages so consumers can verify schema bundle hashes."
+  ]
 }

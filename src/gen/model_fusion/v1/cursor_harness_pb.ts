@@ -115,10 +115,10 @@ export const ModelFusionArtifactEvidenceSchema: GenMessage<ModelFusionArtifactEv
   messageDesc(file_model_fusion_v1_cursor_harness, 2);
 
 /**
- * CursorHarnessService is the cursorkit-owned adapter boundary for executing a
- * Cursor-backed model-fusion candidate. Fusionkit remains the IDL origin; this
- * checked-in proto is a narrow compatibility mirror until generated protocol
- * packages are published for all consumers.
+ * CursorHarnessService is the cursorkit adapter boundary for executing a
+ * Cursor-backed model-fusion candidate. Fusionkit remains the canonical
+ * protobuf/Buf IDL owner; this checked-in proto is a narrow compatibility mirror
+ * until generated protocol packages are published for all consumers.
  *
  * @generated from service model_fusion.v1.CursorHarnessService
  */
