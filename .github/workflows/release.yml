@@ -43,7 +43,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
       - run: pnpm codegen
       - run: git diff --exit-code -- src/gen
       - run: pnpm release:publish:check
@@ -83,7 +83,7 @@ jobs:
           steps.metadata.outputs.publishable == 'true' &&
           (github.event_name == 'push' || inputs.dry_run == false)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
         run: npm publish dist-release/*.tgz --provenance --access restricted --registry=https://npm.pkg.github.com
 
       - name: Skip publish for private package
