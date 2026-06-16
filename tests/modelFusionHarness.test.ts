@@ -63,11 +63,13 @@ describe("model-fusion harness API", () => {
       evidence: {
         rawPayload: "Authorization: Bearer secret-token",
         outputSummary: "Fixture-backed Cursor candidate completed.",
-        observedModel: "local-model",
+        observedModel: "provider-local-model",
         routeInventory: {
           observedRoutes: 3,
           passThroughRoutes: 1,
           interceptedRoutes: 2,
+          observedPaths: ["/agent.v1.AgentService/Run"],
+          diagnosis: ["desktop routes are observed-only"],
         },
       },
     });
@@ -77,12 +79,43 @@ describe("model-fusion harness API", () => {
     assertCursorRunResultV1(result.cursorResult);
     assertHarnessRunResultV1(result.harnessResult);
     expect(result.cursorRequest.cursor_run_id).toBe("cursor_run_candidate_one");
+    expect(result.cursorResult.requested_model).toBe("local-model");
+    expect(result.cursorResult.observed_model).toBe("provider-local-model");
+    expect(result.cursorResult.model_id).toBe("local");
+    expect(result.cursorResult.endpoint_id).toBe("local-endpoint");
     expect(result.cursorResult.raw_hash).not.toBe(
       result.cursorResult.redacted_hash,
     );
     expect(result.harnessResult.candidate_ids).toEqual(["candidate/one"]);
+    expect(result.harnessResult.requested_model).toBe("local-model");
+    expect(result.harnessResult.observed_model).toBe("provider-local-model");
     expect(result.harnessResult.metadata?.requested_model).toBe("local-model");
-    expect(result.harnessResult.metadata?.observed_model).toBe("local-model");
+    expect(result.harnessResult.metadata?.observed_model).toBe(
+      "provider-local-model",
+    );
+    expect(result.harnessResult.metadata?.model_resolution_status).toBe(
+      "blocked_override",
+    );
+    expect(result.harnessResult.metadata?.route_inventory).toEqual({
+      observedRoutes: 3,
+      passThroughRoutes: 1,
+      interceptedRoutes: 2,
+      observedPaths: ["/agent.v1.AgentService/Run"],
+      diagnosis: ["desktop routes are observed-only"],
+    });
+    expect(
+      result.harnessResult.metadata?.route_inventory_evidence,
+    ).toMatchObject({
+      artifact_id: "artifact_candidate_one_route_inventory",
+      kind: "metrics",
+      redaction_status: "redacted",
+    });
+    expect(
+      result.cursorResult.artifacts?.some(
+        (artifact) =>
+          artifact.artifact_id === "artifact_candidate_one_route_inventory",
+      ),
+    ).toBe(true);
     expect(JSON.stringify(result)).not.toContain("secret-token");
     expect("raw_hash" in result.harnessResult).toBe(false);
     expect("redacted_hash" in result.harnessResult).toBe(false);
@@ -103,11 +136,70 @@ describe("model-fusion harness API", () => {
       {
         capability: "tool_call_loop",
         status: "unsupported",
+        requestedStatus: "supported",
         reason: "Cursor capability tool_call_loop is unsupported",
+      },
+    ]);
+    expect(result.cursorResult.diagnostics).toEqual([
+      {
+        kind: "capability_missing",
+        message: "Cursor capability tool_call_loop is unsupported",
+        retryable: false,
+        capability: "tool_call_loop",
+        status: "unsupported",
+        requested_status: "supported",
       },
     ]);
     expect(result.harnessResult.metadata?.missing_capabilities).toEqual(
       result.missingCapabilities,
+    );
+  });
+
+  it("downgrades requested capabilities instead of upgrading Cursor support", () => {
+    const result = runCursorCandidate({
+      request: requestFixture({
+        requested_capabilities: {
+          workspace_read: "supported",
+          apply_patch: "supported",
+        },
+      }),
+      candidateId: "candidate-override",
+      model: { id: "local", model: "local-model" },
+      requiredCapabilities: ["apply_patch"],
+    });
+
+    expect(result.cursorResult.capabilities.apply_patch).toBe("unsupported");
+    expect(result.cursorResult.diagnostics).toContainEqual({
+      kind: "capability_missing",
+      message:
+        "Cursor capability apply_patch requested supported but is unsupported",
+      retryable: false,
+      capability: "apply_patch",
+      status: "unsupported",
+      requested_status: "supported",
+    });
+  });
+
+  it("records unknown model override diagnostics in metadata", () => {
+    const result = runCursorCandidate({
+      request: requestFixture(),
+      candidateId: "candidate-unknown-model",
+      model: { id: "local", model: "local-model" },
+      requestedModel: "desktop-only-model",
+      evidence: {
+        observedModel: "unknown",
+        modelResolutionStatus: "unknown",
+        modelResolutionReason: "desktop model picker state was not observable",
+      },
+    });
+
+    expect(result.cursorResult.requested_model).toBe("desktop-only-model");
+    expect(result.cursorResult.observed_model).toBe("unknown");
+    expect(result.harnessResult.metadata?.model_resolution_status).toBe(
+      "unknown",
+    );
+    expect(result.harnessResult.metadata?.model_resolution_reason).toBe(
+      "desktop model picker state was not observable",
     );
   });
 

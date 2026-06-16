@@ -26,6 +26,13 @@
       "uri": "fixture://cursor/candidate.patch",
       "hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
       "redaction_status": "synthetic"
+    },
+    {
+      "artifact_id": "artifact_cursor_route_inventory_001",
+      "kind": "metrics",
+      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "redaction_status": "redacted"
     }
   ],
   "capabilities": {
@@ -34,10 +41,41 @@
     "tool_call_loop": "unsupported",
     "route_observation": "degraded"
   },
+  "requested_model": "cursor-local-fixture",
+  "observed_model": "provider-local-fixture",
+  "model_id": "cursor-local-fixture",
+  "endpoint_id": "cursor-local-fixture-endpoint",
+  "diagnostics": [
+    {
+      "kind": "capability_missing",
+      "message": "Cursor capability apply_patch requested supported but is unsupported",
+      "retryable": false,
+      "capability": "apply_patch",
+      "status": "unsupported",
+      "requested_status": "supported"
+    }
+  ],
   "started_at": "2026-06-16T00:03:00Z",
   "finished_at": "2026-06-16T00:03:12Z",
   "errors": [],
   "metadata": {
-    "mapped_from_cursor_result_id": "cursor_run_001"
+    "mapped_from_cursor_result_id": "cursor_run_001",
+    "model_resolution_status": "blocked_override",
+    "model_resolution_reason": "requested model override did not match observed provider model",
+    "route_inventory": {
+      "observedRoutes": 3,
+      "passThroughRoutes": 1,
+      "interceptedRoutes": 2,
+      "diagnosis": [
+        "desktop routes are observed-only"
+      ]
+    },
+    "route_inventory_evidence": {
+      "artifact_id": "artifact_cursor_route_inventory_001",
+      "kind": "metrics",
+      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "redaction_status": "redacted"
+    }
   }
 }

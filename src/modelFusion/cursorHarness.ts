@@ -16,7 +16,7 @@ import type {
   HarnessRunResultV1,
   JsonValue,
   ModelFusionCapabilityStatus,
-  ModelFusionStatus,
+  ModelFusionDiagnostic,
 } from "../fixtures/modelFusion.js";
 import { sanitizeModelFusionPayload } from "../fixtures/sanitizer.js";
 
@@ -33,6 +33,9 @@ export type CursorRouteInventorySummary = {
   passThroughRoutes: number;
   interceptedRoutes: number;
   degradedRoutes?: number;
+  observedPaths?: string[];
+  failedRouteCount?: number;
+  diagnosis?: string[];
 };
 
 export type CursorCandidateEvidence = {
@@ -42,7 +45,10 @@ export type CursorCandidateEvidence = {
   outputSummary?: string;
   rawPayload?: string;
   observedModel?: string;
+  modelResolutionStatus?: CursorModelResolutionStatus;
+  modelResolutionReason?: string;
   routeInventory?: CursorRouteInventorySummary;
+  routeInventoryArtifact?: ArtifactRef;
 };
 
 export type CursorHarnessOptions = {
@@ -70,6 +76,21 @@ export type RunCursorCandidateInput = {
 export type CursorCapabilityIssue = {
   capability: string;
   status: ModelFusionCapabilityStatus;
+  requestedStatus?: ModelFusionCapabilityStatus;
+  reason: string;
+};
+
+export type CursorModelResolutionStatus =
+  | "matched"
+  | "unknown"
+  | "blocked_override";
+
+export type CursorModelEvidence = {
+  requestedModel: string;
+  observedModel: string;
+  modelId: string;
+  endpointId: string;
+  status: CursorModelResolutionStatus;
   reason: string;
 };
 
@@ -126,28 +147,39 @@ export function runCursorCandidate(
 ): RunCursorCandidateOutput {
   assertHarnessRunRequestV1(input.request);
   const capabilityPolicy = options.capabilityPolicy ?? "record-and-degrade";
-  const capabilities = {
-    ...cursorCapabilities(),
-    ...input.request.requested_capabilities,
-  };
+  const capabilities = effectiveCapabilities(
+    cursorCapabilities(),
+    input.request.requested_capabilities,
+  );
+  const overrideIssues = capabilityOverrideIssues(
+    input.request.requested_capabilities,
+    capabilities,
+  );
   const missingCapabilities = capabilityIssues(
     input.requiredCapabilities ?? [],
     capabilities,
   );
-  if (capabilityPolicy === "fail-closed" && missingCapabilities.length > 0) {
-    throw new CursorCapabilityError(missingCapabilities);
+  const diagnostics = diagnosticsFor([
+    ...overrideIssues,
+    ...missingCapabilities,
+  ]);
+  if (capabilityPolicy === "fail-closed" && diagnostics.length > 0) {
+    throw new CursorCapabilityError([
+      ...overrideIssues,
+      ...missingCapabilities,
+    ]);
   }
 
   const now = (options.now ?? (() => new Date()))().toISOString();
   const cursorRunId = `cursor_run_${safeId(input.candidateId)}`;
-  const requestedModel = input.requestedModel ?? input.model.model;
+  const modelEvidence = resolveCursorModelEvidence(input);
   const artifactBaseUri = options.artifactBaseUri ?? "fixture://cursor";
   const rawPayload =
     input.evidence?.rawPayload ??
     JSON.stringify({
       prompt: input.request.prompt,
       candidateId: input.candidateId,
-      model: requestedModel,
+      model: modelEvidence.requestedModel,
     });
   const sanitized = sanitizeModelFusionPayload({ rawPayload });
   const transcriptArtifact: ArtifactRef = {
@@ -157,6 +189,15 @@ export function runCursorCandidate(
     hash: sanitized.redacted_hash,
     redaction_status: sanitized.redactionStatus,
   };
+  const routeInventoryArtifact =
+    input.evidence?.routeInventoryArtifact ??
+    (input.evidence?.routeInventory
+      ? routeInventoryArtifactFor({
+          candidateId: input.candidateId,
+          artifactBaseUri,
+          summary: input.evidence.routeInventory,
+        })
+      : undefined);
   const artifacts = [
     ...(input.evidence?.diff
       ? [
@@ -180,6 +221,7 @@ export function runCursorCandidate(
           },
         ]
       : []),
+    ...(routeInventoryArtifact ? [routeInventoryArtifact] : []),
   ];
 
   const cursorRequest: CursorRunRequestV1 = {
@@ -189,7 +231,7 @@ export function runCursorCandidate(
     workspace_path: input.workspacePath ?? input.worktreePath ?? ".",
     prompt: input.request.prompt,
     prompt_hash: input.request.prompt_hash,
-    requested_model: requestedModel,
+    requested_model: modelEvidence.requestedModel,
     allowed_tools: input.request.allowed_tools ?? supportedCursorToolNames(),
     side_effects: input.request.side_effects,
     requested_capabilities: input.request.requested_capabilities,
@@ -207,6 +249,11 @@ export function runCursorCandidate(
     transcript_artifact: transcriptArtifact,
     ...(artifacts.length > 0 ? { artifacts } : {}),
     capabilities,
+    requested_model: modelEvidence.requestedModel,
+    observed_model: modelEvidence.observedModel,
+    model_id: modelEvidence.modelId,
+    endpoint_id: modelEvidence.endpointId,
+    ...(diagnostics.length > 0 ? { diagnostics } : {}),
     raw_hash: sanitized.raw_hash,
     redacted_hash: sanitized.redacted_hash,
   };
@@ -223,13 +270,16 @@ export function runCursorCandidate(
       model_id: input.model.id,
       model: input.model.model,
       endpoint_id: input.model.endpointId ?? input.model.id,
-      requested_model: requestedModel,
-      ...(input.evidence?.observedModel
-        ? { observed_model: input.evidence.observedModel }
-        : {}),
+      requested_model: modelEvidence.requestedModel,
+      observed_model: modelEvidence.observedModel,
+      model_resolution_status: modelEvidence.status,
+      model_resolution_reason: modelEvidence.reason,
       ...(input.worktreePath ? { worktree_path: input.worktreePath } : {}),
       missing_capabilities: missingCapabilities,
       route_inventory: input.evidence?.routeInventory ?? null,
+      ...(routeInventoryArtifact
+        ? { route_inventory_evidence: routeInventoryArtifact }
+        : {}),
       ...(input.metadata ?? {}),
     },
   };
@@ -256,6 +306,36 @@ export function cursorCapabilities(): Record<
     );
   }
   return { ...CORE_CAPABILITIES, ...toolCapabilities };
+}
+
+function effectiveCapabilities(
+  actual: Record<string, ModelFusionCapabilityStatus>,
+  requested: Record<string, ModelFusionCapabilityStatus>,
+): Record<string, ModelFusionCapabilityStatus> {
+  const result = { ...actual };
+  for (const [capability, requestedStatus] of Object.entries(requested)) {
+    const actualStatus = actual[capability] ?? "unknown";
+    result[capability] = weakerCapability(actualStatus, requestedStatus);
+  }
+  return result;
+}
+
+function capabilityOverrideIssues(
+  requested: Record<string, ModelFusionCapabilityStatus>,
+  effective: Record<string, ModelFusionCapabilityStatus>,
+): CursorCapabilityIssue[] {
+  return Object.entries(requested).flatMap(([capability, requestedStatus]) => {
+    const status = effective[capability] ?? "unknown";
+    if (capabilityRank(status) >= capabilityRank(requestedStatus)) return [];
+    return [
+      {
+        capability,
+        status,
+        requestedStatus,
+        reason: `Cursor capability ${capability} requested ${requestedStatus} but is ${status}`,
+      },
+    ];
+  });
 }
 
 function metadata<S extends string>(
@@ -285,10 +365,125 @@ function capabilityIssues(
       {
         capability,
         status,
+        requestedStatus: "supported",
         reason: `Cursor capability ${capability} is ${status}`,
       },
     ];
   });
+}
+
+function diagnosticsFor(
+  issues: readonly CursorCapabilityIssue[],
+): ModelFusionDiagnostic[] {
+  const seen = new Set<string>();
+  return issues.flatMap((issue) => {
+    const key = `${issue.capability}:${issue.status}:${issue.requestedStatus ?? ""}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [
+      {
+        kind: "capability_missing",
+        message: issue.reason,
+        retryable: false,
+        capability: issue.capability,
+        status: issue.status,
+        ...(issue.requestedStatus
+          ? { requested_status: issue.requestedStatus }
+          : {}),
+      },
+    ];
+  });
+}
+
+function weakerCapability(
+  actual: ModelFusionCapabilityStatus,
+  requested: ModelFusionCapabilityStatus,
+): ModelFusionCapabilityStatus {
+  return capabilityRank(actual) <= capabilityRank(requested)
+    ? actual
+    : requested;
+}
+
+function capabilityRank(status: ModelFusionCapabilityStatus): number {
+  switch (status) {
+    case "supported":
+      return 3;
+    case "degraded":
+      return 2;
+    case "unsupported":
+      return 1;
+    case "unknown":
+      return 0;
+    default: {
+      const exhaustive: never = status;
+      return exhaustive;
+    }
+  }
+}
+
+function resolveCursorModelEvidence(
+  input: RunCursorCandidateInput,
+): CursorModelEvidence {
+  const requestedModel = input.requestedModel ?? input.model.model;
+  const observedModel = input.evidence?.observedModel ?? input.model.model;
+  const explicitStatus = input.evidence?.modelResolutionStatus;
+  const status =
+    explicitStatus ??
+    (requestedModel === observedModel
+      ? "matched"
+      : observedModel === "unknown"
+        ? "unknown"
+        : "blocked_override");
+  return {
+    requestedModel,
+    observedModel,
+    modelId: input.model.id,
+    endpointId: input.model.endpointId ?? input.model.id,
+    status,
+    reason:
+      input.evidence?.modelResolutionReason ??
+      (status === "matched"
+        ? "requested model matched observed provider model"
+        : status === "unknown"
+          ? "observed model was not available in fixture evidence"
+          : "requested model override did not match observed provider model"),
+  };
+}
+
+function routeInventoryArtifactFor(input: {
+  candidateId: string;
+  artifactBaseUri: string;
+  summary: CursorRouteInventorySummary;
+}): ArtifactRef {
+  const payload = stableJson({
+    schema: "route-inventory-evidence.v1",
+    redaction_status: "redacted",
+    desktop_route_stability: "observed-only",
+    summary: input.summary,
+  });
+  return {
+    artifact_id: `artifact_${safeId(input.candidateId)}_route_inventory`,
+    kind: "metrics",
+    uri: `${input.artifactBaseUri}/${safeId(input.candidateId)}-route-inventory.json`,
+    hash: sha256Prefixed(payload),
+    redaction_status: "redacted",
+  };
+}
+
+function stableJson(value: JsonValue): string {
+  if (
+    value === null ||
+    typeof value === "boolean" ||
+    typeof value === "number"
+  ) {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "string") return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  return `{${Object.keys(value)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(value[key] ?? null)}`)
+    .join(",")}}`;
 }
 
 function statusForToolSupport(support: string): ModelFusionCapabilityStatus {

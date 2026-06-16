@@ -71,6 +71,15 @@ export type ArtifactRef = {
   redaction_status?: ModelFusionRedactionStatus;
 };
 
+export type ModelFusionDiagnostic = {
+  kind: "capability_missing";
+  message: string;
+  retryable: boolean;
+  capability?: string;
+  status?: ModelFusionCapabilityStatus;
+  requested_status?: ModelFusionCapabilityStatus;
+};
+
 export type HarnessRunRequestV1 = ContractMetadata<"harness-run-request.v1"> & {
   request_id: string;
   harness_kind: ModelFusionHarnessKind;
@@ -93,6 +102,11 @@ export type HarnessRunResultV1 = ContractMetadata<"harness-run-result.v1"> & {
   output_summary?: string;
   artifacts?: ArtifactRef[];
   capabilities: Record<string, ModelFusionCapabilityStatus>;
+  requested_model?: string;
+  observed_model?: string;
+  model_id?: string;
+  endpoint_id?: string;
+  diagnostics?: ModelFusionDiagnostic[];
   started_at: string;
   finished_at?: string;
   errors?: Array<{ kind: string; message: string; retryable: boolean }>;
@@ -120,6 +134,11 @@ export type CursorRunResultV1 = ContractMetadata<"cursor-run-result.v1"> & {
   transcript_artifact?: ArtifactRef;
   artifacts?: ArtifactRef[];
   capabilities: Record<string, ModelFusionCapabilityStatus>;
+  requested_model?: string;
+  observed_model?: string;
+  model_id?: string;
+  endpoint_id?: string;
+  diagnostics?: ModelFusionDiagnostic[];
   raw_hash: string;
   redacted_hash: string;
 };
@@ -202,6 +221,19 @@ export function cursorRunResultToHarnessRunResult(
     output_summary: cursor.output_summary,
     ...(artifacts.length > 0 ? { artifacts } : {}),
     capabilities: cursor.capabilities,
+    ...(cursor.requested_model !== undefined
+      ? { requested_model: cursor.requested_model }
+      : {}),
+    ...(cursor.observed_model !== undefined
+      ? { observed_model: cursor.observed_model }
+      : {}),
+    ...(cursor.model_id !== undefined ? { model_id: cursor.model_id } : {}),
+    ...(cursor.endpoint_id !== undefined
+      ? { endpoint_id: cursor.endpoint_id }
+      : {}),
+    ...(cursor.diagnostics !== undefined
+      ? { diagnostics: cursor.diagnostics }
+      : {}),
     started_at: cursor.created_at,
     metadata: {
       mapped_from_cursor_result_id: cursor.cursor_run_id,
@@ -261,6 +293,11 @@ export function assertHarnessRunResultV1(
       "output_summary",
       "artifacts",
       "capabilities",
+      "requested_model",
+      "observed_model",
+      "model_id",
+      "endpoint_id",
+      "diagnostics",
       "started_at",
       "finished_at",
       "errors",
@@ -279,6 +316,15 @@ export function assertHarnessRunResultV1(
   if (record.artifacts !== undefined)
     assertArtifacts(record.artifacts, "artifacts");
   assertCapabilityMap(record.capabilities, "capabilities");
+  if (record.requested_model !== undefined)
+    assertString(record.requested_model, "requested_model");
+  if (record.observed_model !== undefined)
+    assertString(record.observed_model, "observed_model");
+  if (record.model_id !== undefined) assertString(record.model_id, "model_id");
+  if (record.endpoint_id !== undefined)
+    assertString(record.endpoint_id, "endpoint_id");
+  if (record.diagnostics !== undefined)
+    assertDiagnostics(record.diagnostics, "diagnostics");
   assertDateTime(record.started_at, "started_at");
   if (record.finished_at !== undefined)
     assertDateTime(record.finished_at, "finished_at");
@@ -337,6 +383,11 @@ export function assertCursorRunResultV1(
       "transcript_artifact",
       "artifacts",
       "capabilities",
+      "requested_model",
+      "observed_model",
+      "model_id",
+      "endpoint_id",
+      "diagnostics",
       "raw_hash",
       "redacted_hash",
     ],
@@ -356,6 +407,15 @@ export function assertCursorRunResultV1(
   if (record.artifacts !== undefined)
     assertArtifacts(record.artifacts, "artifacts");
   assertCapabilityMap(record.capabilities, "capabilities");
+  if (record.requested_model !== undefined)
+    assertString(record.requested_model, "requested_model");
+  if (record.observed_model !== undefined)
+    assertString(record.observed_model, "observed_model");
+  if (record.model_id !== undefined) assertString(record.model_id, "model_id");
+  if (record.endpoint_id !== undefined)
+    assertString(record.endpoint_id, "endpoint_id");
+  if (record.diagnostics !== undefined)
+    assertDiagnostics(record.diagnostics, "diagnostics");
   assertHash(record.raw_hash, "raw_hash");
   assertHash(record.redacted_hash, "redacted_hash");
 }
@@ -439,6 +499,45 @@ function assertErrors(value: unknown, context: string): void {
     assertString(record.message, `${context}[${index}].message`);
     if (typeof record.retryable !== "boolean") {
       throw new Error(`${context}[${index}].retryable must be a boolean`);
+    }
+  }
+}
+
+function assertDiagnostics(value: unknown, context: string): void {
+  if (!Array.isArray(value)) throw new Error(`${context} must be an array`);
+  for (const [index, diagnostic] of value.entries()) {
+    const record = assertObject(diagnostic, `${context}[${index}]`);
+    assertAllowedKeys(
+      record,
+      [
+        "kind",
+        "message",
+        "retryable",
+        "capability",
+        "status",
+        "requested_status",
+      ],
+      `${context}[${index}]`,
+    );
+    if (record.kind !== "capability_missing") {
+      throw new Error(`${context}[${index}].kind must be capability_missing`);
+    }
+    assertString(record.message, `${context}[${index}].message`);
+    if (typeof record.retryable !== "boolean") {
+      throw new Error(`${context}[${index}].retryable must be a boolean`);
+    }
+    if (record.capability !== undefined) {
+      assertString(record.capability, `${context}[${index}].capability`);
+    }
+    if (record.status !== undefined) {
+      assertEnum(record.status, CAPABILITIES, `${context}[${index}].status`);
+    }
+    if (record.requested_status !== undefined) {
+      assertEnum(
+        record.requested_status,
+        CAPABILITIES,
+        `${context}[${index}].requested_status`,
+      );
     }
   }
 }

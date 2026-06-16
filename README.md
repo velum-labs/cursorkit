@@ -60,8 +60,11 @@ compatibility fixtures for the model-fusion roadmap. They validate Cursor-specif
 The importable `cursor-rpc/model-fusion` subpath exposes the same fixture-backed
 surface as a small structural API: `cursorHarness(...)` and
 `runCursorCandidate(...)` produce Cursor-specific records plus mapped generic
-harness results. It does not own fan-out, judge synthesis, lifecycle, receipts,
-or live Cursor tool-call replay.
+harness results. Those records keep requested and observed model IDs separate,
+can attach redacted route-inventory artifact refs, and record unsupported Cursor
+capabilities explicitly. It does not own fan-out, judge synthesis, lifecycle,
+receipts, or live Cursor tool-call replay; desktop routes remain observed-only
+until fixture-backed evidence proves stability.
 
 `ck` is the recommended desktop test launcher. It starts the desktop bridge plus
 a local HTTP CONNECT proxy, opens an isolated Cursor profile with

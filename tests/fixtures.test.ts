@@ -113,6 +113,17 @@ describe("fixtures", () => {
     expect(mapped.result_id).toBe("harness_result_cursor_001");
     expect(mapped.request_id).toBe("harness_req_cursor_001");
     expect(mapped.harness_kind).toBe("cursor");
+    expect(mapped.requested_model).toBe("cursor-local-fixture");
+    expect(mapped.observed_model).toBe("provider-local-fixture");
+    expect(mapped.model_id).toBe("cursor-local-fixture");
+    expect(mapped.endpoint_id).toBe("cursor-local-fixture-endpoint");
+    expect(mapped.diagnostics?.[0]?.kind).toBe("capability_missing");
+    expect(
+      mapped.artifacts?.some(
+        (artifact) =>
+          artifact.artifact_id === "artifact_cursor_route_inventory_001",
+      ),
+    ).toBe(true);
     expect(mapped.metadata?.mapped_from_cursor_result_id).toBe(
       "cursor_run_001",
     );

@@ -25,6 +25,13 @@
       "uri": "fixture://cursor/candidate.patch",
       "hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
       "redaction_status": "synthetic"
+    },
+    {
+      "artifact_id": "artifact_cursor_route_inventory_001",
+      "kind": "metrics",
+      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "redaction_status": "redacted"
     }
   ],
   "capabilities": {
@@ -33,6 +40,20 @@
     "tool_call_loop": "unsupported",
     "route_observation": "degraded"
   },
+  "requested_model": "cursor-local-fixture",
+  "observed_model": "provider-local-fixture",
+  "model_id": "cursor-local-fixture",
+  "endpoint_id": "cursor-local-fixture-endpoint",
+  "diagnostics": [
+    {
+      "kind": "capability_missing",
+      "message": "Cursor capability apply_patch requested supported but is unsupported",
+      "retryable": false,
+      "capability": "apply_patch",
+      "status": "unsupported",
+      "requested_status": "supported"
+    }
+  ],
   "raw_hash": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
   "redacted_hash": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
 }
