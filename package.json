@@ -89,6 +89,11 @@
     "typescript": "6.0.3",
     "vitest": "4.1.8"
   },
+  "pnpm": {
+    "overrides": {
+      "js-yaml": "4.2.0"
+    }
+  },
   "engines": {
     "node": ">=22.0.0"
   }
