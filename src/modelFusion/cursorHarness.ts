@@ -736,24 +736,26 @@ async function postAgentRunToBridge(
           : {}),
         ...(options.headers ?? {}),
       },
-      body: encodeEnvelope(
-        toBinary(
-          AgentClientMessageSchema,
-          create(AgentClientMessageSchema, {
-            runRequest: create(AgentRunRequestSchema, {
-              requestedModel: create(RequestedModelSchema, {
-                modelId:
-                  input.cursorRequest.requested_model ?? input.model.model,
-              }),
-              action: create(ConversationActionSchema, {
-                userMessageAction: create(UserMessageActionSchema, {
-                  userMessage: create(UserMessageSchema, {
-                    text: input.cursorRequest.prompt,
+      body: new Uint8Array(
+        encodeEnvelope(
+          toBinary(
+            AgentClientMessageSchema,
+            create(AgentClientMessageSchema, {
+              runRequest: create(AgentRunRequestSchema, {
+                requestedModel: create(RequestedModelSchema, {
+                  modelId:
+                    input.cursorRequest.requested_model ?? input.model.model,
+                }),
+                action: create(ConversationActionSchema, {
+                  userMessageAction: create(UserMessageActionSchema, {
+                    userMessage: create(UserMessageSchema, {
+                      text: input.cursorRequest.prompt,
+                    }),
                   }),
                 }),
               }),
             }),
-          }),
+          ),
         ),
       ),
       signal: controller.signal,
