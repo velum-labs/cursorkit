@@ -53,6 +53,11 @@ TLS status, capture status, and local model registration. The `desktop-*`
 commands support explicit Cursor desktop app proxy experiments; see
 `docs/cursor-app.md`.
 
+The committed `fixtures/model-fusion-contract/` records are synthetic
+compatibility fixtures for the model-fusion roadmap. They validate Cursor-specific
+`cursor-run-*` records and generic `harness-run-*` records locally without adding
+`handoffkit` as a runtime dependency or changing live Cursor routing behavior.
+
 `ck` is the recommended desktop test launcher. It starts the desktop bridge plus
 a local HTTP CONNECT proxy, opens an isolated Cursor profile with
 `--proxy-server`, and reports whether route inventory traffic reaches the

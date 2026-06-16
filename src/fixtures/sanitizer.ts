@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-import type { FixtureHttpMessage, ProtocolFixture } from "./schema.js";
+import type {
+  FixtureHttpMessage,
+  ModelFusionPayloadSanitization,
+  ProtocolFixture,
+} from "./schema.js";
 import { redactHeaders, redactValue } from "../redaction.js";
 
 export const SANITIZER_VERSION = "1";
@@ -20,6 +24,25 @@ export function sanitizeFixture(fixture: ProtocolFixture): ProtocolFixture {
 
 export function bodySha256(body: Uint8Array): string {
   return createHash("sha256").update(body).digest("hex");
+}
+
+export function sha256Prefixed(body: string | Uint8Array): string {
+  return `sha256:${bodySha256(typeof body === "string" ? Buffer.from(body) : body)}`;
+}
+
+export function sanitizeModelFusionPayload(input: {
+  rawPayload: string;
+  synthetic?: boolean;
+}): ModelFusionPayloadSanitization {
+  const redacted = input.synthetic
+    ? input.rawPayload
+    : redactValue(input.rawPayload);
+  return {
+    redactionStatus: input.synthetic ? "synthetic" : "redacted",
+    raw_hash: sha256Prefixed(input.rawPayload),
+    redacted_hash: sha256Prefixed(redacted),
+    persistedPayload: redacted,
+  };
 }
 
 function sanitizeMessage(message: FixtureHttpMessage): FixtureHttpMessage {

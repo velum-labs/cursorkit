@@ -30,6 +30,15 @@ export interface FixtureHttpMessage {
   bodyBase64: string;
 }
 
+export type FixturePayloadMarker = "raw" | "redacted" | "synthetic";
+
+export interface ModelFusionPayloadSanitization {
+  redactionStatus: FixturePayloadMarker;
+  raw_hash: string;
+  redacted_hash: string;
+  persistedPayload: string;
+}
+
 export function assertFixture(
   value: unknown,
 ): asserts value is ProtocolFixture {

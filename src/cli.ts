@@ -16,6 +16,12 @@ import {
 } from "./desktop.js";
 import { createLogger } from "./logger.js";
 import {
+  assertCursorRunRequestV1,
+  assertCursorRunResultV1,
+  assertHarnessRunRequestV1,
+  assertHarnessRunResultV1,
+} from "./fixtures/modelFusion.js";
+import {
   listProtoFiles,
   loadCursorProto,
   resolveProtoDirectory,
@@ -278,8 +284,10 @@ function capture(config: ReturnType<typeof loadConfig>): void {
 }
 
 function validateFixtures(captureDir: string): void {
+  const modelFusionCount = validateModelFusionFixtures();
   if (!fs.existsSync(captureDir)) {
     console.log(`No fixture capture directory found at ${captureDir}`);
+    console.log(`Validated ${modelFusionCount} model-fusion fixture file(s)`);
     return;
   }
 
@@ -295,7 +303,33 @@ function validateFixtures(captureDir: string): void {
       throw new Error(`${fullPath} is missing redaction.status=sanitized`);
     }
   }
-  console.log(`Validated ${files.length} fixture file(s)`);
+  console.log(
+    `Validated ${files.length} capture fixture file(s) and ${modelFusionCount} model-fusion fixture file(s)`,
+  );
+}
+
+function validateModelFusionFixtures(): number {
+  const root = path.resolve("fixtures", "model-fusion-contract");
+  if (!fs.existsSync(root)) return 0;
+  let count = 0;
+  const validators: Record<string, (value: unknown) => void> = {
+    "harness-run-request.v1": assertHarnessRunRequestV1,
+    "harness-run-result.v1": assertHarnessRunResultV1,
+    "cursor-run-request.v1": assertCursorRunRequestV1,
+    "cursor-run-result.v1": assertCursorRunResultV1,
+  };
+  for (const [schema, validate] of Object.entries(validators)) {
+    const schemaDir = path.join(root, schema);
+    if (!fs.existsSync(schemaDir)) continue;
+    for (const file of fs
+      .readdirSync(schemaDir)
+      .filter((item) => item.endsWith(".json"))) {
+      const fixturePath = path.join(schemaDir, file);
+      validate(JSON.parse(fs.readFileSync(fixturePath, "utf8")) as unknown);
+      count++;
+    }
+  }
+  return count;
 }
 
 main(process.argv).catch((error: unknown) => {
