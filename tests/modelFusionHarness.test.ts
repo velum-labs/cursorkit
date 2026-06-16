@@ -1,15 +1,27 @@
 import { describe, expect, it } from "vitest";
+import { create, toBinary } from "@bufbuild/protobuf";
 
+import { encodeEndStream, encodeEnvelope } from "../src/connectEnvelope.js";
+import {
+  AgentServerMessageSchema,
+  InteractionUpdateSchema,
+  TextDeltaUpdateSchema,
+} from "../src/gen/agent/v1/agent_pb.js";
 import {
   assertCursorRunRequestV1,
   assertCursorRunResultV1,
   assertHarnessRunRequestV1,
   assertHarnessRunResultV1,
+  createCursorBridgeRunClient,
   cursorHarness,
   CursorCapabilityError,
+  runRealCursorCandidate,
   runCursorCandidate,
 } from "../src/modelFusion/index.js";
-import type { HarnessRunRequestV1 } from "../src/modelFusion/index.js";
+import type {
+  CursorRunClient,
+  HarnessRunRequestV1,
+} from "../src/modelFusion/index.js";
 
 function requestFixture(
   overrides: Partial<HarnessRunRequestV1> = {},
@@ -46,6 +58,8 @@ describe("model-fusion harness API", () => {
 
     expect(typeof api.cursorHarness).toBe("function");
     expect(typeof api.runCursorCandidate).toBe("function");
+    expect(typeof api.runRealCursorCandidate).toBe("function");
+    expect(typeof api.createCursorBridgeRunClient).toBe("function");
   });
 
   it("produces valid Cursor-specific and generic harness records", () => {
@@ -153,6 +167,200 @@ describe("model-fusion harness API", () => {
     expect(result.harnessResult.metadata?.missing_capabilities).toEqual(
       result.missingCapabilities,
     );
+  });
+
+  it("labels fixture mode as fixture smoke in metadata and artifact URIs", () => {
+    const result = runCursorCandidate({
+      request: requestFixture(),
+      candidateId: "fixture-smoke",
+      model: { id: "local", model: "local-model" },
+    });
+
+    expect(result.harnessResult.metadata).toMatchObject({
+      adapter_mode: "fixture",
+      evidence_tier: "smoke",
+      fixture: true,
+      artifact_base_uri: "fixture://cursor/smoke",
+    });
+    expect(result.cursorResult.transcript_artifact?.uri).toContain(
+      "fixture://cursor/smoke/",
+    );
+    expect(
+      result.harnessResult.artifacts?.every((artifact) =>
+        artifact.uri?.startsWith("fixture://cursor/smoke/"),
+      ),
+    ).toBe(true);
+  });
+
+  it("records non-fixture evidence through the real adapter seam", async () => {
+    let observedRequestSchema: string | undefined;
+    const client: CursorRunClient = {
+      capabilities: () => ({ route_observation: "supported" }),
+      async run(input) {
+        observedRequestSchema = input.cursorRequest.schema;
+        assertCursorRunRequestV1(input.cursorRequest);
+        expect(input.cursorRequest.workspace_path).toBe("/tmp/cursor-real");
+        return {
+          outputSummary: "Real adapter completed.",
+          transcript:
+            "assistant: Real adapter transcript. Authorization: Bearer secret-token",
+          rawPayload:
+            "Real adapter raw payload Authorization: Bearer secret-token",
+          observedModel: "provider-real-model",
+          routeInventory: {
+            observedRoutes: 1,
+            passThroughRoutes: 0,
+            interceptedRoutes: 1,
+            observedPaths: ["/agent.v1.AgentService/Run"],
+          },
+          artifacts: [
+            {
+              kind: "patch",
+              content: "diff --git a/file b/file\n+real adapter patch\n",
+            },
+          ],
+          toolEvidence: [
+            {
+              tool: "read_file",
+              status: "observed",
+            },
+          ],
+        };
+      },
+    };
+
+    const result = await runRealCursorCandidate(
+      {
+        request: requestFixture(),
+        candidateId: "real/one",
+        model: {
+          id: "local-real",
+          model: "real-model",
+          endpointId: "real-endpoint",
+        },
+        workspacePath: "/tmp/cursor-real",
+      },
+      {
+        adapterMode: "real",
+        cursorRunClient: client,
+        now: () => new Date("2026-06-16T01:00:00.000Z"),
+      },
+    );
+
+    assertCursorRunRequestV1(result.cursorRequest);
+    assertCursorRunResultV1(result.cursorResult);
+    assertHarnessRunResultV1(result.harnessResult);
+    expect(observedRequestSchema).toBe("cursor-run-request.v1");
+    expect(result.harnessResult.metadata).toMatchObject({
+      adapter_mode: "real",
+      evidence_tier: "real",
+      fixture: false,
+      route_inventory: {
+        observedRoutes: 1,
+        passThroughRoutes: 0,
+        interceptedRoutes: 1,
+        observedPaths: ["/agent.v1.AgentService/Run"],
+      },
+      tool_evidence_count: 1,
+    });
+    expect(result.cursorResult.transcript_artifact?.uri).toContain(
+      "cursor-bridge://agent-run/real_one/",
+    );
+    expect(result.cursorResult.artifacts?.[0]?.uri).toContain(
+      "cursor-bridge://agent-run/real_one/",
+    );
+    expect(result.cursorResult.capabilities.apply_patch).toBe("unsupported");
+    expect(result.cursorResult.capabilities.tool_call_loop).toBe("unsupported");
+    expect(JSON.stringify(result)).not.toContain("secret-token");
+    expect(result.cursorResult.raw_hash).not.toBe(
+      result.cursorResult.redacted_hash,
+    );
+  });
+
+  it("real adapter fail-closed rejects unsupported capabilities before invoking the client", async () => {
+    let invoked = false;
+    const client: CursorRunClient = {
+      async run() {
+        invoked = true;
+        throw new Error("should not run");
+      },
+    };
+
+    await expect(
+      runRealCursorCandidate(
+        {
+          request: requestFixture(),
+          candidateId: "real-fail",
+          model: { id: "local", model: "local-model" },
+          requiredCapabilities: ["apply_patch"],
+        },
+        {
+          adapterMode: "real",
+          cursorRunClient: client,
+          capabilityPolicy: "fail-closed",
+        },
+      ),
+    ).rejects.toThrow(CursorCapabilityError);
+    expect(invoked).toBe(false);
+  });
+
+  it("bridge client wraps the Agent Run route with Connect framing", async () => {
+    let observedUrl = "";
+    let observedContentType = "";
+    let observedBodyBytes = 0;
+    const client = createCursorBridgeRunClient({
+      bridgeBaseUrl: "http://127.0.0.1:9443",
+      fetch: async (url, init) => {
+        observedUrl = String(url);
+        observedContentType = String(
+          (init?.headers as Record<string, string>)["content-type"],
+        );
+        observedBodyBytes =
+          init?.body instanceof Uint8Array ? init.body.byteLength : 0;
+        return new Response(
+          new Uint8Array([
+            ...encodeEnvelope(
+              toBinary(
+                AgentServerMessageSchema,
+                create(AgentServerMessageSchema, {
+                  interactionUpdate: create(InteractionUpdateSchema, {
+                    textDelta: create(TextDeltaUpdateSchema, {
+                      text: "bridge response",
+                    }),
+                  }),
+                }),
+              ),
+            ),
+            ...encodeEndStream(),
+          ]),
+          {
+            status: 200,
+            headers: { "content-type": "application/connect+proto" },
+          },
+        );
+      },
+    });
+    const cursorRequest = runCursorCandidate({
+      request: requestFixture(),
+      candidateId: "bridge-client",
+      model: { id: "local", model: "local-model" },
+    }).cursorRequest;
+
+    const result = await client.run({
+      cursorRequest,
+      candidateId: "bridge-client",
+      model: { id: "local", model: "local-model" },
+      workspacePath: ".",
+      capabilities: {},
+    });
+
+    expect(observedUrl).toBe("http://127.0.0.1:9443/agent.v1.AgentService/Run");
+    expect(observedContentType).toBe("application/connect+proto");
+    expect(observedBodyBytes).toBeGreaterThan(0);
+    expect(result.outputSummary).toBe("bridge response");
+    expect(result.routeInventory?.observedPaths).toEqual([
+      "/agent.v1.AgentService/Run",
+    ]);
   });
 
   it("downgrades requested capabilities instead of upgrading Cursor support", () => {

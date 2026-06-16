@@ -16,21 +16,21 @@
     {
       "artifact_id": "artifact_cursor_transcript_001",
       "kind": "transcript",
-      "uri": "fixture://cursor/transcript-redacted.json",
+      "uri": "fixture://cursor/smoke/transcript-redacted.json",
       "hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
       "redaction_status": "redacted"
     },
     {
       "artifact_id": "artifact_cursor_patch_001",
       "kind": "patch",
-      "uri": "fixture://cursor/candidate.patch",
+      "uri": "fixture://cursor/smoke/candidate.patch",
       "hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
       "redaction_status": "synthetic"
     },
     {
       "artifact_id": "artifact_cursor_route_inventory_001",
       "kind": "metrics",
-      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "uri": "fixture://cursor/smoke/route-inventory-redacted.json",
       "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
       "redaction_status": "redacted"
     }
@@ -60,20 +60,22 @@
   "errors": [],
   "metadata": {
     "mapped_from_cursor_result_id": "cursor_run_001",
+    "adapter_mode": "fixture",
+    "evidence_tier": "smoke",
+    "fixture": true,
+    "artifact_base_uri": "fixture://cursor/smoke",
     "model_resolution_status": "blocked_override",
     "model_resolution_reason": "requested model override did not match observed provider model",
     "route_inventory": {
       "observedRoutes": 3,
       "passThroughRoutes": 1,
       "interceptedRoutes": 2,
-      "diagnosis": [
-        "desktop routes are observed-only"
-      ]
+      "diagnosis": ["desktop routes are observed-only"]
     },
     "route_inventory_evidence": {
       "artifact_id": "artifact_cursor_route_inventory_001",
       "kind": "metrics",
-      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "uri": "fixture://cursor/smoke/route-inventory-redacted.json",
       "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
       "redaction_status": "redacted"
     }
