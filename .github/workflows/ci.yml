@@ -6,6 +6,10 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+  packages: read
+
 jobs:
   test:
     runs-on: macos-latest
