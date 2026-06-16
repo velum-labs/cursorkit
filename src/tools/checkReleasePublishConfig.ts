@@ -45,7 +45,7 @@ const PROTOCOL_ORIGIN_PATH = "docs/model-fusion-protocol-origin.json";
 const GITHUB_PACKAGES_REGISTRY = "https://npm.pkg.github.com";
 const CANONICAL_REPOSITORY_URL =
   "git+https://github.com/velum-labs/cursorkit.git";
-const PROTOCOL_PACKAGE_NAME = "@velum/model-fusion-protocol";
+const PROTOCOL_PACKAGE_NAME = "@velum-labs/model-fusion-protocol";
 const PROTOCOL_CONTRACTS = "json-schema+openapi-3.1";
 
 export function checkReleasePublishConfig(repoRoot = process.cwd()): string[] {
@@ -90,9 +90,9 @@ function checkPackageMetadata(
   }
 
   if (packageJson.private === false) {
-    if (!packageJson.name?.startsWith("@velum/")) {
+    if (!packageJson.name?.startsWith("@velum-labs/")) {
       errors.push(
-        `${PACKAGE_JSON_PATH}: publishable GitHub Packages npm packages must use the @velum scope`,
+        `${PACKAGE_JSON_PATH}: publishable GitHub Packages npm packages must use the @velum-labs scope`,
       );
     }
   }

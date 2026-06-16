@@ -44,18 +44,18 @@ Safety guards:
 - `pnpm release:publish:check` requires:
   - `publishConfig.registry` to be `https://npm.pkg.github.com`;
   - `publishConfig.access` to be `restricted`;
-  - publishable packages to use the `@velum/` npm scope;
+  - publishable packages to use the `@velum-labs/` npm scope;
   - the model-fusion protocol package pin to name
-    `@velum/model-fusion-protocol`;
+    `@velum-labs/model-fusion-protocol`;
   - the pinned model-fusion protocol schema bundle hash to match the local
     JSON Schema/OpenAPI protocol manifest.
 - Model-fusion service clients/types must come from the generated
-  `@velum/model-fusion-protocol` OpenAPI package once fusionkit publishes it.
+  `@velum-labs/model-fusion-protocol` OpenAPI package once fusionkit publishes it.
 - Durable record validators/types must come from the fusionkit JSON Schema bundle
   in the generated protocol package. Cursorkit's local record validators are
   temporary fixture validators with schema-bundle provenance until that package
   is published.
-- If `@velum/model-fusion-protocol` is not published, this remains a documented
+- If `@velum-labs/model-fusion-protocol` is not published, this remains a documented
   blocker and the PR must stay draft.
 - Protobuf/Buf remains outside the v1 release path; the release check expects
   JSON Schema durable records and OpenAPI 3.1 HTTP/API contracts.

@@ -15,13 +15,13 @@
     "typescript": {
       "openapi": {
         "generator": "openapi-typescript",
-        "generatedTypes": "@velum/model-fusion-protocol",
+        "generatedTypes": "@velum-labs/model-fusion-protocol",
         "clientRuntime": "openapi-fetch",
         "driftCheck": "corepack pnpm model-fusion:protocol:check"
       },
       "jsonSchema": {
         "source": "fusionkit JSON Schema bundle",
-        "targetPackage": "@velum/model-fusion-protocol",
+        "targetPackage": "@velum-labs/model-fusion-protocol",
         "localStatus": "temporary fixture validators with schema bundle provenance until generated validators are published"
       }
     },
@@ -54,7 +54,7 @@
   ],
   "packages": {
     "typescript": {
-      "name": "@velum/model-fusion-protocol",
+      "name": "@velum-labs/model-fusion-protocol",
       "registry": "npm-or-github-packages",
       "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
       "consumerPlan": "Cursorkit must consume generated OpenAPI clients/types and JSON Schema validators from this package once fusionkit publishes it.",
@@ -105,17 +105,17 @@
   },
   "mergeBlocker": {
     "status": "blocked",
-    "reason": "@velum/model-fusion-protocol is not published in the configured registry yet, so cursorkit cannot consume generated OpenAPI client/types or JSON Schema validators.",
+    "reason": "@velum-labs/model-fusion-protocol is not published in the configured registry yet, so cursorkit cannot consume generated OpenAPI client/types or JSON Schema validators.",
     "requiredBeforeReady": [
-      "Publish @velum/model-fusion-protocol from fusionkit.",
-      "Add @velum/model-fusion-protocol as a dependency or devDependency in cursorkit.",
+      "Publish @velum-labs/model-fusion-protocol from fusionkit.",
+      "Add @velum-labs/model-fusion-protocol as a dependency or devDependency in cursorkit.",
       "Replace local model-fusion contract mirrors with generated package imports where applicable.",
       "Verify the package schema bundle hash matches this manifest."
     ]
   },
   "followUpWorkOutsideCursorkit": [
     "Move the canonical Cursor harness OpenAPI 3.1 source to fusionkit-owned protocol source.",
-    "Publish @velum/model-fusion-protocol for TypeScript consumers.",
+    "Publish @velum-labs/model-fusion-protocol for TypeScript consumers.",
     "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
     "Generate TS OpenAPI client/types with openapi-typescript plus openapi-fetch from fusionkit OpenAPI contracts.",
     "Generate TS durable-record validators/types from the fusionkit JSON Schema bundle.",

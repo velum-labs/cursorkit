@@ -17,7 +17,7 @@
     "access": "restricted"
   },
   "modelFusionProtocol": {
-    "packageName": "@velum/model-fusion-protocol",
+    "packageName": "@velum-labs/model-fusion-protocol",
     "version": "0.1.0",
     "schemaBundleHash": "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
     "contracts": "json-schema+openapi-3.1",

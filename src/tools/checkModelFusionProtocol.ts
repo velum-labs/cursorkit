@@ -61,7 +61,7 @@ const ROOT = process.cwd();
 const ORIGIN_MANIFEST_PATH = "docs/model-fusion-protocol-origin.json";
 const PROTOCOL_DOC_PATH = "docs/model-fusion-protocol.md";
 const PACKAGE_JSON_PATH = "package.json";
-const PROTOCOL_PACKAGE_NAME = "@velum/model-fusion-protocol";
+const PROTOCOL_PACKAGE_NAME = "@velum-labs/model-fusion-protocol";
 const CONTRACT_FIXTURE_ROOT = "fixtures/model-fusion-contract";
 const CURSOR_HARNESS_PROTO_PATH = "proto/model_fusion/v1/cursor_harness.proto";
 const CURSOR_HARNESS_TS_PATH = "src/gen/model_fusion/v1/cursor_harness_pb.ts";
@@ -171,9 +171,11 @@ function checkManifest(
       );
     }
   }
-  if (manifest.packages?.typescript?.name !== "@velum/model-fusion-protocol") {
+  if (
+    manifest.packages?.typescript?.name !== "@velum-labs/model-fusion-protocol"
+  ) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: TypeScript package target must be @velum/model-fusion-protocol`,
+      `${ORIGIN_MANIFEST_PATH}: TypeScript package target must be @velum-labs/model-fusion-protocol`,
     );
   }
   if (
@@ -215,7 +217,7 @@ function checkManifest(
   );
   if (cursorBoundary?.openapi !== undefined) {
     errors.push(
-      `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi must not point at a local OpenAPI mirror while @velum/model-fusion-protocol is unavailable`,
+      `${ORIGIN_MANIFEST_PATH}: CursorHarnessHttpApi must not point at a local OpenAPI mirror while @velum-labs/model-fusion-protocol is unavailable`,
     );
   }
   if (cursorBoundary?.canonicalSource !== "fusionkit") {
@@ -226,7 +228,7 @@ function checkManifest(
   const followUps = manifest.followUpWorkOutsideCursorkit ?? [];
   for (const expected of [
     "OpenAPI 3.1 source",
-    "@velum/model-fusion-protocol",
+    "@velum-labs/model-fusion-protocol",
     "velum-model-fusion-protocol wheels",
     "TS OpenAPI client/types",
     "TS durable-record validators/types",
@@ -341,7 +343,7 @@ function checkProtocolDocs(errors: string[]): void {
   const normalizedDoc = doc.replace(/\s+/g, " ");
   for (const expected of [
     "fusionkit",
-    "@velum/model-fusion-protocol",
+    "@velum-labs/model-fusion-protocol",
     "OpenAPI 3.1 is the source of truth",
     "Service/API clients and request/response models should be generated from OpenAPI specs",
     "Durable record validators and record types should be generated from the JSON Schema bundle",
