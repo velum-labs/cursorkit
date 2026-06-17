@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "cursorkit-v*"
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run release validation and package artifacts without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  npm-package:
+    if: github.repository == 'velum-labs/cursorkit'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://npm.pkg.github.com
+          scope: "@velum-labs"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: vendor/extract-cursor-protos/go.mod
+          cache-dependency-path: vendor/extract-cursor-protos/go.mod
+
+      - run: pnpm install --frozen-lockfile
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+      - run: pnpm codegen
+      - run: git diff --exit-code -- src/gen
+      - run: pnpm release:publish:check
+      - run: pnpm check
+      - run: pnpm audit --audit-level moderate
+      - run: go test ./...
+        working-directory: vendor/extract-cursor-protos
+
+      - name: Read package metadata
+        id: metadata
+        run: |
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const pkg = require('./package.json');
+          console.log(`name=${pkg.name}`);
+          console.log(`version=${pkg.version}`);
+          console.log(`private=${pkg.private === true ? 'true' : 'false'}`);
+          console.log(`publishable=${pkg.private === false ? 'true' : 'false'}`);
+          console.log(`protocol_package=${pkg.modelFusionProtocol?.packageName ?? ''}`);
+          console.log(`protocol_version=${pkg.modelFusionProtocol?.version ?? ''}`);
+          console.log(`protocol_hash=${pkg.modelFusionProtocol?.schemaBundleHash ?? ''}`);
+          NODE
+
+      - name: Pack npm tarball
+        run: |
+          mkdir -p dist-release
+          pnpm pack --pack-destination dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cursorkit-npm-package-${{ steps.metadata.outputs.version }}
+          path: dist-release/*.tgz
+          if-no-files-found: error
+
+      - name: Publish to GitHub Packages
+        if: >-
+          startsWith(github.ref, 'refs/tags/') &&
+          steps.metadata.outputs.publishable == 'true' &&
+          (github.event_name == 'push' || inputs.dry_run == false)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm publish dist-release/*.tgz --provenance --access restricted --registry=https://npm.pkg.github.com
+
+      - name: Skip publish for private package
+        if: steps.metadata.outputs.publishable != 'true'
+        run: |
+          echo "Package ${PACKAGE_NAME} is private; release workflow validated and packed artifacts but skipped npm publish."
+        env:
+          PACKAGE_NAME: ${{ steps.metadata.outputs.name }}

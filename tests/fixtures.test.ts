@@ -16,6 +16,7 @@ import {
   assertHarnessRunResultV1,
   cursorRunResultToHarnessRunResult,
 } from "../src/fixtures/modelFusion.js";
+import { checkModelFusionProtocol } from "../src/tools/checkModelFusionProtocol.js";
 
 const MODEL_FUSION_ROOT = join(
   process.cwd(),
@@ -165,5 +166,9 @@ describe("fixtures", () => {
 
     expect(result.status).toBe(0);
     expect(result.stdout).toContain("Validated 8 model-fusion fixture file(s)");
+  });
+
+  it("keeps local model-fusion protocol mirrors tied to the origin manifest", () => {
+    expect(checkModelFusionProtocol()).toEqual([]);
   });
 });

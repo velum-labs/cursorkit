@@ -1,4 +1,11 @@
+import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+
 import { CURSOR_TOOL_SURFACE } from "../agentTools/surface.js";
+import {
+  decodeEnvelopes,
+  encodeEnvelope,
+  isEndStreamEnvelope,
+} from "../connectEnvelope.js";
 import {
   assertCursorRunRequestV1,
   assertCursorRunResultV1,
@@ -17,8 +24,19 @@ import type {
   JsonValue,
   ModelFusionCapabilityStatus,
   ModelFusionDiagnostic,
+  ModelFusionStatus,
 } from "../fixtures/modelFusion.js";
 import { sanitizeModelFusionPayload } from "../fixtures/sanitizer.js";
+import {
+  AgentClientMessageSchema,
+  AgentRunRequestSchema,
+  AgentServerMessageSchema,
+  ConversationActionSchema,
+  RequestedModelSchema,
+  UserMessageActionSchema,
+  UserMessageSchema,
+} from "../gen/agent/v1/agent_pb.js";
+import { AGENT_RUN_PATH } from "../routes.js";
 
 export type CursorCapabilityPolicy = "record-and-degrade" | "fail-closed";
 
@@ -27,6 +45,9 @@ export type CursorHarnessModel = {
   model: string;
   endpointId?: string;
 };
+
+export type CursorAdapterMode = "fixture" | "real";
+export type CursorEvidenceTier = "smoke" | "real";
 
 export type CursorRouteInventorySummary = {
   observedRoutes: number;
@@ -49,9 +70,20 @@ export type CursorCandidateEvidence = {
   modelResolutionReason?: string;
   routeInventory?: CursorRouteInventorySummary;
   routeInventoryArtifact?: ArtifactRef;
+  artifacts?: CursorArtifactEvidence[];
+  toolEvidence?: Record<string, JsonValue>[];
 };
 
-export type CursorHarnessOptions = {
+export type CursorArtifactEvidence = {
+  artifactId?: string;
+  kind: ArtifactRef["kind"];
+  uri?: string;
+  content?: string;
+  hash?: string;
+  redactionStatus?: ArtifactRef["redaction_status"];
+};
+
+export type CursorHarnessBaseOptions = {
   capabilityPolicy?: CursorCapabilityPolicy;
   artifactBaseUri?: string;
   producer?: string;
@@ -59,6 +91,20 @@ export type CursorHarnessOptions = {
   producerGitSha?: string;
   now?: () => Date;
 };
+
+export type CursorFixtureHarnessOptions = CursorHarnessBaseOptions & {
+  adapterMode?: "fixture";
+};
+
+export type CursorRealHarnessOptions = CursorHarnessBaseOptions & {
+  adapterMode: "real";
+  cursorRunClient: CursorRunClient;
+  capabilities?: Record<string, ModelFusionCapabilityStatus>;
+};
+
+export type CursorHarnessOptions =
+  | CursorFixtureHarnessOptions
+  | CursorRealHarnessOptions;
 
 export type RunCursorCandidateInput = {
   request: HarnessRunRequestV1;
@@ -102,11 +148,59 @@ export type RunCursorCandidateOutput = {
   metadata: Record<string, JsonValue>;
 };
 
-export type CursorHarness = {
+export type CursorRunClientRequest = {
+  cursorRequest: CursorRunRequestV1;
+  candidateId: string;
+  model: CursorHarnessModel;
+  workspacePath: string;
+  timeoutMs?: number;
+  capabilities: Record<string, ModelFusionCapabilityStatus>;
+};
+
+export type CursorRunClientResult = {
+  status?: ModelFusionStatus;
+  outputSummary?: string;
+  transcript?: string;
+  rawPayload?: string;
+  observedModel?: string;
+  modelId?: string;
+  endpointId?: string;
+  routeInventory?: CursorRouteInventorySummary;
+  routeInventoryArtifact?: ArtifactRef;
+  artifacts?: CursorArtifactEvidence[];
+  capabilities?: Record<string, ModelFusionCapabilityStatus>;
+  toolEvidence?: Record<string, JsonValue>[];
+};
+
+export type CursorRunClient = {
+  capabilities?: () => Record<string, ModelFusionCapabilityStatus>;
+  run(input: CursorRunClientRequest): Promise<CursorRunClientResult>;
+};
+
+export type CursorBridgeRunClientOptions = {
+  bridgeBaseUrl: string;
+  authToken?: string;
+  headers?: Record<string, string>;
+  fetch?: typeof fetch;
+};
+
+export type CursorFixtureHarness = {
   id: "cursor";
+  adapterMode: "fixture";
   capabilities(): Record<string, ModelFusionCapabilityStatus>;
   runCursorCandidate(input: RunCursorCandidateInput): RunCursorCandidateOutput;
 };
+
+export type CursorRealHarness = {
+  id: "cursor";
+  adapterMode: "real";
+  capabilities(): Record<string, ModelFusionCapabilityStatus>;
+  runCursorCandidate(
+    input: RunCursorCandidateInput,
+  ): Promise<RunCursorCandidateOutput>;
+};
+
+export type CursorHarness = CursorFixtureHarness | CursorRealHarness;
 
 export class CursorCapabilityError extends Error {
   readonly issues: CursorCapabilityIssue[];
@@ -132,10 +226,25 @@ const CORE_CAPABILITIES: Record<string, ModelFusionCapabilityStatus> = {
 };
 
 export function cursorHarness(
+  options: CursorRealHarnessOptions,
+): CursorRealHarness;
+export function cursorHarness(
+  options?: CursorFixtureHarnessOptions,
+): CursorFixtureHarness;
+export function cursorHarness(
   options: CursorHarnessOptions = {},
 ): CursorHarness {
+  if (options.adapterMode === "real") {
+    return {
+      id: "cursor",
+      adapterMode: "real",
+      capabilities: () => realCursorCapabilities(options),
+      runCursorCandidate: (input) => runRealCursorCandidate(input, options),
+    };
+  }
   return {
     id: "cursor",
+    adapterMode: "fixture",
     capabilities: () => cursorCapabilities(),
     runCursorCandidate: (input) => runCursorCandidate(input, options),
   };
@@ -143,12 +252,128 @@ export function cursorHarness(
 
 export function runCursorCandidate(
   input: RunCursorCandidateInput,
-  options: CursorHarnessOptions = {},
+  options: CursorFixtureHarnessOptions = {},
 ): RunCursorCandidateOutput {
+  const prepared = prepareCursorCandidateRun(
+    input,
+    options,
+    cursorCapabilities(),
+  );
+  const evidence: CursorCandidateEvidence = {
+    ...input.evidence,
+    outputSummary:
+      input.evidence?.outputSummary ??
+      `Cursor candidate ${input.candidateId} recorded fixture-backed smoke evidence.`,
+  };
+  return buildCursorCandidateOutput({
+    input,
+    options,
+    prepared,
+    adapterMode: "fixture",
+    evidenceTier: "smoke",
+    artifactBaseUri: options.artifactBaseUri ?? "fixture://cursor/smoke",
+    evidence,
+    status: "succeeded",
+  });
+}
+
+export async function runRealCursorCandidate(
+  input: RunCursorCandidateInput,
+  options: CursorRealHarnessOptions,
+): Promise<RunCursorCandidateOutput> {
+  const prepared = prepareCursorCandidateRun(
+    input,
+    options,
+    realCursorCapabilities(options),
+  );
+  const cursorRequest = buildCursorRunRequest(input, options, prepared);
+  assertCursorRunRequestV1(cursorRequest);
+  const clientResult = await options.cursorRunClient.run({
+    cursorRequest,
+    candidateId: input.candidateId,
+    model: input.model,
+    workspacePath: cursorRequest.workspace_path,
+    timeoutMs: input.timeoutMs,
+    capabilities: prepared.capabilities,
+  });
+  const observedModel =
+    clientResult.observedModel ?? input.evidence?.observedModel;
+  const evidence: CursorCandidateEvidence = {
+    ...input.evidence,
+    rawPayload: clientResult.rawPayload ?? input.evidence?.rawPayload,
+    transcript: clientResult.transcript ?? input.evidence?.transcript,
+    outputSummary:
+      clientResult.outputSummary ??
+      input.evidence?.outputSummary ??
+      `Cursor candidate ${input.candidateId} completed through the real Cursor adapter.`,
+    observedModel,
+    routeInventory:
+      clientResult.routeInventory ?? input.evidence?.routeInventory,
+    routeInventoryArtifact:
+      clientResult.routeInventoryArtifact ??
+      input.evidence?.routeInventoryArtifact,
+    artifacts: [
+      ...(input.evidence?.artifacts ?? []),
+      ...(clientResult.artifacts ?? []),
+    ],
+    toolEvidence: [
+      ...(input.evidence?.toolEvidence ?? []),
+      ...(clientResult.toolEvidence ?? []),
+    ],
+  };
+  const modelEvidence = resolveCursorModelEvidence({
+    ...input,
+    model: {
+      ...input.model,
+      id: clientResult.modelId ?? input.model.id,
+      endpointId: clientResult.endpointId ?? input.model.endpointId,
+    },
+    evidence,
+  });
+  return buildCursorCandidateOutput({
+    input,
+    options,
+    prepared: {
+      ...prepared,
+      cursorRequest,
+      capabilities: effectiveCapabilities(
+        {
+          ...prepared.capabilities,
+          ...(clientResult.capabilities ?? {}),
+        },
+        input.request.requested_capabilities,
+      ),
+      modelEvidence,
+    },
+    adapterMode: "real",
+    evidenceTier: "real",
+    artifactBaseUri:
+      options.artifactBaseUri ??
+      `cursor-bridge://agent-run/${safeId(input.candidateId)}`,
+    evidence,
+    status: clientResult.status ?? "succeeded",
+  });
+}
+
+type PreparedCursorCandidateRun = {
+  now: string;
+  cursorRunId: string;
+  capabilities: Record<string, ModelFusionCapabilityStatus>;
+  diagnostics: ModelFusionDiagnostic[];
+  missingCapabilities: CursorCapabilityIssue[];
+  modelEvidence: CursorModelEvidence;
+  cursorRequest?: CursorRunRequestV1;
+};
+
+function prepareCursorCandidateRun(
+  input: RunCursorCandidateInput,
+  options: CursorHarnessBaseOptions,
+  actualCapabilities: Record<string, ModelFusionCapabilityStatus>,
+): PreparedCursorCandidateRun {
   assertHarnessRunRequestV1(input.request);
   const capabilityPolicy = options.capabilityPolicy ?? "record-and-degrade";
   const capabilities = effectiveCapabilities(
-    cursorCapabilities(),
+    actualCapabilities,
     input.request.requested_capabilities,
   );
   const overrideIssues = capabilityOverrideIssues(
@@ -170,90 +395,106 @@ export function runCursorCandidate(
     ]);
   }
 
-  const now = (options.now ?? (() => new Date()))().toISOString();
-  const cursorRunId = `cursor_run_${safeId(input.candidateId)}`;
-  const modelEvidence = resolveCursorModelEvidence(input);
-  const artifactBaseUri = options.artifactBaseUri ?? "fixture://cursor";
-  const rawPayload =
-    input.evidence?.rawPayload ??
-    JSON.stringify({
-      prompt: input.request.prompt,
-      candidateId: input.candidateId,
-      model: modelEvidence.requestedModel,
-    });
-  const sanitized = sanitizeModelFusionPayload({ rawPayload });
-  const transcriptArtifact: ArtifactRef = {
-    artifact_id: `artifact_${safeId(input.candidateId)}_cursor_transcript`,
-    kind: "transcript",
-    uri: `${artifactBaseUri}/${safeId(input.candidateId)}-transcript-redacted.json`,
-    hash: sanitized.redacted_hash,
-    redaction_status: sanitized.redactionStatus,
+  return {
+    now: (options.now ?? (() => new Date()))().toISOString(),
+    cursorRunId: `cursor_run_${safeId(input.candidateId)}`,
+    capabilities,
+    diagnostics,
+    missingCapabilities,
+    modelEvidence: resolveCursorModelEvidence(input),
   };
-  const routeInventoryArtifact =
-    input.evidence?.routeInventoryArtifact ??
-    (input.evidence?.routeInventory
-      ? routeInventoryArtifactFor({
-          candidateId: input.candidateId,
-          artifactBaseUri,
-          summary: input.evidence.routeInventory,
-        })
-      : undefined);
-  const artifacts = [
-    ...(input.evidence?.diff
-      ? [
-          {
-            artifact_id: `artifact_${safeId(input.candidateId)}_cursor_patch`,
-            kind: "patch" as const,
-            uri: `${artifactBaseUri}/${safeId(input.candidateId)}.patch`,
-            hash: sha256Prefixed(input.evidence.diff),
-            redaction_status: "redacted" as const,
-          },
-        ]
-      : []),
-    ...(input.evidence?.log
-      ? [
-          {
-            artifact_id: `artifact_${safeId(input.candidateId)}_cursor_log`,
-            kind: "log" as const,
-            uri: `${artifactBaseUri}/${safeId(input.candidateId)}.log`,
-            hash: sha256Prefixed(input.evidence.log),
-            redaction_status: "redacted" as const,
-          },
-        ]
-      : []),
-    ...(routeInventoryArtifact ? [routeInventoryArtifact] : []),
-  ];
+}
 
-  const cursorRequest: CursorRunRequestV1 = {
-    ...metadata("cursor-run-request.v1", options, now),
-    cursor_run_id: cursorRunId,
+function buildCursorRunRequest(
+  input: RunCursorCandidateInput,
+  options: CursorHarnessBaseOptions,
+  prepared: PreparedCursorCandidateRun,
+): CursorRunRequestV1 {
+  return {
+    ...metadata("cursor-run-request.v1", options, prepared.now),
+    cursor_run_id: prepared.cursorRunId,
     harness_request_id: input.request.request_id,
     workspace_path: input.workspacePath ?? input.worktreePath ?? ".",
     prompt: input.request.prompt,
     prompt_hash: input.request.prompt_hash,
-    requested_model: modelEvidence.requestedModel,
+    requested_model: prepared.modelEvidence.requestedModel,
     allowed_tools: input.request.allowed_tools ?? supportedCursorToolNames(),
     side_effects: input.request.side_effects,
     requested_capabilities: input.request.requested_capabilities,
   };
+}
+
+function buildCursorCandidateOutput(input: {
+  input: RunCursorCandidateInput;
+  options: CursorHarnessBaseOptions;
+  prepared: PreparedCursorCandidateRun;
+  adapterMode: CursorAdapterMode;
+  evidenceTier: CursorEvidenceTier;
+  artifactBaseUri: string;
+  evidence: CursorCandidateEvidence;
+  status: ModelFusionStatus;
+}): RunCursorCandidateOutput {
+  const runInput = input.input;
+  const modelEvidence = input.prepared.modelEvidence;
+  const cursorRequest =
+    input.prepared.cursorRequest ??
+    buildCursorRunRequest(runInput, input.options, input.prepared);
+  const rawPayload =
+    input.evidence.rawPayload ??
+    input.evidence.transcript ??
+    JSON.stringify({
+      prompt: runInput.request.prompt,
+      candidateId: runInput.candidateId,
+      model: modelEvidence.requestedModel,
+      adapterMode: input.adapterMode,
+      evidenceTier: input.evidenceTier,
+    });
+  const sanitized = sanitizeModelFusionPayload({ rawPayload });
+  const transcriptArtifact: ArtifactRef = {
+    artifact_id: `artifact_${safeId(runInput.candidateId)}_cursor_transcript`,
+    kind: "transcript",
+    uri: `${input.artifactBaseUri}/${safeId(runInput.candidateId)}-transcript-redacted.json`,
+    hash: sanitized.redacted_hash,
+    redaction_status:
+      input.adapterMode === "fixture" ? "synthetic" : sanitized.redactionStatus,
+  };
+  const routeInventoryArtifact =
+    input.evidence.routeInventoryArtifact ??
+    (input.evidence.routeInventory
+      ? routeInventoryArtifactFor({
+          candidateId: runInput.candidateId,
+          artifactBaseUri: input.artifactBaseUri,
+          summary: input.evidence.routeInventory,
+        })
+      : undefined);
+  const artifacts = [
+    ...artifactRefsForEvidence({
+      candidateId: runInput.candidateId,
+      artifactBaseUri: input.artifactBaseUri,
+      evidence: input.evidence,
+    }),
+    ...(routeInventoryArtifact ? [routeInventoryArtifact] : []),
+  ];
 
   const cursorResult: CursorRunResultV1 = {
-    ...metadata("cursor-run-result.v1", options, now),
-    cursor_run_id: cursorRunId,
-    harness_request_id: input.request.request_id,
-    mapped_harness_result_id: `harness_result_${safeId(input.candidateId)}`,
-    status: "succeeded",
+    ...metadata("cursor-run-result.v1", input.options, input.prepared.now),
+    cursor_run_id: input.prepared.cursorRunId,
+    harness_request_id: runInput.request.request_id,
+    mapped_harness_result_id: `harness_result_${safeId(runInput.candidateId)}`,
+    status: input.status,
     output_summary:
-      input.evidence?.outputSummary ??
-      `Cursor candidate ${input.candidateId} recorded fixture-backed evidence.`,
+      input.evidence.outputSummary ??
+      `Cursor candidate ${runInput.candidateId} completed.`,
     transcript_artifact: transcriptArtifact,
     ...(artifacts.length > 0 ? { artifacts } : {}),
-    capabilities,
+    capabilities: input.prepared.capabilities,
     requested_model: modelEvidence.requestedModel,
     observed_model: modelEvidence.observedModel,
     model_id: modelEvidence.modelId,
     endpoint_id: modelEvidence.endpointId,
-    ...(diagnostics.length > 0 ? { diagnostics } : {}),
+    ...(input.prepared.diagnostics.length > 0
+      ? { diagnostics: input.prepared.diagnostics }
+      : {}),
     raw_hash: sanitized.raw_hash,
     redacted_hash: sanitized.redacted_hash,
   };
@@ -261,26 +502,35 @@ export function runCursorCandidate(
   assertCursorRunRequestV1(cursorRequest);
   assertCursorRunResultV1(cursorResult);
   const mapped = cursorRunResultToHarnessRunResult(cursorResult);
+  const toolEvidence = input.evidence.toolEvidence ?? [];
   const harnessResult: HarnessRunResultV1 = {
     ...mapped,
-    candidate_ids: [input.candidateId],
+    candidate_ids: [runInput.candidateId],
     metadata: {
       ...(mapped.metadata ?? {}),
-      candidate_id: input.candidateId,
-      model_id: input.model.id,
-      model: input.model.model,
-      endpoint_id: input.model.endpointId ?? input.model.id,
+      adapter_mode: input.adapterMode,
+      evidence_tier: input.evidenceTier,
+      fixture: input.adapterMode === "fixture",
+      artifact_base_uri: input.artifactBaseUri,
+      candidate_id: runInput.candidateId,
+      model_id: runInput.model.id,
+      model: runInput.model.model,
+      endpoint_id: runInput.model.endpointId ?? runInput.model.id,
       requested_model: modelEvidence.requestedModel,
       observed_model: modelEvidence.observedModel,
       model_resolution_status: modelEvidence.status,
       model_resolution_reason: modelEvidence.reason,
-      ...(input.worktreePath ? { worktree_path: input.worktreePath } : {}),
-      missing_capabilities: missingCapabilities,
-      route_inventory: input.evidence?.routeInventory ?? null,
+      ...(runInput.worktreePath
+        ? { worktree_path: runInput.worktreePath }
+        : {}),
+      missing_capabilities: input.prepared.missingCapabilities,
+      route_inventory: input.evidence.routeInventory ?? null,
       ...(routeInventoryArtifact
         ? { route_inventory_evidence: routeInventoryArtifact }
         : {}),
-      ...(input.metadata ?? {}),
+      tool_evidence_count: toolEvidence.length,
+      ...(toolEvidence.length > 0 ? { tool_evidence: toolEvidence } : {}),
+      ...(runInput.metadata ?? {}),
     },
   };
   assertHarnessRunResultV1(harnessResult);
@@ -289,8 +539,100 @@ export function runCursorCandidate(
     cursorRequest,
     cursorResult,
     harnessResult,
-    missingCapabilities,
+    missingCapabilities: input.prepared.missingCapabilities,
     metadata: harnessResult.metadata ?? {},
+  };
+}
+
+function artifactRefsForEvidence(input: {
+  candidateId: string;
+  artifactBaseUri: string;
+  evidence: CursorCandidateEvidence;
+}): ArtifactRef[] {
+  return [
+    ...(input.evidence.diff
+      ? [
+          artifactRefForContent({
+            candidateId: input.candidateId,
+            artifactBaseUri: input.artifactBaseUri,
+            suffix: "cursor_patch",
+            filename: `${safeId(input.candidateId)}.patch`,
+            kind: "patch",
+            content: input.evidence.diff,
+          }),
+        ]
+      : []),
+    ...(input.evidence.log
+      ? [
+          artifactRefForContent({
+            candidateId: input.candidateId,
+            artifactBaseUri: input.artifactBaseUri,
+            suffix: "cursor_log",
+            filename: `${safeId(input.candidateId)}.log`,
+            kind: "log",
+            content: input.evidence.log,
+          }),
+        ]
+      : []),
+    ...(input.evidence.artifacts ?? []).map((artifact, index) =>
+      artifactRefForEvidence({
+        candidateId: input.candidateId,
+        artifactBaseUri: input.artifactBaseUri,
+        artifact,
+        index,
+      }),
+    ),
+  ];
+}
+
+function artifactRefForContent(input: {
+  candidateId: string;
+  artifactBaseUri: string;
+  suffix: string;
+  filename: string;
+  kind: ArtifactRef["kind"];
+  content: string;
+}): ArtifactRef {
+  return {
+    artifact_id: `artifact_${safeId(input.candidateId)}_${input.suffix}`,
+    kind: input.kind,
+    uri: `${input.artifactBaseUri}/${input.filename}`,
+    hash: sha256Prefixed(input.content),
+    redaction_status: "redacted",
+  };
+}
+
+function artifactRefForEvidence(input: {
+  candidateId: string;
+  artifactBaseUri: string;
+  artifact: CursorArtifactEvidence;
+  index: number;
+}): ArtifactRef {
+  const suffix = `${input.artifact.kind}_${String(input.index + 1)}`;
+  const artifactId =
+    input.artifact.artifactId ??
+    `artifact_${safeId(input.candidateId)}_cursor_${suffix}`;
+  const uri =
+    input.artifact.uri ??
+    `${input.artifactBaseUri}/${safeId(input.candidateId)}-${suffix}.json`;
+  return {
+    artifact_id: artifactId,
+    kind: input.artifact.kind,
+    uri,
+    hash:
+      input.artifact.hash ??
+      sha256Prefixed(input.artifact.content ?? `${artifactId}:${uri}`),
+    redaction_status: input.artifact.redactionStatus ?? "redacted",
+  };
+}
+
+function realCursorCapabilities(
+  options: CursorRealHarnessOptions,
+): Record<string, ModelFusionCapabilityStatus> {
+  return {
+    ...cursorCapabilities(),
+    ...(options.cursorRunClient.capabilities?.() ?? {}),
+    ...(options.capabilities ?? {}),
   };
 }
 
@@ -306,6 +648,176 @@ export function cursorCapabilities(): Record<
     );
   }
   return { ...CORE_CAPABILITIES, ...toolCapabilities };
+}
+
+export function createCursorBridgeRunClient(
+  options: CursorBridgeRunClientOptions,
+): CursorRunClient {
+  return {
+    capabilities: () => ({
+      workspace_read: "supported",
+      route_observation: "degraded",
+      apply_patch: "unsupported",
+      tool_call_loop: "unsupported",
+    }),
+    run: async (input) => {
+      const response = await postAgentRunToBridge(options, input);
+      const body = Buffer.from(await response.arrayBuffer());
+      const transcript = decodeAgentRunTranscript(body);
+      const routeInventory: CursorRouteInventorySummary = {
+        observedRoutes: 1,
+        passThroughRoutes: 0,
+        interceptedRoutes: response.ok ? 1 : 0,
+        degradedRoutes: response.ok ? 0 : 1,
+        failedRouteCount: response.ok ? 0 : 1,
+        observedPaths: [AGENT_RUN_PATH],
+        diagnosis: [
+          response.ok
+            ? "Agent Run was submitted through the Cursor bridge route."
+            : `Agent Run bridge request failed with HTTP ${String(response.status)}.`,
+        ],
+      };
+      const rawPayload = stableJson({
+        schema: "cursor-agent-run-transcript.v1",
+        bridge_path: AGENT_RUN_PATH,
+        status: response.status,
+        headers: responseHeaders(response),
+        transcript,
+      });
+      return {
+        status: response.ok ? "succeeded" : "failed",
+        outputSummary:
+          transcript.text.length > 0
+            ? transcript.text
+            : `Cursor bridge Agent Run returned HTTP ${String(response.status)}.`,
+        transcript: rawPayload,
+        rawPayload,
+        observedModel: input.model.model,
+        routeInventory,
+        artifacts: [
+          {
+            kind: "log",
+            content: stableJson({
+              bridge_path: AGENT_RUN_PATH,
+              status: response.status,
+              body_bytes: body.byteLength,
+              text_chars: transcript.text.length,
+            }),
+          },
+        ],
+        toolEvidence: [
+          {
+            bridge_path: AGENT_RUN_PATH,
+            observed_tool_events: transcript.toolEventCount,
+          },
+        ],
+      };
+    },
+  };
+}
+
+async function postAgentRunToBridge(
+  options: CursorBridgeRunClientOptions,
+  input: CursorRunClientRequest,
+): Promise<Response> {
+  const fetchImpl = options.fetch ?? fetch;
+  const controller = new AbortController();
+  let timeout: NodeJS.Timeout | undefined;
+  if (input.timeoutMs !== undefined) {
+    timeout = setTimeout(() => controller.abort(), input.timeoutMs);
+  }
+  try {
+    return await fetchImpl(agentRunUrl(options.bridgeBaseUrl), {
+      method: "POST",
+      headers: {
+        "content-type": "application/connect+proto",
+        ...(options.authToken !== undefined
+          ? { authorization: `Bearer ${options.authToken}` }
+          : {}),
+        ...(options.headers ?? {}),
+      },
+      body: new Uint8Array(
+        encodeEnvelope(
+          toBinary(
+            AgentClientMessageSchema,
+            create(AgentClientMessageSchema, {
+              runRequest: create(AgentRunRequestSchema, {
+                requestedModel: create(RequestedModelSchema, {
+                  modelId:
+                    input.cursorRequest.requested_model ?? input.model.model,
+                }),
+                action: create(ConversationActionSchema, {
+                  userMessageAction: create(UserMessageActionSchema, {
+                    userMessage: create(UserMessageSchema, {
+                      text: input.cursorRequest.prompt,
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          ),
+        ),
+      ),
+      signal: controller.signal,
+    });
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
+}
+
+function agentRunUrl(bridgeBaseUrl: string): string {
+  return new URL(AGENT_RUN_PATH, bridgeBaseUrl).toString();
+}
+
+function decodeAgentRunTranscript(body: Buffer): {
+  text: string;
+  messageCount: number;
+  toolEventCount: number;
+} {
+  const textParts: string[] = [];
+  let messageCount = 0;
+  let toolEventCount = 0;
+  try {
+    for (const envelope of decodeEnvelopes(body)) {
+      if (isEndStreamEnvelope(envelope) || envelope.payload.length === 0) {
+        continue;
+      }
+      const message = fromBinary(AgentServerMessageSchema, envelope.payload);
+      messageCount += 1;
+      const delta = message.interactionUpdate?.textDelta?.text;
+      if (delta !== undefined && delta.length > 0) {
+        textParts.push(delta);
+      }
+      if (message.execServerMessage !== undefined) {
+        toolEventCount += 1;
+      }
+    }
+  } catch (error) {
+    textParts.push(
+      `Agent Run response decode failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+  return {
+    text: textParts.join(""),
+    messageCount,
+    toolEventCount,
+  };
+}
+
+function responseHeaders(response: Response): Record<string, JsonValue> {
+  const headers: Record<string, JsonValue> = {};
+  response.headers.forEach((value, key) => {
+    if (/authorization|cookie|token|key|secret/i.test(key)) {
+      headers[key] = "[REDACTED]";
+      return;
+    }
+    headers[key] = value.slice(0, 1_000);
+  });
+  return headers;
 }
 
 function effectiveCapabilities(

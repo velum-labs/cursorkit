@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "canonicalSpec": "https://github.com/velum-labs/openclaw-shared/blob/main/spec/2026-06-16-model-fusion-protocol-packaging-spec.md",
+  "origin": {
+    "repo": "fusionkit",
+    "status": "contract-idl-origin",
+    "notes": "fusionkit remains the source of truth for model-fusion JSON Schema durable records and OpenAPI 3.1 HTTP/service contracts until stable generated packages are published."
+  },
+  "serviceIdl": {
+    "sourceOfTruth": "openapi-3.1",
+    "openapi": "v1-http-json-source-of-truth",
+    "localCursorkitStatus": "consumes-published-protocol-package"
+  },
+  "codegen": {
+    "typescript": {
+      "openapi": {
+        "generator": "openapi-typescript",
+        "generatedTypes": "@velum-labs/model-fusion-protocol",
+        "clientRuntime": "openapi-fetch",
+        "driftCheck": "corepack pnpm model-fusion:protocol:check"
+      },
+      "jsonSchema": {
+        "source": "fusionkit JSON Schema bundle",
+        "targetPackage": "@velum-labs/model-fusion-protocol",
+        "localStatus": "temporary fixture validators with schema bundle provenance until generated validators are published"
+      }
+    },
+    "python": {
+      "openapi": {
+        "preferredGenerators": [
+          "openapi-python-client"
+        ],
+        "targetPackage": "velum-model-fusion-protocol"
+      },
+      "jsonSchema": {
+        "preferredGenerators": [
+          "datamodel-code-generator"
+        ],
+        "targetPackage": "velum-model-fusion-protocol"
+      }
+    }
+  },
+  "persistedRecordFormat": {
+    "sourceOfTruth": "json-schema",
+    "notes": "JSON Schema remains the persisted audit and benchmark record format."
+  },
+  "protobufBuf": {
+    "v1Required": false,
+    "status": "reserved-for-future-internal-streaming-connect-grpc",
+    "notes": "Do not require protobuf/Buf for v1 package or HTTP/JSON service consumption."
+  },
+  "schemaBundleHash": "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
+  "persistedJsonSchemas": [
+    "harness-run-request.v1",
+    "harness-run-result.v1",
+    "cursor-run-request.v1",
+    "cursor-run-result.v1"
+  ],
+  "packages": {
+    "typescript": {
+      "name": "@velum-labs/model-fusion-protocol",
+      "registry": "npm-or-github-packages",
+      "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
+      "consumerPlan": "Cursorkit consumes the published package and verifies package metadata, version, and schema bundle hash before merge/release.",
+      "currentStatus": "published-consumed"
+    },
+    "python": {
+      "name": "velum-model-fusion-protocol",
+      "preferredPrivateIndexes": [
+        "Cloudsmith",
+        "CodeArtifact",
+        "Gemfury"
+      ],
+      "shortTermOptions": [
+        "GitHub Releases wheels",
+        "uv git deps"
+      ],
+      "generatedFrom": "fusionkit JSON Schema and OpenAPI 3.1 contracts",
+      "consumerPlan": "Python consumers should use a private PyPI-compatible index; GitHub Packages alone is not sufficient for Python packages."
+    }
+  },
+  "serviceBoundaries": [
+    {
+      "service": "model_fusion.v1.HarnessExecutorService",
+      "owner": "handoffkit",
+      "consumer": "fusionkit",
+      "status": "fusionkit-origin-planned",
+      "purpose": "Coding task execution handoff from benchmark orchestration to executor harnesses."
+    },
+    {
+      "service": "CursorHarnessHttpApi",
+      "owner": "cursorkit",
+      "consumer": "fusionkit",
+      "status": "consumes-published-protocol-package",
+      "canonicalSource": "fusionkit",
+      "purpose": "Cursor adapter execution output, transcript/artifact evidence, and mapped harness result handoff."
+    },
+    {
+      "service": "model_fusion.v1.MlxProviderService",
+      "owner": "providerkit",
+      "consumer": "fusionkit",
+      "status": "fusionkit-origin-planned",
+      "purpose": "Provider capability and model-call metadata for MLX-backed candidates."
+    },
+    {
+      "service": "model_fusion.v1.BenchmarkExecutionService",
+      "owner": "fusionkit",
+      "consumer": "fusionkit",
+      "status": "fusionkit-origin-planned",
+      "purpose": "Benchmark execution and join envelopes for evaluation records."
+    }
+  ],
+  "driftChecks": {
+    "cursorkit": "corepack pnpm model-fusion:protocol:check",
+    "fusionkitTarget": "Generate TS and Python bindings from fusionkit JSON Schema/OpenAPI contracts and verify schema bundle hashes before publish."
+  },
+  "followUpWorkOutsideCursorkit": [
+    "Move the canonical Cursor harness OpenAPI 3.1 source into fusionkit-owned protocol source.",
+    "Maintain @velum-labs/model-fusion-protocol releases for TypeScript consumers.",
+    "Publish velum-model-fusion-protocol wheels through a private PyPI-compatible index or short-term GitHub Releases wheels plus uv git dependencies.",
+    "Generate TS OpenAPI client/types with openapi-typescript plus openapi-fetch from fusionkit OpenAPI contracts.",
+    "Generate TS durable-record validators/types from the fusionkit JSON Schema bundle.",
+    "Generate Python OpenAPI client/models and JSON Schema/Pydantic validators from fusionkit contracts.",
+    "Publish JSON Schema bundle metadata with generated packages so consumers can verify schema bundle hashes."
+  ]
+}

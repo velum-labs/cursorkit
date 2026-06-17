@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 
+import { checkReleasePublishConfig } from "../src/tools/checkReleasePublishConfig.js";
 import {
   buildReleaseCategoryStatuses,
   EXCLUDED_PACKAGE_ENTRY_PREFIXES,
@@ -9,6 +11,26 @@ import {
 } from "../src/tools/releaseCheck.js";
 
 describe("release check metadata", () => {
+  it("keeps release publishing metadata pinned and safe", () => {
+    expect(checkReleasePublishConfig()).toEqual([]);
+  });
+
+  it("documents release workflow tags and canonical publish guards", () => {
+    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    const docs = readFileSync("docs/release-gates.md", "utf8");
+
+    expect(workflow).toContain("cursorkit-v*");
+    expect(workflow).toContain("v*");
+    expect(workflow).toContain("workflow_dispatch");
+    expect(workflow).toContain("github.repository == 'velum-labs/cursorkit'");
+    expect(workflow).toContain("npm publish");
+    expect(workflow).toContain("--provenance");
+    expect(workflow).toContain("https://npm.pkg.github.com");
+    expect(docs).toContain("cursorkit-v0.1.0");
+    expect(docs).toContain("v0.1.0");
+    expect(docs).toContain("PRIVATE_PYPI_*");
+  });
+
   it("requires runtime, docs, proto, and generated release files in the package", () => {
     expect(REQUIRED_PACKAGE_ENTRIES).toEqual(
       expect.arrayContaining([

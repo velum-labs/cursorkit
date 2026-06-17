@@ -14,5 +14,11 @@
   "capabilities": {
     "workspace_read": "supported"
   },
-  "started_at": "2026-06-16T00:02:00Z"
+  "started_at": "2026-06-16T00:02:00Z",
+  "metadata": {
+    "adapter_mode": "fixture",
+    "evidence_tier": "smoke",
+    "fixture": true,
+    "artifact_base_uri": "fixture://cursor/smoke"
+  }
 }

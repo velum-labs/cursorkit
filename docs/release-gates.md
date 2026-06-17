@@ -6,9 +6,16 @@ checks, build, deterministic tests, formatting, examples typecheck, and package
 artifact smoke validation, then writes
 `.cursor-rpc/release-check/release-summary.json`.
 
+GitHub Actions release automation lives in `.github/workflows/release.yml`. It
+validates, tests, and packs the package on explicit release tags and
+workflow-dispatch dry runs. Because `package.json` is still `private: true`, the
+workflow is safe by default: it uploads the packed tarball as a workflow artifact
+and skips npm publish until the package is intentionally made publishable.
+
 Before publishing or sharing a tarball, all gates must pass:
 
 - `pnpm install --frozen-lockfile`
+- `pnpm release:publish:check`
 - `pnpm release:check`
 - `pnpm baseline:check`
 - `pnpm build`
@@ -19,6 +26,48 @@ Before publishing or sharing a tarball, all gates must pass:
 - `pnpm pack`
 - `node dist/src/cli.js --help`
 - `go test ./...` from `vendor/extract-cursor-protos`
+
+## Release publish workflow
+
+Triggers:
+
+- `cursorkit-v*` tags, for example `cursorkit-v0.1.0`
+- `v*` tags, for example `v0.1.0`
+- manual `workflow_dispatch` dry runs, with `dry_run: true` by default
+
+Safety guards:
+
+- The release job only runs when
+  `github.repository == 'velum-labs/cursorkit'`, so forks cannot publish.
+- The publish step only runs on tags and only when `package.json` has
+  `"private": false`.
+- `pnpm release:publish:check` requires:
+  - `publishConfig.registry` to be `https://npm.pkg.github.com`;
+  - `publishConfig.access` to be `restricted`;
+  - publishable packages to use the `@velum-labs/` npm scope;
+  - the model-fusion protocol package pin to name
+    `@velum-labs/model-fusion-protocol`;
+  - the pinned model-fusion protocol schema bundle hash to match the local
+    JSON Schema/OpenAPI protocol manifest.
+- Model-fusion service clients/types must come from the generated
+  `@velum-labs/model-fusion-protocol` OpenAPI package once fusionkit publishes it.
+- Durable record validators/types must come from the fusionkit JSON Schema bundle
+  in the generated protocol package. Cursorkit's local record validators are
+  temporary fixture validators with schema-bundle provenance until that package
+  is published.
+- `@velum-labs/model-fusion-protocol` must be installable from GitHub Packages,
+  and its installed protocol metadata must match the pinned schema bundle hash.
+- Protobuf/Buf remains outside the v1 release path; the release check expects
+  JSON Schema durable records and OpenAPI 3.1 HTTP/API contracts.
+
+Secrets and permissions:
+
+- No custom secret is required for dry runs or GitHub Packages publishing.
+- The workflow uses the built-in `GITHUB_TOKEN` with `packages: write` and
+  `id-token: write`; npm publish uses `--provenance` and the GitHub Packages
+  registry.
+- Python/private PyPI secrets such as `PRIVATE_PYPI_*` are intentionally not used
+  in cursorkit. They belong in fusionkit's protocol-package release workflow.
 
 `pnpm release:check` is the command to trust for deterministic readiness. The
 other commands are listed so an operator can reproduce a failing layer directly

@@ -10,11 +10,11 @@
   "harness_request_id": "harness_req_cursor_001",
   "mapped_harness_result_id": "harness_result_cursor_001",
   "status": "succeeded",
-  "output_summary": "Synthetic Cursor run produced a redacted transcript and mapped harness result.",
+  "output_summary": "Synthetic fixture-smoke Cursor run produced a redacted transcript and mapped harness result.",
   "transcript_artifact": {
     "artifact_id": "artifact_cursor_transcript_001",
     "kind": "transcript",
-    "uri": "fixture://cursor/transcript-redacted.json",
+    "uri": "fixture://cursor/smoke/transcript-redacted.json",
     "hash": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
     "redaction_status": "redacted"
   },
@@ -22,14 +22,14 @@
     {
       "artifact_id": "artifact_cursor_patch_001",
       "kind": "patch",
-      "uri": "fixture://cursor/candidate.patch",
+      "uri": "fixture://cursor/smoke/candidate.patch",
       "hash": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
       "redaction_status": "synthetic"
     },
     {
       "artifact_id": "artifact_cursor_route_inventory_001",
       "kind": "metrics",
-      "uri": "fixture://cursor/route-inventory-redacted.json",
+      "uri": "fixture://cursor/smoke/route-inventory-redacted.json",
       "hash": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
       "redaction_status": "redacted"
     }

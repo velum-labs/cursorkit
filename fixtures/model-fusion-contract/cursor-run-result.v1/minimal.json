@@ -9,7 +9,7 @@
   "cursor_run_id": "cursor_run_min_001",
   "harness_request_id": "harness_req_cursor_min_001",
   "status": "succeeded",
-  "output_summary": "Synthetic minimal Cursor run completed.",
+  "output_summary": "Synthetic minimal fixture-smoke Cursor run completed.",
   "capabilities": {
     "workspace_read": "supported"
   },
