@@ -83,7 +83,7 @@ jobs:
           steps.metadata.outputs.publishable == 'true' &&
           (github.event_name == 'push' || inputs.dry_run == false)
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm publish dist-release/*.tgz --provenance --access restricted --registry=https://npm.pkg.github.com
 
       - name: Skip publish for private package
