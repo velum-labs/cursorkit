@@ -1,6 +1,7 @@
 import type { LocalModelConfig } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { ModelProvider } from "../models/registry.js";
+import { emitTrace, newSpanId, TRACE_ID_HEADER, TRACE_SPAN_HEADER } from "../trace.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -40,6 +41,12 @@ export type OpenAIBackendErrorCode =
 export interface OpenAIStreamOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  /**
+   * Observability correlation id forwarded to the model backend (gateway) as
+   * `x-fusion-trace-id`. The gateway honors it so the Cursor edge shares one
+   * observable session with the downstream fusion run.
+   */
+  traceId?: string;
 }
 
 export class OpenAIBackendError extends Error {
@@ -145,6 +152,25 @@ export class OpenAICompatibleProvider implements ModelProvider {
       options.timeoutMs ??
       this.config.requestTimeoutMs ??
       DEFAULT_BACKEND_REQUEST_TIMEOUT_MS;
+    const traceId = options.traceId ?? process.env.FUSION_TRACE_ID ?? undefined;
+    const traceSpan = newSpanId();
+    const traceHeaders: Record<string, string> =
+      traceId !== undefined
+        ? { [TRACE_ID_HEADER]: traceId, [TRACE_SPAN_HEADER]: traceSpan }
+        : {};
+    emitTrace({
+      event_type: "cursor.route",
+      traceId,
+      spanId: traceSpan,
+      modelId: this.config.id,
+      payload: {
+        message: "model backend request",
+        provider_model: this.config.providerModel,
+        url,
+        tool_count: tools.length,
+        message_count: messages.length,
+      },
+    });
     this.logger?.info("model backend request", {
       modelId: this.config.id,
       providerModel: this.config.providerModel,
@@ -175,6 +201,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
           ...(this.config.apiKey
             ? { authorization: `Bearer ${this.config.apiKey}` }
             : {}),
+          ...traceHeaders,
         },
         body: JSON.stringify(requestBody),
         signal: abortContext.signal,
@@ -242,6 +269,19 @@ export class OpenAICompatibleProvider implements ModelProvider {
         durationMs: Date.now() - started,
         chunkCount,
         responseChars,
+      });
+      emitTrace({
+        event_type: "cursor.route",
+        traceId,
+        spanId: traceSpan,
+        modelId: this.config.id,
+        payload: {
+          message: "model backend response complete",
+          status: response.status,
+          duration_ms: Date.now() - started,
+          chunk_count: chunkCount,
+          response_chars: responseChars,
+        },
       });
     } catch (error) {
       const classified = classifyBackendError(error, abortContext);

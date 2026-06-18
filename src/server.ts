@@ -70,6 +70,7 @@ import {
   withNativeRequestContext,
   writeLocalAgentRunResponse,
 } from "./services/agentRun.js";
+import { emitTrace, newTraceId } from "./trace.js";
 import {
   AgentClientMessageSchema,
   AgentServerMessageSchema,
@@ -1225,8 +1226,16 @@ async function handleAgentRun(
     return;
   }
 
+  const traceId = newTraceId();
+  emitTrace({
+    event_type: "cursor.route",
+    traceId,
+    modelId: decision.model.id,
+    payload: { message: "served local agent run", path, format },
+  });
   await writeLocalAgentRunResponse(response, decision, runtime.logger, {
     signal: requestAbortSignal(request, response),
+    traceId,
   });
 }
 
@@ -1303,10 +1312,18 @@ async function writeLocalAgentRunResponseWithCursorTools(
   payloads: AsyncIterator<Buffer>,
   signal: AbortSignal,
 ): Promise<void> {
+  const traceId = newTraceId();
+  emitTrace({
+    event_type: "cursor.route",
+    traceId,
+    modelId: decision.model.id,
+    payload: { message: "served local agent run (native context)" },
+  });
   const streamEvents = decision.model.provider.streamCompletionEvents;
   if (streamEvents === undefined) {
     await writeLocalAgentRunResponse(response, decision, runtime.logger, {
       signal,
+      traceId,
     });
     return;
   }
@@ -1322,7 +1339,7 @@ async function writeLocalAgentRunResponseWithCursorTools(
       decision.model.provider,
       messages,
       tools,
-      { signal },
+      { signal, traceId },
     )) {
       if (event.type === "text") {
         outputCharacters += event.text.length;
