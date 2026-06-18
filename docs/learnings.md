@@ -32,6 +32,33 @@ source of truth, but the route allowlist is still deliberately narrow.
   `acp`, and the harness now drives
   `initialize`/`authenticate`/`session/new`/`session/prompt` directly.
 
+## Routing The Local Model Backend At A Fusion Gateway
+
+The bridge's local-model backend (`MODEL_BASE_URL`) can point at any
+OpenAI-compatible endpoint, including a model-fusion gateway. This has been
+verified end to end: real `cursor-agent acp` → this bridge → HandoffKit's Fusion
+Harness Gateway → a multi-model fusion run → the synthesized answer streamed
+back to `cursor-agent` via `session/update`.
+
+Observed requirements for that flow:
+
+- Start the bridge with `MODEL_BASE_URL=<gateway>/v1`, `MODEL_NAME=<local id>`,
+  and `MODEL_PROVIDER_MODEL=<model sent upstream>`. The bridge calls
+  `<MODEL_BASE_URL>/chat/completions` with `model = MODEL_PROVIDER_MODEL`.
+- Interception only happens when `cursor-agent --model` equals the registered
+  local id (`MODEL_NAME`). Other models pass upstream.
+- `BRIDGE_HARDCODED_RESPONSE` short-circuits the backend. The `acp`/`traffic`
+  harness suites set it, so they prove connectivity and route inventory, not real
+  backend content. To prove a real backend (fusion or otherwise) flows through,
+  omit `BRIDGE_HARDCODED_RESPONSE`.
+- ACP still depends on a logged-in Cursor session. `authenticate` uses
+  `methodId: "cursor_login"`; without login the flow is `auth_profile_blocked`,
+  not a hard failure.
+
+The gateway side (dialect translation, streaming, fusion synthesis) lives in
+HandoffKit. Cursorkit's role is unchanged: intercept the local model route and
+proxy it to the configured OpenAI-compatible backend.
+
 ## Framing
 
 - Cursor backend RPCs can use Connect envelopes or raw protobuf payloads.
