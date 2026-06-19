@@ -1,7 +1,12 @@
 import type { LocalModelConfig } from "../config.js";
 import type { Logger } from "../logger.js";
 import type { ModelProvider } from "../models/registry.js";
-import { emitTrace, newSpanId, TRACE_ID_HEADER, TRACE_SPAN_HEADER } from "../trace.js";
+import {
+  emitTrace,
+  newSpanId,
+  TRACE_ID_HEADER,
+  TRACE_SPAN_HEADER,
+} from "../trace.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";

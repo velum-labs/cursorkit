@@ -1251,7 +1251,7 @@ export function buildLocalDesktopModelEntry(
     icon: "",
     tertiaryText: "",
     tertiaryTextUrl: "",
-    markdownContent: `**${model.displayName}**<br />Local OpenAI-compatible model served by cursor-rpc.<br /><br />${model.contextTokenLimit.toLocaleString()} token context window`,
+    markdownContent: `**${model.displayName}**<br />Local OpenAI-compatible model served by cursorkit.<br /><br />${model.contextTokenLimit.toLocaleString()} token context window`,
   };
   return {
     name: model.id,
@@ -1852,6 +1852,7 @@ export function bridgeProcessMatchesState(
     (normalizedCommand.includes("src/cli.ts") ||
       normalizedCommand.includes("dist/src/cli.js") ||
       normalizedCommand.includes("/cli.js") ||
+      normalizedCommand.includes("cursorkit") ||
       normalizedCommand.includes("cursor-rpc"))
   );
 }

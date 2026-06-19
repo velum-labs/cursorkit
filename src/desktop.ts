@@ -96,7 +96,7 @@ export async function writeDesktopCertificate(): Promise<{
 
 export function desktopCertificateStatus(config: Config): string {
   if (config.certPath === undefined || config.keyPath === undefined) {
-    return "not configured; run cursor-rpc desktop-cert and set BRIDGE_CERT_PATH/BRIDGE_KEY_PATH";
+    return "not configured; run cursorkit desktop-cert and set BRIDGE_CERT_PATH/BRIDGE_KEY_PATH";
   }
   if (!fs.existsSync(config.certPath) || !fs.existsSync(config.keyPath)) {
     return "missing cert or key path";

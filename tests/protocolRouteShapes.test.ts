@@ -477,6 +477,7 @@ function baseConfig(): BridgeConfig {
     desktopAgentHttpPort: undefined,
     routeInventoryEnabled: false,
     modelPayloadLogging: "summary",
+    agentToolMaxIterations: 8,
     agentToolPolicy: "safe",
     agentNativeContextEnabled: true,
     tlsHostnames: ["localhost", "127.0.0.1", "::1"],

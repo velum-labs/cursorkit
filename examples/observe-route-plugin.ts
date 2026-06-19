@@ -1,4 +1,4 @@
-import type { CursorExtension } from "cursor-rpc/extensions";
+import type { CursorExtension } from "@velum-labs/cursorkit/extensions";
 
 const extension: CursorExtension = {
   name: "observe-route",

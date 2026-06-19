@@ -77,7 +77,7 @@ export interface ReleaseCategoryStatus {
 
 const RELEASE_CHECK_DIR = ".cursor-rpc/release-check";
 const PACKAGE_SMOKE_COMMAND =
-  "pnpm pack, pnpm add --offline <tarball>, cursor-rpc --help";
+  "pnpm pack, pnpm add --offline <tarball>, cursorkit --help";
 
 export const REQUIRED_PACKAGE_ENTRIES = [
   "package/package.json",
@@ -400,7 +400,7 @@ function runPackageSmoke(repoRoot: string): GateExecution {
     fs.readFileSync(packedPackageJsonPath, "utf8"),
   ) as { bin?: Record<string, string>; files?: string[] };
   const expectedBins = new Map([
-    ["cursor-rpc", "./dist/src/cli.js"],
+    ["cursorkit", "./dist/src/cli.js"],
     ["ck", "./dist/src/ck.js"],
   ]);
   const invalidBins = Array.from(expectedBins).filter(
@@ -434,21 +434,21 @@ function runPackageSmoke(repoRoot: string): GateExecution {
     return failedExecution(install.status, install.signal, details);
   }
 
-  const cursorRpcBin = path.join(
+  const cursorkitBin = path.join(
     installDir,
     "node_modules",
     ".bin",
-    "cursor-rpc",
+    "cursorkit",
   );
-  const help = spawnSync(cursorRpcBin, ["--help"], {
+  const help = spawnSync(cursorkitBin, ["--help"], {
     cwd: installDir,
     env: process.env,
     encoding: "utf8",
   });
-  details.binary = "cursor-rpc --help";
-  if (help.status !== 0 || !help.stdout.includes("cursor-rpc")) {
+  details.binary = "cursorkit --help";
+  if (help.status !== 0 || !help.stdout.includes("cursorkit")) {
     details.error =
-      help.stderr || "cursor-rpc --help did not print expected help";
+      help.stderr || "cursorkit --help did not print expected help";
     details.stdout = help.stdout;
     return failedExecution(help.status ?? 1, help.signal, details);
   }

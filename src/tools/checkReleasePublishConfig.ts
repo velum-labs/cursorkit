@@ -15,6 +15,7 @@ type PackageJson = {
   publishConfig?: {
     registry?: string;
     access?: string;
+    provenance?: boolean;
   };
   modelFusionProtocol?: {
     packageName?: string;
@@ -42,7 +43,8 @@ type ProtocolOriginManifest = {
 
 const PACKAGE_JSON_PATH = "package.json";
 const PROTOCOL_ORIGIN_PATH = "docs/model-fusion-protocol-origin.json";
-const GITHUB_PACKAGES_REGISTRY = "https://npm.pkg.github.com";
+const PUBLIC_NPM_REGISTRY = "https://registry.npmjs.org";
+const CANONICAL_PACKAGE_NAME = "@velum-labs/cursorkit";
 const CANONICAL_REPOSITORY_URL =
   "git+https://github.com/velum-labs/cursorkit.git";
 const PROTOCOL_PACKAGE_NAME = "@velum-labs/model-fusion-protocol";
@@ -73,28 +75,34 @@ function checkPackageMetadata(
   packageJson: PackageJson,
   errors: string[],
 ): void {
+  if (packageJson.name !== CANONICAL_PACKAGE_NAME) {
+    errors.push(`${PACKAGE_JSON_PATH}: name must be ${CANONICAL_PACKAGE_NAME}`);
+  }
   if (packageJson.repository?.url !== CANONICAL_REPOSITORY_URL) {
     errors.push(
       `${PACKAGE_JSON_PATH}: repository.url must be ${CANONICAL_REPOSITORY_URL}`,
     );
   }
-  if (packageJson.publishConfig?.registry !== GITHUB_PACKAGES_REGISTRY) {
+  // @velum-labs/cursorkit publishes to public npm (no manual deploys): the release
+  // workflow runs only on a reviewed GitHub Release and publishes with
+  // provenance, so the publish posture is asserted here.
+  if (packageJson.publishConfig?.registry !== PUBLIC_NPM_REGISTRY) {
     errors.push(
-      `${PACKAGE_JSON_PATH}: publishConfig.registry must be ${GITHUB_PACKAGES_REGISTRY}`,
+      `${PACKAGE_JSON_PATH}: publishConfig.registry must be ${PUBLIC_NPM_REGISTRY}`,
     );
   }
-  if (packageJson.publishConfig?.access !== "restricted") {
+  if (packageJson.publishConfig?.access !== "public") {
+    errors.push(`${PACKAGE_JSON_PATH}: publishConfig.access must be public`);
+  }
+  if (packageJson.publishConfig?.provenance !== true) {
     errors.push(
-      `${PACKAGE_JSON_PATH}: publishConfig.access must be restricted`,
+      `${PACKAGE_JSON_PATH}: publishConfig.provenance must be true for supply-chain provenance`,
     );
   }
-
-  if (packageJson.private === false) {
-    if (!packageJson.name?.startsWith("@velum-labs/")) {
-      errors.push(
-        `${PACKAGE_JSON_PATH}: publishable GitHub Packages npm packages must use the @velum-labs scope`,
-      );
-    }
+  if (packageJson.private !== false) {
+    errors.push(
+      `${PACKAGE_JSON_PATH}: private must be false so the release workflow can publish`,
+    );
   }
 }
 

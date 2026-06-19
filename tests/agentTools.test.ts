@@ -45,6 +45,7 @@ describe("Cursor agent tool runtime", () => {
       "grep",
       "run_shell",
       "write_file",
+      "apply_patch",
       "delete_path",
       "fetch_url",
       "mcp_tool",

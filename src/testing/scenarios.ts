@@ -2022,7 +2022,7 @@ async function probeModelPickerDom(
     bodyText,
   );
 
-  const workspaceOpened = bodyText.includes("cursor-rpc");
+  const workspaceOpened = bodyText.includes("cursorkit");
   if (!composerBodyTextVisible(bodyText)) {
     if (await clickVisibleText(webSocketDebuggerUrl, "New Agent")) {
       actions.push("clicked:New Agent");

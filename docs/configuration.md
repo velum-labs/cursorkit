@@ -52,4 +52,4 @@ rollback instructions.
 - `BRIDGE_PLUGIN_PATH`: future local plugin module path.
 - `BRIDGE_MAX_INTERCEPT_BODY_BYTES`: request body limit for typed routes. Defaults to 50 MiB.
 
-Run `cursor-rpc doctor` after changing config.
+Run `cursorkit doctor` after changing config.

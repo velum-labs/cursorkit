@@ -38,17 +38,17 @@ type Command =
   | "desktop-doctor"
   | "help";
 
-const HELP = `cursor-rpc
+const HELP = `cursorkit
 
 Usage:
-  cursor-rpc serve            Start the local bridge
-  cursor-rpc doctor           Check local configuration and proto availability
-  cursor-rpc desktop-cert     Generate local TLS material for Cursor desktop proxying
-  cursor-rpc desktop-proxy    Start the bridge with Cursor desktop proxy defaults
-  cursor-rpc desktop-doctor   Check Cursor desktop proxy prerequisites
-  cursor-rpc capture          Print capture-mode guidance
-  cursor-rpc fixtures         Validate committed fixture metadata
-  cursor-rpc --help           Show this help
+  cursorkit serve            Start the local bridge
+  cursorkit doctor           Check local configuration and proto availability
+  cursorkit desktop-cert     Generate local TLS material for Cursor desktop proxying
+  cursorkit desktop-proxy    Start the bridge with Cursor desktop proxy defaults
+  cursorkit desktop-doctor   Check Cursor desktop proxy prerequisites
+  cursorkit capture          Print capture-mode guidance
+  cursorkit fixtures         Validate committed fixture metadata
+  cursorkit --help           Show this help
 
 Environment:
   BRIDGE_HOST=127.0.0.1
@@ -243,7 +243,7 @@ async function desktopCert(): Promise<void> {
   console.log("");
   console.log("Then start with:");
   console.log(
-    `BRIDGE_CERT_PATH=${cert.certPath} BRIDGE_KEY_PATH=${cert.keyPath} cursor-rpc desktop-proxy`,
+    `BRIDGE_CERT_PATH=${cert.certPath} BRIDGE_KEY_PATH=${cert.keyPath} cursorkit desktop-proxy`,
   );
 }
 

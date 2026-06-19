@@ -1,4 +1,4 @@
-# cursor-rpc
+# cursorkit
 
 Unofficial research bridge for experimenting with Cursor's backend protocol from
 the server side: keep Cursor's existing UX, but route model inference to a
@@ -38,14 +38,14 @@ ck route
 ck route status
 ck route rollback
 ck stop
-cursor-rpc serve
-cursor-rpc doctor
-cursor-rpc desktop-cert
-cursor-rpc desktop-proxy
-cursor-rpc desktop-doctor
-cursor-rpc capture
-cursor-rpc fixtures
-cursor-rpc --help
+cursorkit serve
+cursorkit doctor
+cursorkit desktop-cert
+cursorkit desktop-proxy
+cursorkit desktop-doctor
+cursorkit capture
+cursorkit fixtures
+cursorkit --help
 ```
 
 `serve` starts the local bridge. `doctor` checks proto loading, upstream config,
@@ -57,7 +57,7 @@ The committed `fixtures/model-fusion-contract/` records are synthetic
 compatibility fixtures for the model-fusion roadmap. They validate Cursor-specific
 `cursor-run-*` records and generic `harness-run-*` records locally without adding
 `handoffkit` as a runtime dependency or changing live Cursor routing behavior.
-The importable `cursor-rpc/model-fusion` subpath exposes the same fixture-backed
+The importable `@velum-labs/cursorkit/model-fusion` subpath exposes the same fixture-backed
 surface as a small structural API: `cursorHarness(...)` and
 `runCursorCandidate(...)` produce Cursor-specific records plus mapped generic
 harness results. Those records keep requested and observed model IDs separate,

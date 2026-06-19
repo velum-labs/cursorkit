@@ -1,7 +1,7 @@
 # Cursor Desktop App Proxy
 
 The Cursor desktop app does not expose the same `--endpoint` flag that
-`cursor-agent` supports. Desktop proxy mode makes `cursor-rpc` look like the
+`cursor-agent` supports. Desktop proxy mode makes `cursorkit` look like the
 Cursor backend host locally, then passes unknown routes through to the real
 backend while logging route metadata and serving registered local models on
 typed, allowlisted routes.
@@ -39,7 +39,7 @@ settings.
 `ck` does the safe parts automatically:
 
 - generates `.cursor-rpc/certs/api2.cursor.sh.crt` and `.key` if needed
-- starts `cursor-rpc desktop-proxy` with desktop defaults and debug logging
+- starts `cursorkit desktop-proxy` with desktop defaults and debug logging
 - starts a local HTTP CONNECT proxy and launches isolated Cursor with
   `--proxy-server`, so renderer and extension/plugin helper traffic can be
   routed without `/etc/hosts` or `pf`
@@ -257,7 +257,7 @@ route appears in the inventory and is decoded against the generated proto.
 Before experimenting, know your rollback path:
 
 1. Quit Cursor.
-2. Stop `cursor-rpc`.
+2. Stop `cursorkit`.
 3. Remove the `api2.cursor.sh` line from `/etc/hosts`.
 4. Disable any temporary `pf` redirect.
 5. Reopen Cursor and confirm it reaches the real backend normally.

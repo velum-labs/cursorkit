@@ -73,6 +73,20 @@ export function cursorOpenAITools(
             ["path", "content"],
           ),
         ];
+      case "apply_patch":
+        return [
+          tool(
+            "apply_patch",
+            "Apply a targeted edit to a file by replacing old_string with new_string. Cursor reads the file, applies the change, writes it back, and returns a unified diff. Include enough surrounding context in old_string to match exactly once, or set replace_all. To create a new file, pass an empty old_string and the full file content as new_string.",
+            {
+              path: { type: "string" },
+              old_string: { type: "string" },
+              new_string: { type: "string" },
+              replace_all: { type: "boolean" },
+            },
+            ["path", "old_string", "new_string"],
+          ),
+        ];
       case "delete_path":
         return [
           tool(

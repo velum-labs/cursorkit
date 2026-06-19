@@ -1,7 +1,7 @@
 {
-  "name": "cursor-rpc",
+  "name": "@velum-labs/cursorkit",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "packageManager": "pnpm@10.33.4",
   "description": "Unofficial research bridge for experimenting with Cursor's ConnectRPC protocol against a self-hosted OpenAI-compatible model.",
@@ -13,8 +13,9 @@
   "main": "./dist/src/cli.js",
   "types": "./dist/src/cli.d.ts",
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public",
+    "provenance": true
   },
   "modelFusionProtocol": {
     "packageName": "@velum-labs/model-fusion-protocol",
@@ -60,7 +61,7 @@
   },
   "bin": {
     "ck": "./dist/src/ck.js",
-    "cursor-rpc": "./dist/src/cli.js"
+    "cursorkit": "./dist/src/cli.js"
   },
   "files": [
     "dist/src",
@@ -75,7 +76,7 @@
     "@connectrpc/connect-node": "^2.1.2",
     "protobufjs": "8.6.3",
     "selfsigned": "5.5.0",
-    "undici": "8.4.1"
+    "undici": "8.5.0"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.70.0",

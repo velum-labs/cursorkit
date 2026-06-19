@@ -1,6 +1,6 @@
 # Implementation Learnings
 
-This document captures behavior discovered while making `cursor-rpc` work with
+This document captures behavior discovered while making `cursorkit` work with
 `cursor-agent` and preparing a safe path for the Cursor desktop app. Treat these
 as observed implementation notes, not a stable Cursor contract.
 

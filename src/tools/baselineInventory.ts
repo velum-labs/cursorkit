@@ -125,6 +125,12 @@ const CONFIG_ENV_ANNOTATIONS: Record<string, Omit<ConfigEnvEntry, "name">> = {
     description:
       "Controls whether local agent runs advertise only safe tools or the approved extended tool set.",
   },
+  BRIDGE_AGENT_TOOL_MAX_ITERATIONS: {
+    category: "agent-tools",
+    defaultValue: "8",
+    description:
+      "Maximum number of tool-call iterations the bridge runs per local agent turn before stopping.",
+  },
   BRIDGE_AGENT_TOOL_RESULT_TIMEOUT_MS: {
     category: "reliability",
     defaultValue: "undefined",
@@ -677,7 +683,7 @@ function buildTestManifest(): TestManifestSuite[] {
     },
     {
       id: "pack-smoke",
-      command: "pnpm pack && pnpm add --offline <tarball> && cursor-rpc --help",
+      command: "pnpm pack && pnpm add --offline <tarball> && cursorkit --help",
       deterministic: true,
       status: "implemented",
       categories: ["packaging", "final-gate"],
@@ -689,7 +695,7 @@ function buildTestManifest(): TestManifestSuite[] {
         "Packed tarball contains required dist/src, proto, docs, README.md, and DISCLAIMER.md files.",
         "Source examples are typechecked but intentionally excluded from the tarball.",
         "A clean temporary project can install the tarball from the local pnpm store.",
-        "The packed cursor-rpc binary executes --help successfully.",
+        "The packed cursorkit binary executes --help successfully.",
       ],
     },
     {

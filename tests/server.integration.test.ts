@@ -1952,6 +1952,156 @@ describe("bridge server", () => {
     }
   }, 30_000);
 
+  it("applies a patch through a read + write Agent Run round trip", async () => {
+    const capturedRequests: Array<{
+      messages?: Array<{
+        role: string;
+        content: string;
+        tool_call_id?: string;
+      }>;
+    }> = [];
+    const backend = http.createServer((request, response) => {
+      const chunks: Buffer[] = [];
+      request.on("data", (chunk: Buffer) => chunks.push(chunk));
+      request.on("end", () => {
+        capturedRequests.push(
+          JSON.parse(
+            Buffer.concat(chunks).toString("utf8"),
+          ) as (typeof capturedRequests)[number],
+        );
+        response.writeHead(200, { "content-type": "text/event-stream" });
+        if (capturedRequests.length === 1) {
+          response.end(
+            scriptedToolCallSse("call-apply_patch", "apply_patch", {
+              path: "notes.txt",
+              old_string: "line two",
+              new_string: "LINE TWO",
+            }),
+          );
+          return;
+        }
+        response.end(
+          [
+            `data: ${JSON.stringify({
+              choices: [{ delta: { content: "apply_patch-ok" } }],
+            })}`,
+            "data: [DONE]",
+            "",
+          ].join("\n"),
+        );
+      });
+    });
+    await listen(backend);
+    servers.push(backend);
+    const bridge = await startTestBridge({
+      agentToolPolicy: "all",
+      models: [
+        {
+          id: "local-model",
+          displayName: "Local Model",
+          providerModel: "local-model",
+          baseUrl: `http://127.0.0.1:${portOf(backend)}/v1`,
+          apiKey: "",
+          contextTokenLimit: 128000,
+        },
+      ],
+    });
+    const runRequest = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        runRequest: create(AgentRunRequestSchema, {
+          requestedModel: create(RequestedModelSchema, {
+            modelId: "local-model",
+          }),
+          action: create(ConversationActionSchema, {
+            userMessageAction: create(UserMessageActionSchema, {
+              userMessage: create(UserMessageSchema, {
+                text: "edit notes.txt",
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const contextResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 1,
+          execId: "cursor-rpc-context-1",
+          requestContextResult: create(RequestContextResultSchema, {
+            success: create(RequestContextSuccessSchema, {
+              requestContext: create(RequestContextSchema),
+            }),
+          }),
+        }),
+      }),
+    );
+    const readResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 2,
+          execId: "cursor-rpc-tool-call-apply_patch-2",
+          readResult: create(ReadResultSchema, {
+            success: create(ReadSuccessSchema, {
+              path: "notes.txt",
+              content: "line one\nline two\n",
+              totalLines: 3,
+              truncated: false,
+            }),
+          }),
+        }),
+      }),
+    );
+    const writeResultMessage = toBinary(
+      AgentClientMessageSchema,
+      create(AgentClientMessageSchema, {
+        execClientMessage: create(ExecClientMessageSchema, {
+          id: 3,
+          execId: "cursor-rpc-tool-call-apply_patch-3",
+          writeResult: create(WriteResultSchema, {
+            success: create(WriteSuccessSchema, {
+              path: "notes.txt",
+              linesCreated: 3,
+              fileSize: 18,
+            }),
+          }),
+        }),
+      }),
+    );
+
+    const { responseText, serverMessages } = await runDuplexAgentRequest(
+      portOf(bridge),
+      runRequest,
+      contextResultMessage,
+      [readResultMessage, writeResultMessage],
+    );
+
+    const readExec = serverMessages.find(
+      (message) => message.execServerMessage?.readArgs !== undefined,
+    );
+    const writeExec = serverMessages.find(
+      (message) => message.execServerMessage?.writeArgs !== undefined,
+    );
+    expect(readExec?.execServerMessage?.readArgs).toMatchObject({
+      path: "notes.txt",
+      toolCallId: "call-apply_patch",
+    });
+    expect(writeExec?.execServerMessage?.writeArgs).toMatchObject({
+      path: "notes.txt",
+      fileText: "line one\nLINE TWO\n",
+      toolCallId: "call-apply_patch",
+    });
+    const toolMessage = capturedRequests[1]?.messages?.find(
+      (message) => message.tool_call_id === "call-apply_patch",
+    );
+    expect(toolMessage?.content).toContain('"status": "success"');
+    expect(toolMessage?.content).toContain("-line two");
+    expect(toolMessage?.content).toContain("+LINE TWO");
+    expect(responseText).toContain("apply_patch-ok");
+  }, 30_000);
+
   it("serves typed local model and chat routes over HTTPS", async () => {
     const bridge = await startTestBridge({ useTls: true });
     const runtime = await createBridgeRuntime(
@@ -2048,6 +2198,7 @@ function baseConfig(): BridgeConfig {
     routeInventoryEnabled: false,
     modelPayloadLogging: "summary",
     agentToolPolicy: "safe",
+    agentToolMaxIterations: 8,
     agentNativeContextEnabled: true,
     tlsHostnames: ["localhost", "127.0.0.1", "::1"],
     unsafeAllowNonLocalhost: false,

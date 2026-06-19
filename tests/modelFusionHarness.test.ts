@@ -54,7 +54,7 @@ function requestFixture(
 
 describe("model-fusion harness API", () => {
   it("exports cursorHarness and runCursorCandidate from the public subpath", async () => {
-    const api = await import("cursor-rpc/model-fusion");
+    const api = await import("@velum-labs/cursorkit/model-fusion");
 
     expect(typeof api.cursorHarness).toBe("function");
     expect(typeof api.runCursorCandidate).toBe("function");
@@ -368,24 +368,43 @@ describe("model-fusion harness API", () => {
       request: requestFixture({
         requested_capabilities: {
           workspace_read: "supported",
-          apply_patch: "supported",
+          route_observation: "supported",
         },
       }),
       candidateId: "candidate-override",
       model: { id: "local", model: "local-model" },
-      requiredCapabilities: ["apply_patch"],
+      requiredCapabilities: ["route_observation"],
     });
 
-    expect(result.cursorResult.capabilities.apply_patch).toBe("unsupported");
+    expect(result.cursorResult.capabilities.route_observation).toBe("degraded");
     expect(result.cursorResult.diagnostics).toContainEqual({
       kind: "capability_missing",
       message:
-        "Cursor capability apply_patch requested supported but is unsupported",
+        "Cursor capability route_observation requested supported but is degraded",
       retryable: false,
-      capability: "apply_patch",
-      status: "unsupported",
+      capability: "route_observation",
+      status: "degraded",
       requested_status: "supported",
     });
+  });
+
+  it("reports apply_patch and tool_call_loop as supported capabilities", () => {
+    const result = runCursorCandidate({
+      request: requestFixture({
+        requested_capabilities: {
+          workspace_read: "supported",
+          apply_patch: "supported",
+          tool_call_loop: "supported",
+        },
+      }),
+      candidateId: "candidate-supported",
+      model: { id: "local", model: "local-model" },
+      requiredCapabilities: ["apply_patch", "tool_call_loop"],
+    });
+
+    expect(result.cursorResult.capabilities.apply_patch).toBe("supported");
+    expect(result.cursorResult.capabilities.tool_call_loop).toBe("supported");
+    expect(result.missingCapabilities).toEqual([]);
   });
 
   it("records unknown model override diagnostics in metadata", () => {

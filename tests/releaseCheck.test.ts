@@ -16,7 +16,10 @@ describe("release check metadata", () => {
   });
 
   it("documents release workflow tags and canonical publish guards", () => {
-    const workflow = readFileSync(".github/workflows/release.yml", "utf8");
+    const workflow = readFileSync(
+      ".github/workflows/release-packages.yml",
+      "utf8",
+    );
     const docs = readFileSync("docs/release-gates.md", "utf8");
 
     expect(workflow).toContain("cursorkit-v*");
@@ -25,7 +28,8 @@ describe("release check metadata", () => {
     expect(workflow).toContain("github.repository == 'velum-labs/cursorkit'");
     expect(workflow).toContain("npm publish");
     expect(workflow).toContain("--provenance");
-    expect(workflow).toContain("https://npm.pkg.github.com");
+    expect(workflow).toContain("--access public");
+    expect(workflow).toContain("https://registry.npmjs.org");
     expect(docs).toContain("cursorkit-v0.1.0");
     expect(docs).toContain("v0.1.0");
     expect(docs).toContain("PRIVATE_PYPI_*");

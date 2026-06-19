@@ -312,6 +312,12 @@
         "description": "Optional timeout for waiting on pending Agent RunSSE/Bidi state."
       },
       {
+        "name": "BRIDGE_AGENT_TOOL_MAX_ITERATIONS",
+        "category": "agent-tools",
+        "defaultValue": "8",
+        "description": "Maximum number of tool-call iterations the bridge runs per local agent turn before stopping."
+      },
+      {
         "name": "BRIDGE_AGENT_TOOL_POLICY",
         "category": "agent-tools",
         "defaultValue": "safe",

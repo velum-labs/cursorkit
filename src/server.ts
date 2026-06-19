@@ -117,7 +117,59 @@ export interface BridgeRuntime {
   extensions: ExtensionManager;
   pendingAgentRuns: Map<string, PendingAgentRun>;
   pendingAgentContextRuns: Map<string, PendingAgentContextRun>;
+  /**
+   * Tool-result mailboxes for the SSE + BidiAppend Agent Run transport (used by
+   * the real cursor-agent CLI). The streaming Connect path reads ExecClientMessage
+   * tool results inline from the duplex request body; over SSE the results arrive
+   * on separate BidiAppend POSTs, so the SSE tool loop awaits them here, keyed by
+   * the Bidi request id.
+   */
+  toolResultMailboxes: Map<string, ToolResultMailbox>;
   nextAgentExecId: number;
+}
+
+/**
+ * A single-consumer queue of ExecClientMessage payload buffers (each a binary
+ * AgentClientMessage) delivered out-of-band via BidiAppend. Exposes an
+ * AsyncIterator so the shared Cursor tool loop can await tool results exactly as
+ * it does on the inline duplex stream.
+ */
+export class ToolResultMailbox {
+  #queue: Buffer[] = [];
+  #waiters: ((result: IteratorResult<Buffer>) => void)[] = [];
+  #closed = false;
+
+  push(payload: Buffer): void {
+    const waiter = this.#waiters.shift();
+    if (waiter !== undefined) {
+      waiter({ done: false, value: payload });
+      return;
+    }
+    this.#queue.push(payload);
+  }
+
+  close(): void {
+    this.#closed = true;
+    const waiters = this.#waiters.splice(0);
+    for (const waiter of waiters) {
+      waiter({ done: true, value: undefined });
+    }
+  }
+
+  iterator(): AsyncIterator<Buffer> {
+    return {
+      next: (): Promise<IteratorResult<Buffer>> => {
+        const queued = this.#queue.shift();
+        if (queued !== undefined) {
+          return Promise.resolve({ done: false, value: queued });
+        }
+        if (this.#closed) {
+          return Promise.resolve({ done: true, value: undefined });
+        }
+        return new Promise((resolve) => this.#waiters.push(resolve));
+      },
+    };
+  }
 }
 
 interface PendingAgentRun {
@@ -186,6 +238,7 @@ export async function createBridgeRuntime(
     extensions,
     pendingAgentRuns: new Map(),
     pendingAgentContextRuns: new Map(),
+    toolResultMailboxes: new Map(),
     nextAgentExecId: 1,
   };
 }
@@ -1233,8 +1286,42 @@ async function handleAgentRun(
     modelId: decision.model.id,
     payload: { message: "served local agent run", path, format },
   });
+  const signal = requestAbortSignal(request, response);
+
+  // Over the SSE + BidiAppend transport (the real cursor-agent CLI), drive the
+  // same Cursor tool loop as the inline duplex path: ExecServerMessage frames go
+  // out on this SSE response, and tool results arrive on later BidiAppend POSTs
+  // routed into a per-request mailbox.
+  const tools = cursorOpenAITools(runtime.config.agentToolPolicy);
+  if (
+    requestId !== undefined &&
+    requestId.length > 0 &&
+    tools.length > 0 &&
+    decision.model.provider.streamCompletionEvents !== undefined
+  ) {
+    const mailbox = new ToolResultMailbox();
+    runtime.toolResultMailboxes.set(requestId, mailbox);
+    response.statusCode = 200;
+    if (!response.headersSent) {
+      response.setHeader("content-type", "application/connect+proto");
+    }
+    try {
+      await writeLocalAgentRunResponseWithCursorTools(
+        response,
+        decision,
+        runtime,
+        mailbox.iterator(),
+        signal,
+      );
+    } finally {
+      mailbox.close();
+      runtime.toolResultMailboxes.delete(requestId);
+    }
+    return;
+  }
+
   await writeLocalAgentRunResponse(response, decision, runtime.logger, {
-    signal: requestAbortSignal(request, response),
+    signal,
     traceId,
   });
 }
@@ -1330,9 +1417,10 @@ async function writeLocalAgentRunResponseWithCursorTools(
 
   const messages: ChatMessage[] = [...decision.messages];
   const tools = cursorOpenAITools(runtime.config.agentToolPolicy);
+  const maxIterations = runtime.config.agentToolMaxIterations;
   let outputCharacters = 0;
   let toolIterations = 0;
-  while (toolIterations < 8) {
+  while (toolIterations < maxIterations) {
     let assistantContent = "";
     let requestedToolCalls: OpenAIToolCall[] = [];
     for await (const event of streamEvents.call(
@@ -1616,6 +1704,37 @@ async function handleBidiAppend(
   const append = fromBidiAppendPayload(payload);
   const requestId = append?.requestId?.requestId;
   const decision = decodeLocalAgentRunDecisionFromAppend(append, runtime);
+
+  // Tool-result append for an in-flight SSE agent run: deliver the
+  // ExecClientMessage to the waiting tool loop instead of proxying upstream.
+  if (
+    decision === undefined &&
+    requestId !== undefined &&
+    requestId.length > 0 &&
+    append !== undefined
+  ) {
+    const mailbox = runtime.toolResultMailboxes.get(requestId);
+    if (mailbox !== undefined) {
+      const toolResult = extractExecClientPayload(append);
+      if (toolResult !== undefined) {
+        mailbox.push(toolResult);
+        writeModelResponse(
+          response,
+          Buffer.from(
+            toBinary(
+              BidiAppendResponseSchema,
+              create(BidiAppendResponseSchema),
+            ),
+          ),
+          runtime.logger,
+          "served cursor tool result append",
+          format,
+        );
+        return;
+      }
+    }
+  }
+
   if (
     requestId === undefined ||
     requestId.length === 0 ||
@@ -1865,6 +1984,22 @@ function decodeLocalAgentRunDecisionFromAppend(
       );
       if (decision !== undefined) {
         return decision;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function extractExecClientPayload(
+  append: NonNullable<ReturnType<typeof fromBidiAppendPayload>>,
+): Buffer | undefined {
+  for (const candidate of bidiAppendClientPayloadCandidates(append)) {
+    try {
+      const message = fromBinary(AgentClientMessageSchema, candidate);
+      if (message.execClientMessage !== undefined) {
+        return Buffer.from(candidate);
       }
     } catch {
       continue;

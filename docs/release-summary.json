@@ -71,7 +71,7 @@
     "routeContractCoverage": "13/13",
     "interceptRouteCount": 13,
     "protoBackedRouteCount": 11,
-    "configEnvVarCount": 38,
+    "configEnvVarCount": 39,
     "uncertaintyCount": 7,
     "implementedDeterministicSuites": 6,
     "placeholderSuites": 0,

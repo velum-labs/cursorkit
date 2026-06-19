@@ -1,0 +1,135 @@
+name: Release packages
+
+on:
+  # Publishing is gated behind a published GitHub Release (not a bare tag push),
+  # so the release notes + tag are reviewed before anything ships to public npm.
+  # The release tag must match cursorkit-v* or v* (enforced in "Validate release tag").
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run release validation and pack the tarball without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  packages: read
+  id-token: write
+
+# Lets pnpm read the repo .npmrc (the @velum-labs private protocol devDep on
+# GitHub Packages) while the default registry / publish target is public npm.
+env:
+  PACKAGES_READ_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
+
+concurrency:
+  group: release-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  npm-package:
+    name: build, test, and publish @velum-labs/cursorkit to npm
+    # macOS keeps `pnpm codegen` byte-identical to the committed src/gen (the
+    # generated protobuf code is platform-sensitive); the diff gate below relies
+    # on it.
+    runs-on: macos-latest
+    timeout-minutes: 25
+    if: github.repository == 'velum-labs/cursorkit'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: vendor/extract-cursor-protos/go.mod
+          cache-dependency-path: vendor/extract-cursor-protos/go.mod
+
+      # `npm publish --provenance` performs the OIDC exchange via the npm CLI,
+      # which must be >= 11.5.1 for trusted publishing. Once a Trusted Publisher
+      # is configured on npmjs.com publishing uses OIDC automatically; the
+      # NPM_TOKEN below is the bootstrap fallback for the first publish.
+      - name: Update npm for OIDC trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Validate release tag
+        if: github.event_name == 'release'
+        run: |
+          case "${{ github.event.release.tag_name }}" in
+            cursorkit-v*|v*) echo "release tag ${{ github.event.release.tag_name }} ok" ;;
+            *) echo "release tag must match cursorkit-v* or v*"; exit 1 ;;
+          esac
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Regenerate protobuf bindings
+        run: pnpm codegen
+
+      - name: Generated bindings are committed and current
+        run: git diff --exit-code -- src/gen
+
+      - name: Validate publish config
+        run: pnpm release:publish:check
+
+      - name: Check (build + test + protocol + format)
+        run: pnpm check
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level moderate
+
+      - name: Proto extractor tests
+        run: go test ./...
+        working-directory: vendor/extract-cursor-protos
+
+      - name: Read package metadata
+        id: metadata
+        run: |
+          node <<'NODE' >> "$GITHUB_OUTPUT"
+          const pkg = require('./package.json');
+          console.log(`name=${pkg.name}`);
+          console.log(`version=${pkg.version}`);
+          console.log(`publishable=${pkg.private === false ? 'true' : 'false'}`);
+          NODE
+
+      - name: Build
+        run: pnpm build
+
+      - name: Pack npm tarball
+        run: |
+          mkdir -p dist-release
+          pnpm pack --pack-destination dist-release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cursorkit-npm-package-${{ steps.metadata.outputs.version }}
+          path: dist-release/*.tgz
+          if-no-files-found: error
+
+      - name: Configure npm registry auth
+        if: github.event_name == 'release'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
+
+      - name: Dry-run publish (no deploy)
+        if: github.event_name == 'workflow_dispatch'
+        run: npm publish dist-release/*.tgz --provenance --access public --dry-run
+
+      - name: Publish @velum-labs/cursorkit to npm
+        if: >-
+          github.event_name == 'release' &&
+          steps.metadata.outputs.publishable == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish dist-release/*.tgz --provenance --access public

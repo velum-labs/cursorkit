@@ -113,6 +113,15 @@ export const CURSOR_TOOL_SURFACE: CursorToolSurfaceEntry[] = [
     notes: "Mapped, but exposed only through policy because it mutates files.",
   },
   {
+    execServerField: "writeArgs",
+    execClientField: "writeResult",
+    openAIToolName: "apply_patch",
+    support: "policy-gated",
+    safety: "mutating",
+    notes:
+      "Targeted search/replace edit synthesized from a read + write round trip; returns a unified diff. Policy-gated because it mutates files.",
+  },
+  {
     execServerField: "deleteArgs",
     execClientField: "deleteResult",
     openAIToolName: "delete_path",

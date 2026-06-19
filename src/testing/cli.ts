@@ -11,7 +11,7 @@ import { ScenarioRunner } from "./runner.js";
 import { createScenarios } from "./scenarios.js";
 import type { HarnessOptions, HarnessSuiteInput } from "./types.js";
 
-const HELP = `cursor-rpc test harness
+const HELP = `cursorkit test harness
 
 Usage:
   pnpm test:harness -- --suite static

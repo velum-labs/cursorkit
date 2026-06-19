@@ -34,6 +34,7 @@ export interface BridgeConfig {
   routeInventoryEnabled: boolean;
   modelPayloadLogging: ModelPayloadLogging;
   agentToolPolicy: AgentToolPolicy;
+  agentToolMaxIterations: number;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -171,6 +172,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BridgeConfig {
       env.BRIDGE_LOG_MODEL_PAYLOADS,
     ),
     agentToolPolicy: parseAgentToolPolicy(env.BRIDGE_AGENT_TOOL_POLICY),
+    agentToolMaxIterations: parseInteger(
+      env.BRIDGE_AGENT_TOOL_MAX_ITERATIONS,
+      8,
+    ),
   };
 }
 

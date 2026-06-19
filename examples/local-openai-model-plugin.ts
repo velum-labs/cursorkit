@@ -1,5 +1,5 @@
-import type { CursorExtension } from "cursor-rpc/extensions";
-import { OpenAICompatibleProvider } from "cursor-rpc/providers/openai";
+import type { CursorExtension } from "@velum-labs/cursorkit/extensions";
+import { OpenAICompatibleProvider } from "@velum-labs/cursorkit/providers/openai";
 
 const extension: CursorExtension = {
   name: "local-openai-model",

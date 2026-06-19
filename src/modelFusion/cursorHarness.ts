@@ -221,8 +221,8 @@ const DEFAULT_GIT_SHA = "0".repeat(40);
 const CORE_CAPABILITIES: Record<string, ModelFusionCapabilityStatus> = {
   workspace_read: "supported",
   route_observation: "degraded",
-  apply_patch: "unsupported",
-  tool_call_loop: "unsupported",
+  apply_patch: "supported",
+  tool_call_loop: "supported",
 };
 
 export function cursorHarness(
@@ -657,8 +657,8 @@ export function createCursorBridgeRunClient(
     capabilities: () => ({
       workspace_read: "supported",
       route_observation: "degraded",
-      apply_patch: "unsupported",
-      tool_call_loop: "unsupported",
+      apply_patch: "supported",
+      tool_call_loop: "supported",
     }),
     run: async (input) => {
       const response = await postAgentRunToBridge(options, input);

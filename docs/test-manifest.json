@@ -85,7 +85,7 @@
     },
     {
       "id": "pack-smoke",
-      "command": "pnpm pack && pnpm add --offline <tarball> && cursor-rpc --help",
+      "command": "pnpm pack && pnpm add --offline <tarball> && cursorkit --help",
       "deterministic": true,
       "status": "implemented",
       "categories": ["packaging", "final-gate"],
@@ -97,7 +97,7 @@
         "Packed tarball contains required dist/src, proto, docs, README.md, and DISCLAIMER.md files.",
         "Source examples are typechecked but intentionally excluded from the tarball.",
         "A clean temporary project can install the tarball from the local pnpm store.",
-        "The packed cursor-rpc binary executes --help successfully."
+        "The packed cursorkit binary executes --help successfully."
       ]
     },
     {

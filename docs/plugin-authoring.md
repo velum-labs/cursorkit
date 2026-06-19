@@ -5,7 +5,7 @@ The extension API is experimental and local-only. Plugins run as trusted in-proc
 ## Minimal Shape
 
 ```ts
-import type { CursorExtension } from "cursor-rpc/extensions";
+import type { CursorExtension } from "@velum-labs/cursorkit/extensions";
 
 export default {
   name: "my-extension",

@@ -93,7 +93,9 @@ class CursorTraceEmitter {
       ts: Date.now(),
       component: "cursor-bridge",
       event_type: input.event_type,
-      ...(input.parentSpanId !== undefined ? { parent_span_id: input.parentSpanId } : {}),
+      ...(input.parentSpanId !== undefined
+        ? { parent_span_id: input.parentSpanId }
+        : {}),
       ...(input.modelId !== undefined ? { model_id: input.modelId } : {}),
       ...(input.payload !== undefined ? { payload: input.payload } : {}),
     };
@@ -110,7 +112,10 @@ class CursorTraceEmitter {
         mkdirSync(this.dir, { recursive: true });
         this.dirReady = true;
       }
-      appendFileSync(join(this.dir, `${event.trace_id}.jsonl`), `${JSON.stringify(event)}\n`);
+      appendFileSync(
+        join(this.dir, `${event.trace_id}.jsonl`),
+        `${JSON.stringify(event)}\n`,
+      );
     } catch {
       // best-effort durable fallback
     }

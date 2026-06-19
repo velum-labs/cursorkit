@@ -17,12 +17,14 @@ import {
   GrepArgsSchema,
   LsArgsSchema,
   McpArgsSchema,
+  type ReadSuccess,
   ReadArgsSchema,
   ShellArgsSchema,
   WriteArgsSchema,
 } from "../gen/agent/v1/agent_pb.js";
 import type { Logger } from "../logger.js";
 import type { OpenAIToolCall } from "../providers/openai.js";
+import { diffStats, unifiedDiff } from "./diff.js";
 import { toolEnabledByPolicy } from "./policy.js";
 import {
   agentExecClientMessageFields,
@@ -46,6 +48,12 @@ export interface CursorToolRuntime {
 interface CursorToolExecutionOptions {
   signal?: AbortSignal;
 }
+
+type ExecClientMessage = NonNullable<
+  ReturnType<
+    typeof fromBinary<typeof AgentClientMessageSchema>
+  >["execClientMessage"]
+>;
 
 type OpenAIToolArgumentType = "string" | "integer" | "boolean" | "object";
 
@@ -93,6 +101,16 @@ const TOOL_ARGUMENT_SCHEMAS = {
       return_file_content_after_write: "boolean",
     },
     required: ["path", "content"],
+    nonEmpty: ["path"],
+  },
+  apply_patch: {
+    properties: {
+      path: "string",
+      old_string: "string",
+      new_string: "string",
+      replace_all: "boolean",
+    },
+    required: ["path", "old_string", "new_string"],
     nonEmpty: ["path"],
   },
   delete_path: {
@@ -149,6 +167,16 @@ export async function executeCursorToolCall(
   }
 
   const parsedArgs = validation.args;
+  if (validation.name === "apply_patch") {
+    return await executeApplyPatch(
+      response,
+      runtime,
+      payloads,
+      toolCall,
+      parsedArgs,
+      options,
+    );
+  }
   const execId = `cursor-rpc-tool-${toolCall.id}`;
   const id = runtime.nextAgentExecId;
   runtime.nextAgentExecId += 1;
@@ -433,6 +461,267 @@ async function waitForCursorToolResult(
     }
   }
   throw new Error(`Timed out waiting for Cursor tool result ${execId}`);
+}
+
+async function runExecRoundTrip(
+  response: ServerResponse,
+  runtime: CursorToolRuntime,
+  payloads: AsyncIterator<Buffer>,
+  toolCallId: string,
+  build: (
+    id: number,
+    execId: string,
+  ) => ReturnType<typeof create<typeof ExecServerMessageSchema>>,
+  signal: AbortSignal | undefined,
+): Promise<ExecClientMessage> {
+  const id = runtime.nextAgentExecId;
+  runtime.nextAgentExecId += 1;
+  const execId = `cursor-rpc-tool-${toolCallId}-${id}`;
+  response.write(
+    encodeEnvelope(
+      toBinary(
+        AgentServerMessageSchema,
+        create(AgentServerMessageSchema, {
+          execServerMessage: build(id, execId),
+        }),
+      ),
+    ),
+  );
+  return await waitForCursorToolResult(
+    payloads,
+    id,
+    execId,
+    runtime.config.toolResultTimeoutMs ?? 120_000,
+    signal,
+  );
+}
+
+/**
+ * apply_patch is synthesized on the Exec channel: the native Cursor edit tool
+ * (EditToolCall) is not exposed through ExecServerMessage, so we read the file,
+ * apply the search/replace in-process, write the new content back, and return a
+ * unified diff as the tool result.
+ */
+async function executeApplyPatch(
+  response: ServerResponse,
+  runtime: CursorToolRuntime,
+  payloads: AsyncIterator<Buffer>,
+  toolCall: OpenAIToolCall,
+  args: Record<string, unknown>,
+  options: CursorToolExecutionOptions,
+): Promise<string> {
+  const path = stringArg(args, "path");
+  const oldString = stringArg(args, "old_string");
+  const newString = stringArg(args, "new_string");
+  const replaceAll = booleanArg(args, "replace_all") ?? false;
+
+  runtime.logger.info("requested cursor apply_patch", {
+    toolCallId: toolCall.id,
+    path,
+    oldStringChars: oldString.length,
+    newStringChars: newString.length,
+    replaceAll,
+  });
+
+  let readClient: ExecClientMessage;
+  try {
+    readClient = await runExecRoundTrip(
+      response,
+      runtime,
+      payloads,
+      toolCall.id,
+      (id, execId) =>
+        create(ExecServerMessageSchema, {
+          id,
+          execId,
+          readArgs: create(ReadArgsSchema, { path, toolCallId: toolCall.id }),
+        }),
+      options.signal,
+    );
+  } catch (error) {
+    return formatCursorToolError({
+      code: "tool_result_timeout",
+      toolName: "apply_patch",
+      toolCallId: toolCall.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const read = readClient.readResult;
+  let before: string;
+  let creating = false;
+  if (read?.success !== undefined) {
+    if (read.success.truncated) {
+      return applyPatchError(
+        toolCall.id,
+        "file_truncated",
+        `File ${path} is too large to edit with apply_patch; use write_file with the full content instead.`,
+      );
+    }
+    before = readSuccessContent(read.success);
+  } else if (read?.fileNotFound !== undefined && oldString.length === 0) {
+    before = "";
+    creating = true;
+  } else {
+    return applyPatchError(
+      toolCall.id,
+      "read_failed",
+      `Could not read ${path} for apply_patch.`,
+      { read: agentExecClientMessageFields(readClient) },
+    );
+  }
+
+  let after: string;
+  if (oldString.length === 0) {
+    after = newString;
+  } else {
+    const occurrences = countOccurrences(before, oldString);
+    if (occurrences === 0) {
+      return applyPatchError(
+        toolCall.id,
+        "old_string_not_found",
+        `old_string was not found in ${path}.`,
+      );
+    }
+    if (occurrences > 1 && !replaceAll) {
+      return applyPatchError(
+        toolCall.id,
+        "old_string_not_unique",
+        `old_string matched ${occurrences} times in ${path}. Add surrounding context to make it unique, or set replace_all=true.`,
+      );
+    }
+    after = replaceAll
+      ? before.split(oldString).join(newString)
+      : replaceOnce(before, oldString, newString);
+  }
+
+  if (after === before) {
+    return applyPatchError(
+      toolCall.id,
+      "no_change",
+      `apply_patch produced no change to ${path}.`,
+    );
+  }
+
+  let writeClient: ExecClientMessage;
+  try {
+    writeClient = await runExecRoundTrip(
+      response,
+      runtime,
+      payloads,
+      toolCall.id,
+      (id, execId) =>
+        create(ExecServerMessageSchema, {
+          id,
+          execId,
+          writeArgs: create(WriteArgsSchema, {
+            path,
+            fileText: after,
+            toolCallId: toolCall.id,
+            returnFileContentAfterWrite: false,
+          }),
+        }),
+      options.signal,
+    );
+  } catch (error) {
+    return formatCursorToolError({
+      code: "tool_result_timeout",
+      toolName: "apply_patch",
+      toolCallId: toolCall.id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const write = writeClient.writeResult;
+  if (write?.success === undefined) {
+    return applyPatchError(
+      toolCall.id,
+      "write_failed",
+      `Cursor did not apply the write for ${path}.`,
+      { write: formatCursorToolResult(writeClient) },
+    );
+  }
+
+  const stats = diffStats(before, after);
+  runtime.logger.info("applied cursor apply_patch", {
+    toolCallId: toolCall.id,
+    path,
+    created: creating,
+    linesAdded: stats.added,
+    linesRemoved: stats.removed,
+  });
+  return JSON.stringify(
+    {
+      status: "success",
+      tool: "apply_patch",
+      path,
+      created: creating,
+      lines_added: stats.added,
+      lines_removed: stats.removed,
+      diff: unifiedDiff(path, before, after),
+    },
+    null,
+    2,
+  );
+}
+
+function applyPatchError(
+  toolCallId: string,
+  reason: string,
+  message: string,
+  extra?: Record<string, unknown>,
+): string {
+  return JSON.stringify(
+    {
+      status: "error",
+      tool: "apply_patch",
+      reason,
+      tool_call_id: toolCallId,
+      message,
+      ...(extra ?? {}),
+    },
+    null,
+    2,
+  );
+}
+
+function readSuccessContent(success: ReadSuccess): string {
+  if (success.content.length > 0) {
+    return success.content;
+  }
+  if (success.data.length > 0) {
+    return Buffer.from(success.data).toString("utf8");
+  }
+  return success.content;
+}
+
+function countOccurrences(haystack: string, needle: string): number {
+  if (needle.length === 0) {
+    return 0;
+  }
+  let count = 0;
+  let index = haystack.indexOf(needle);
+  while (index !== -1) {
+    count += 1;
+    index = haystack.indexOf(needle, index + needle.length);
+  }
+  return count;
+}
+
+function replaceOnce(
+  haystack: string,
+  needle: string,
+  replacement: string,
+): string {
+  const index = haystack.indexOf(needle);
+  if (index === -1) {
+    return haystack;
+  }
+  return (
+    haystack.slice(0, index) +
+    replacement +
+    haystack.slice(index + needle.length)
+  );
 }
 
 export function summarizeToolArgs(
