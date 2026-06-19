@@ -37,8 +37,8 @@ importers:
         specifier: 24.10.1
         version: 24.10.1
       '@velum-labs/model-fusion-protocol':
-        specifier: 0.1.0
-        version: 0.1.0
+        specifier: 0.1.1
+        version: 0.1.1
       prettier:
         specifier: 3.8.4
         version: 3.8.4
@@ -468,8 +468,8 @@ packages:
     peerDependencies:
       typescript: '*'
 
-  '@velum-labs/model-fusion-protocol@0.1.0':
-    resolution: {integrity: sha512-Ugc1lfExBEZ6lcpCjqLwa1+ylJIoN5sdtG2uhFWJFzRSEOZ+VsEjkeQIeiX+0ZckMKRLrS/mNA/iqvNF542iTA==, tarball: https://npm.pkg.github.com/download/@velum-labs/model-fusion-protocol/0.1.0/94b58aaa924d4cd6a670ba9e907243c898d89eba}
+  '@velum-labs/model-fusion-protocol@0.1.1':
+    resolution: {integrity: sha512-71ZRXosQMxPoPzUSBrzXyqmVtIFSm3Z2fmz7365RM+AyL0IZilRsTHHwmpL7S7MLZq4HnDF9zG6BypFW0VqUyA==}
 
   '@vitest/expect@4.1.8':
     resolution: {integrity: sha512-h3nDO677RDLEGlBxyQ5CW8RlMThSKSRLUePLOx09gNIWRL40edgA1GCZSZgf1W55MFAG6/Sw14KeaAnqv0NKdQ==}
@@ -1187,7 +1187,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@velum-labs/model-fusion-protocol@0.1.0': {}
+  '@velum-labs/model-fusion-protocol@0.1.1': {}
 
   '@vitest/expect@4.1.8':
     dependencies:

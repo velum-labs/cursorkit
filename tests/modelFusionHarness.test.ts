@@ -30,7 +30,7 @@ function requestFixture(
     schema: "harness-run-request.v1",
     schema_version: "v1",
     schema_bundle_hash:
-      "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
+      "sha256:955da2d6891c88d4c40746a8206439e2dae2efc1e7ffefca015e84d4ce265671",
     producer: "cursorkit-test",
     producer_version: "0.1.0",
     producer_git_sha: "0".repeat(40),

@@ -49,7 +49,7 @@
     "status": "reserved-for-future-internal-streaming-connect-grpc",
     "notes": "Do not require protobuf/Buf for v1 package or HTTP/JSON service consumption."
   },
-  "schemaBundleHash": "sha256:75792f89c091b6ab4fd317a15fb03fd73438563dceff5ccf9f5d7c752dbf35f3",
+  "schemaBundleHash": "sha256:955da2d6891c88d4c40746a8206439e2dae2efc1e7ffefca015e84d4ce265671",
   "persistedJsonSchemas": [
     "harness-run-request.v1",
     "harness-run-result.v1",

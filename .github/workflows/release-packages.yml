@@ -15,13 +15,7 @@ on:
 
 permissions:
   contents: read
-  packages: read
   id-token: write
-
-# Lets pnpm read the repo .npmrc (the @velum-labs private protocol devDep on
-# GitHub Packages) while the default registry / publish target is public npm.
-env:
-  PACKAGES_READ_TOKEN: ${{ secrets.PACKAGES_READ_TOKEN || github.token }}
 
 concurrency:
   group: release-packages-${{ github.ref }}
