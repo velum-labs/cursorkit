@@ -28,16 +28,6 @@ pass through to an upstream. See `docs/configuration.md` for all config.
 ## CLI
 
 ```bash
-ck
-ck test
-ck --use-default-profile
-ck --print
-ck doctor
-ck cert
-ck route
-ck route status
-ck route rollback
-ck stop
 cursorkit serve
 cursorkit doctor
 cursorkit desktop-cert
@@ -45,6 +35,16 @@ cursorkit desktop-proxy
 cursorkit desktop-doctor
 cursorkit capture
 cursorkit fixtures
+cursorkit ck
+cursorkit ck test
+cursorkit ck --use-default-profile
+cursorkit ck --print
+cursorkit ck doctor
+cursorkit ck cert
+cursorkit ck route
+cursorkit ck route status
+cursorkit ck route rollback
+cursorkit ck stop
 cursorkit --help
 ```
 
@@ -66,18 +66,19 @@ capabilities explicitly. It does not own fan-out, judge synthesis, lifecycle,
 receipts, or live Cursor tool-call replay; desktop routes remain observed-only
 until fixture-backed evidence proves stability.
 
-`ck` is the recommended desktop test launcher. It starts the desktop bridge plus
-a local HTTP CONNECT proxy, opens an isolated Cursor profile with
+`cursorkit ck` is the recommended desktop test launcher. It starts the desktop
+bridge plus a local HTTP CONNECT proxy, opens an isolated Cursor profile with
 `--proxy-server`, and reports whether route inventory traffic reaches the
 bridge. For isolated desktop UI tests, it also seeds/activates local models
 additively in Cursor's settings-backed model picker state. It does not install
 certificates, edit `/etc/hosts`, modify `pf`, or kill your normal Cursor app.
 Inside this repo, use `pnpm ck`; when installed or linked as a package, use
-`ck` directly. If the isolated profile cannot complete browser login,
-`ck --use-default-profile` reuses your current Cursor auth state while keeping
-the same non-privileged routing attempt.
-Use `ck test --use-default-profile` for a bounded desktop smoke test that reports
-whether route inventory and the known model-list RPCs reached the bridge.
+`cursorkit ck` directly. If the isolated profile cannot complete browser login,
+`cursorkit ck --use-default-profile` reuses your current Cursor auth state while
+keeping the same non-privileged routing attempt.
+Use `cursorkit ck test --use-default-profile` for a bounded desktop smoke test
+that reports whether route inventory and the known model-list RPCs reached the
+bridge.
 
 The project knowledge base for observed Cursor behavior is `docs/learnings.md`.
 Read it before changing route interception, model metadata, or desktop proxy

@@ -165,7 +165,8 @@ describe("fixtures", () => {
     );
 
     expect(result.status).toBe(0);
-    expect(result.stdout).toContain("Validated 8 model-fusion fixture file(s)");
+    // CLI prose is written to stderr (the UI stream).
+    expect(result.stderr).toContain("Validated 8 model-fusion fixture file(s)");
   });
 
   it("keeps local model-fusion protocol mirrors tied to the origin manifest", () => {

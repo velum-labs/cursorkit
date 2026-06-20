@@ -56,11 +56,10 @@
     "release:check": "tsx src/tools/releaseCheck.ts",
     "serve": "node dist/src/cli.js serve",
     "dev": "tsx src/cli.ts serve",
-    "ck": "node dist/src/ck.js",
+    "ck": "node dist/src/cli.js ck",
     "test:harness": "node dist/src/testing/cli.js"
   },
   "bin": {
-    "ck": "./dist/src/ck.js",
     "cursorkit": "./dist/src/cli.js"
   },
   "files": [
@@ -74,6 +73,7 @@
     "@bufbuild/protobuf": "^2.12.0",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-node": "^2.1.2",
+    "commander": "14.0.3",
     "protobufjs": "8.6.3",
     "selfsigned": "5.5.0",
     "undici": "8.5.0"

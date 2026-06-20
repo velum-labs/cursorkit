@@ -85,8 +85,6 @@ export const REQUIRED_PACKAGE_ENTRIES = [
   "package/DISCLAIMER.md",
   "package/dist/src/cli.js",
   "package/dist/src/cli.d.ts",
-  "package/dist/src/ck.js",
-  "package/dist/src/ck.d.ts",
   "package/proto/agent/v1/agent.proto",
   "package/proto/aiserver/v1/aiserver.proto",
   "package/docs/protocol.md",
@@ -399,10 +397,7 @@ function runPackageSmoke(repoRoot: string): GateExecution {
   const packedPackageJson = JSON.parse(
     fs.readFileSync(packedPackageJsonPath, "utf8"),
   ) as { bin?: Record<string, string>; files?: string[] };
-  const expectedBins = new Map([
-    ["cursorkit", "./dist/src/cli.js"],
-    ["ck", "./dist/src/ck.js"],
-  ]);
+  const expectedBins = new Map([["cursorkit", "./dist/src/cli.js"]]);
   const invalidBins = Array.from(expectedBins).filter(
     ([name, target]) => packedPackageJson.bin?.[name] !== target,
   );

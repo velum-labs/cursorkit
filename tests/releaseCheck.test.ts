@@ -39,7 +39,6 @@ describe("release check metadata", () => {
     expect(REQUIRED_PACKAGE_ENTRIES).toEqual(
       expect.arrayContaining([
         "package/dist/src/cli.js",
-        "package/dist/src/ck.js",
         "package/proto/agent/v1/agent.proto",
         "package/proto/aiserver/v1/aiserver.proto",
         "package/docs/release-gates.md",

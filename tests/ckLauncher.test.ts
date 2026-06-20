@@ -472,11 +472,22 @@ describe("ck launcher", () => {
   it("prints dry-run commands without generating cert files", async () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-rpc-ck-"));
     process.chdir(tempDir);
-    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    // CLI prose is written to stderr (the UI stream); stdout is reserved for
+    // bridge/tool output.
+    let output = "";
+    const write = vi
+      .spyOn(process.stderr, "write")
+      .mockImplementation((chunk: string | Uint8Array) => {
+        output +=
+          typeof chunk === "string"
+            ? chunk
+            : Buffer.from(chunk).toString("utf8");
+        return true;
+      });
 
     await runCk(["node", "ck", "--print"]);
+    write.mockRestore();
 
-    const output = log.mock.calls.map((call) => call.join(" ")).join("\n");
     expect(output).toContain("Bridge:");
     expect(output).toContain("Cursor:");
     expect(output).toContain("--proxy-server=http://127.0.0.1:");

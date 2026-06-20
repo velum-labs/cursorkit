@@ -5,6 +5,8 @@ import net from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Command, InvalidArgumentError } from "commander";
+
 import { loadConfig, type LocalModelConfig } from "./config.js";
 import {
   startDesktopConnectProxy,
@@ -32,6 +34,21 @@ import {
   GET_USABLE_MODELS_PATH,
   STREAM_CHAT_WITH_TOOLS_PATH,
 } from "./routes.js";
+import {
+  StepList,
+  bold,
+  brandHeader,
+  cyan,
+  dim,
+  glyph,
+  gray,
+  green,
+  note,
+  red,
+  uiStream,
+  withSpinner,
+  yellow,
+} from "./ui/index.js";
 
 export type CkCommand =
   | "launch"
@@ -39,8 +56,7 @@ export type CkCommand =
   | "doctor"
   | "cert"
   | "route"
-  | "stop"
-  | "help";
+  | "stop";
 export type CkProfileMode = "isolated" | "default";
 export type CkRouteMethod = "pf" | "direct";
 export type CkRouteAction = "plan" | "status" | "rollback";
@@ -204,150 +220,200 @@ const LOCAL_AGENT_CANDIDATE_PATHS = [
   STREAM_CHAT_WITH_TOOLS_PATH,
 ];
 
-const CK_HELP = `ck
+const CK_ENV_HELP = `
+cursorkit ck launches an isolated Cursor against a local desktop-proxy bridge.
+Bridge logs stream live during \`ck\` and are written to .cursor-rpc/ck/bridge.log.`;
 
-Usage:
-  ck                         Start desktop proxy and isolated Cursor
-  ck test                    Launch, monitor route inventory, print diagnosis, then stop bridge
-  ck --use-default-profile   Reuse your logged-in Cursor profile for auth-sensitive testing
-  ck --timeout-ms 30000      Set launch/test route-inventory wait time
-  ck --debug-port 9333       Launch Cursor with a Chromium remote debugging port
-  ck --instance-id name      Use a fresh isolated ck state/profile subdirectory
-  ck --seed-auth-from-default Copy Cursor auth rows from your default profile
-  ck --no-seed-auth-from-default Start isolated Cursor without copying auth rows
-  ck --print                 Print commands without launching
-  ck doctor                  Check desktop launch readiness
-  ck cert                    Generate desktop proxy certificate
-  ck route                   Print manual desktop routing setup and rollback commands
-  ck route status            Check desktop routing prerequisites and current DNS state
-  ck route rollback          Print rollback commands only
-  ck route --method direct   Print direct :443 routing commands instead of pf redirect
-  ck stop                    Stop ck-owned bridge process
-  ck --help                  Show this help
-`;
+function parsePositiveInt(flag: string): (value: string) => number {
+  return (value) => {
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new InvalidArgumentError(`${flag} must be a positive integer`);
+    }
+    return parsed;
+  };
+}
 
-export function parseCkArgs(argv: string[]): CkArgs {
-  const args = argv.slice(2);
-  let dryRun = false;
-  let profileMode: CkProfileMode = "isolated";
-  let routeMethod: CkRouteMethod = "pf";
-  let routeAction: CkRouteAction = "plan";
-  let debugPort: number | undefined;
-  let instanceId: string | undefined;
-  let seedAuthFromDefault: boolean | undefined;
-  let timeoutMs = DEFAULT_ROUTE_INVENTORY_TIMEOUT_MS;
-  const commandArgs: string[] = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === "--print") {
-      dryRun = true;
-    } else if (arg === "--use-default-profile") {
-      profileMode = "default";
-    } else if (arg === "--profile") {
-      const next = args[index + 1];
-      if (next !== "isolated" && next !== "default") {
-        throw new Error("--profile must be isolated or default");
-      }
-      profileMode = next;
-      index += 1;
-    } else if (arg === "--timeout-ms") {
-      const next = args[index + 1];
-      const parsed = Number(next);
-      if (!Number.isInteger(parsed) || parsed <= 0) {
-        throw new Error("--timeout-ms must be a positive integer");
-      }
-      timeoutMs = parsed;
-      index += 1;
-    } else if (arg === "--method") {
-      const next = args[index + 1];
-      if (next !== "pf" && next !== "direct") {
-        throw new Error("--method must be pf or direct");
-      }
-      routeMethod = next;
-      index += 1;
-    } else if (arg === "--debug-port") {
-      const next = args[index + 1];
-      const parsed = Number(next);
-      if (!Number.isInteger(parsed) || parsed <= 0) {
-        throw new Error("--debug-port must be a positive integer");
-      }
-      debugPort = parsed;
-      index += 1;
-    } else if (arg === "--instance-id") {
-      const next = args[index + 1];
-      if (next === undefined || !/^[A-Za-z0-9._-]+$/.test(next)) {
-        throw new Error(
-          "--instance-id must use only letters, numbers, dot, underscore, or dash",
-        );
-      }
-      instanceId = next;
-      index += 1;
-    } else if (arg === "--seed-auth-from-default") {
-      seedAuthFromDefault = true;
-    } else if (arg === "--no-seed-auth-from-default") {
-      seedAuthFromDefault = false;
-    } else if (arg !== undefined) {
-      commandArgs.push(arg);
-    }
+function parseProfile(value: string): CkProfileMode {
+  if (value !== "isolated" && value !== "default") {
+    throw new InvalidArgumentError("--profile must be isolated or default");
   }
-  const first = commandArgs[0];
-  const second = commandArgs[1];
-  if (first === "route") {
-    if (second === undefined) {
-      routeAction = "plan";
-    } else if (second === "status" || second === "rollback") {
-      routeAction = second;
-    } else {
-      throw new Error("ck route subcommand must be status or rollback");
-    }
+  return value;
+}
+
+function parseMethod(value: string): CkRouteMethod {
+  if (value !== "pf" && value !== "direct") {
+    throw new InvalidArgumentError("--method must be pf or direct");
   }
-  if (first === undefined) {
-    return compactCkArgs({
-      command: "launch",
-      dryRun,
-      profileMode,
-      timeoutMs,
-      routeMethod,
-      routeAction,
-      debugPort,
-      instanceId,
-      seedAuthFromDefault,
+  return value;
+}
+
+function parseInstanceId(value: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(value)) {
+    throw new InvalidArgumentError(
+      "--instance-id must use only letters, numbers, dot, underscore, or dash",
+    );
+  }
+  return value;
+}
+
+function normalizeRouteAction(action: string | undefined): CkRouteAction {
+  if (action === undefined) return "plan";
+  if (action === "status" || action === "rollback") return action;
+  throw new Error("ck route subcommand must be status or rollback");
+}
+
+/**
+ * Shared launch/test options. Defaults are applied later in {@link ckArgsFromOpts}
+ * (not via commander) so the same flag works before or after a subcommand name:
+ * an unset option stays absent and the parent value wins via `optsWithGlobals`.
+ */
+function applyLaunchOptions(cmd: Command): Command {
+  return cmd
+    .option("--print", "print commands without launching")
+    .option(
+      "--use-default-profile",
+      "reuse your logged-in Cursor profile for auth-sensitive testing",
+    )
+    .option("--profile <mode>", "isolated | default", parseProfile)
+    .option(
+      "--timeout-ms <ms>",
+      "launch/test route-inventory wait time",
+      parsePositiveInt("--timeout-ms"),
+    )
+    .option(
+      "--debug-port <port>",
+      "launch Cursor with a Chromium remote debugging port",
+      parsePositiveInt("--debug-port"),
+    )
+    .option(
+      "--instance-id <name>",
+      "use a fresh isolated ck state/profile subdirectory",
+      parseInstanceId,
+    )
+    .option(
+      "--seed-auth-from-default",
+      "copy Cursor auth rows from your default profile",
+    )
+    .option(
+      "--no-seed-auth-from-default",
+      "start isolated Cursor without copying auth rows",
+    );
+}
+
+function ckArgsFromOpts(
+  command: CkCommand,
+  opts: Record<string, unknown>,
+  routeAction: CkRouteAction,
+): CkArgs {
+  const profileMode: CkProfileMode =
+    (opts.profile as CkProfileMode | undefined) ??
+    (opts.useDefaultProfile === true ? "default" : "isolated");
+  return compactCkArgs({
+    command,
+    dryRun: opts.print === true,
+    profileMode,
+    timeoutMs:
+      (opts.timeoutMs as number | undefined) ??
+      DEFAULT_ROUTE_INVENTORY_TIMEOUT_MS,
+    routeMethod: (opts.method as CkRouteMethod | undefined) ?? "pf",
+    routeAction,
+    debugPort: opts.debugPort as number | undefined,
+    instanceId: opts.instanceId as string | undefined,
+    seedAuthFromDefault: opts.seedAuthFromDefault as boolean | undefined,
+  });
+}
+
+/**
+ * Build the commander program for `ck`. `dispatch` receives the resolved
+ * {@link CkArgs}; the real binary runs the command while {@link parseCkArgs}
+ * captures the args for tests.
+ */
+export function buildCkProgram(
+  dispatch: (args: CkArgs) => void | Promise<void>,
+): Command {
+  const program = new Command();
+  program
+    .name("ck")
+    .description("desktop proxy launcher for Cursor")
+    .addHelpText("after", CK_ENV_HELP);
+
+  applyLaunchOptions(program).action(function (this: Command) {
+    return dispatch(ckArgsFromOpts("launch", this.optsWithGlobals(), "plan"));
+  });
+
+  applyLaunchOptions(
+    program
+      .command("test")
+      .description(
+        "launch, monitor route inventory, print diagnosis, then stop bridge",
+      ),
+  ).action(function (this: Command) {
+    return dispatch(ckArgsFromOpts("test", this.optsWithGlobals(), "plan"));
+  });
+
+  program
+    .command("doctor")
+    .description("check desktop launch readiness")
+    .action(function (this: Command) {
+      return dispatch(ckArgsFromOpts("doctor", this.optsWithGlobals(), "plan"));
     });
+
+  program
+    .command("cert")
+    .description("generate desktop proxy certificate")
+    .action(function (this: Command) {
+      return dispatch(ckArgsFromOpts("cert", this.optsWithGlobals(), "plan"));
+    });
+
+  program
+    .command("route [action]")
+    .description(
+      "print manual desktop routing setup and rollback commands (action: status | rollback)",
+    )
+    .option("--method <method>", "pf | direct", parseMethod)
+    .action(function (this: Command, action: string | undefined) {
+      return dispatch(
+        ckArgsFromOpts(
+          "route",
+          this.optsWithGlobals(),
+          normalizeRouteAction(action),
+        ),
+      );
+    });
+
+  program
+    .command("stop")
+    .description("stop ck-owned bridge process")
+    .action(function (this: Command) {
+      return dispatch(ckArgsFromOpts("stop", this.optsWithGlobals(), "plan"));
+    });
+
+  return program;
+}
+
+/**
+ * Pure argument parser built on the commander program: returns the resolved
+ * {@link CkArgs} (or throws on invalid input) without running the command.
+ */
+export function parseCkArgs(argv: string[]): CkArgs {
+  let captured: CkArgs | undefined;
+  const program = buildCkProgram((args) => {
+    captured = args;
+  });
+  // Throw (rather than exit) on invalid input, and stay silent; applied to
+  // every command since subcommands like `route` validate their own options.
+  const makeParseOnly = (cmd: Command): void => {
+    cmd.exitOverride();
+    cmd.configureOutput({ writeOut: () => {}, writeErr: () => {} });
+    cmd.commands.forEach(makeParseOnly);
+  };
+  makeParseOnly(program);
+  program.parse(argv);
+  if (captured === undefined) {
+    throw new Error("ck: no command parsed");
   }
-  switch (first) {
-    case "test":
-    case "doctor":
-    case "cert":
-    case "route":
-    case "stop":
-      return compactCkArgs({
-        command: first,
-        dryRun,
-        profileMode,
-        timeoutMs,
-        routeMethod,
-        routeAction,
-        debugPort,
-        instanceId,
-        seedAuthFromDefault,
-      });
-    case "help":
-    case "--help":
-    case "-h":
-      return compactCkArgs({
-        command: "help",
-        dryRun,
-        profileMode,
-        timeoutMs,
-        routeMethod,
-        routeAction,
-        debugPort,
-        instanceId,
-        seedAuthFromDefault,
-      });
-    default:
-      throw new Error(`Unknown ck command: ${first}\n\n${CK_HELP}`);
-  }
+  return captured;
 }
 
 function compactCkArgs(args: CkArgs): CkArgs {
@@ -774,11 +840,16 @@ function desktopTestDiagnosis(report: {
 }
 
 export async function runCk(argv = process.argv): Promise<void> {
-  const parsed = parseCkArgs(argv);
-  if (parsed.command === "help") {
-    console.log(CK_HELP);
-    return;
-  }
+  const program = buildCkProgram(runCkCommand);
+  await program.parseAsync(argv);
+}
+
+/** Attach the `ck` desktop launcher as a subcommand group of another program. */
+export function registerCk(program: Command): void {
+  program.addCommand(buildCkProgram(runCkCommand));
+}
+
+async function runCkCommand(parsed: CkArgs): Promise<void> {
   if (parsed.command === "cert") {
     await printCertInstructions();
     return;
@@ -817,9 +888,17 @@ export async function runCk(argv = process.argv): Promise<void> {
     return;
   }
 
-  const cert = await writeDesktopCertificate();
+  const cert = await withSpinner(
+    "preparing desktop certificate",
+    () => writeDesktopCertificate(),
+    {
+      success: (result) =>
+        result.created
+          ? "generated desktop proxy certificate"
+          : "desktop certificate ready",
+    },
+  );
   if (cert.created) {
-    console.warn("Generated desktop proxy certificate.");
     printTrustInstructions(cert.certPath);
   }
 
@@ -854,18 +933,38 @@ async function chooseFreePort(): Promise<number> {
   });
 }
 
+/** Write a single human-facing line to the UI stream (stderr). */
+function out(line = ""): void {
+  uiStream().write(`${line}\n`);
+}
+
+interface BridgeStartOptions {
+  /** Mirror live bridge stdout/stderr to this process (off during `test`). */
+  mirror?: boolean;
+  /** Suppress orchestration log lines (when a StepList is animating instead). */
+  quiet?: boolean;
+}
+
 async function launch(plan: CkLaunchPlan, timeoutMs: number): Promise<void> {
-  const { bridge, log, connectProxy } = await startBridge(plan);
+  out(`\n${brandHeader("desktop launch")}\n`);
+  const { bridge, log, connectProxy } = await startBridge(plan, {
+    mirror: true,
+  });
+
   const routeSeen = waitForRouteInventory(bridge, timeoutMs);
 
-  launchCursor(plan);
+  launchCursor(plan, {});
+
+  out(
+    `${green(glyph.tick())} ${bold("ck ready")}  ${dim(`https://127.0.0.1:${plan.bridgePort}`)} ${dim(`(log: ${plan.logPath})`)}`,
+  );
 
   const observed = await routeSeen;
   if (observed) {
-    console.log("Desktop route inventory observed.");
+    out(`${green(glyph.tick())} desktop route inventory observed`);
   } else {
     for (const line of routeInventoryTimeoutDiagnosis()) {
-      console.warn(line);
+      out(`${yellow(glyph.warn())} ${line}`);
     }
   }
 
@@ -882,18 +981,48 @@ async function testDesktopLaunch(
   plan: CkLaunchPlan,
   timeoutMs: number,
 ): Promise<void> {
-  const { bridge, log, connectProxy } = await startBridge(plan);
+  out(`\n${brandHeader("desktop test")}\n`);
+  const steps = new StepList(
+    [
+      { id: "bridge", label: "start bridge" },
+      { id: "cursor", label: "launch Cursor" },
+      { id: "inventory", label: "monitor route inventory" },
+    ],
+    { title: dim(`bridge log: ${plan.logPath}`) },
+  ).start();
+
+  steps.setActive("bridge");
+  const { bridge, log, connectProxy } = await startBridge(plan, {
+    mirror: false,
+    quiet: true,
+  });
+  steps.setDone("bridge", `127.0.0.1:${plan.bridgePort}`);
   try {
-    launchCursor(plan);
-    console.log(`Monitoring desktop route inventory for ${timeoutMs}ms`);
+    steps.setActive("cursor");
+    launchCursor(plan, { quiet: true });
+    steps.setDone(
+      "cursor",
+      plan.profileMode === "isolated" ? "isolated profile" : "default profile",
+    );
+
+    steps.setActive("inventory", `up to ${timeoutMs}ms`);
     await delay(timeoutMs);
 
     const logText = fs.existsSync(plan.logPath)
       ? fs.readFileSync(plan.logPath, "utf8")
       : "";
     const report = analyzeRouteInventoryLog(logText);
+    steps.setDone(
+      "inventory",
+      report.routeInventorySeen ? "observed" : "none seen",
+    );
+    steps.stop();
     writeLatestStatus(plan, report);
     printDesktopTestReport(plan, report);
+  } catch (error) {
+    steps.setFailed("inventory");
+    steps.stop();
+    throw error;
   } finally {
     bridge.kill("SIGTERM");
     await connectProxy?.close();
@@ -904,45 +1033,62 @@ async function testDesktopLaunch(
   }
 }
 
-async function startBridge(plan: CkLaunchPlan): Promise<CkProcessGroup> {
+async function startBridge(
+  plan: CkLaunchPlan,
+  options: BridgeStartOptions = {},
+): Promise<CkProcessGroup> {
+  const { mirror = true, quiet = false } = options;
   fs.mkdirSync(plan.stateDir, { recursive: true });
   if (plan.userDataDir !== undefined) {
     fs.mkdirSync(plan.userDataDir, { recursive: true });
   }
   fs.mkdirSync(plan.extensionsDir, { recursive: true });
   plan.authSeedStatus = seedCursorAuthFromDefault(plan);
-  if (plan.authSeedStatus === "seeded") {
-    console.log("Seeded isolated Cursor profile with default auth rows");
-  } else if (
-    plan.seedAuthFromDefault &&
-    plan.authSeedStatus !== "not-isolated"
-  ) {
-    console.warn(`Cursor auth seeding status: ${plan.authSeedStatus}`);
+  if (!quiet) {
+    if (plan.authSeedStatus === "seeded") {
+      out(
+        `${green(glyph.tick())} seeded isolated Cursor profile with default auth rows`,
+      );
+    } else if (
+      plan.seedAuthFromDefault &&
+      plan.authSeedStatus !== "not-isolated"
+    ) {
+      out(
+        `${yellow(glyph.warn())} Cursor auth seeding status: ${plan.authSeedStatus}`,
+      );
+    }
   }
   plan.localModelSeedStatus = seedLocalModelsIntoCursorState(plan);
-  if (plan.localModelSeedStatus === "seeded") {
-    console.log("Seeded isolated Cursor profile with local model entries");
-  } else if (plan.localModelSeedStatus !== "not-isolated") {
-    console.warn(
-      `Cursor local model seeding status: ${plan.localModelSeedStatus}`,
-    );
+  if (!quiet) {
+    if (plan.localModelSeedStatus === "seeded") {
+      out(
+        `${green(glyph.tick())} seeded isolated Cursor profile with local model entries`,
+      );
+    } else if (plan.localModelSeedStatus !== "not-isolated") {
+      out(
+        `${yellow(glyph.warn())} Cursor local model seeding status: ${plan.localModelSeedStatus}`,
+      );
+    }
   }
   configureCursorNodeTlsEnv(plan);
 
   assertSafe(plan.bridge);
   assertSafe(plan.cursor);
 
-  console.log(`Starting bridge on 127.0.0.1:${plan.bridgePort}`);
-  console.log(`Writing bridge log to ${plan.logPath}`);
+  if (!quiet) {
+    out(
+      `${cyan(glyph.arrow())} starting bridge on 127.0.0.1:${plan.bridgePort} ${dim(`(log: ${plan.logPath})`)}`,
+    );
+  }
   const log = fs.createWriteStream(plan.logPath, { flags: "w" });
   const bridge = spawn(plan.bridge.executable, plan.bridge.args, {
     env: { ...process.env, ...plan.bridge.env },
     stdio: ["ignore", "pipe", "pipe"],
   });
-  attachBridgeOutput(bridge, log);
+  attachBridgeOutput(bridge, log, mirror);
   writeState(plan, bridge);
   await waitForBridgeListening(bridge);
-  const connectProxy = await startConnectProxy(plan);
+  const connectProxy = await startConnectProxy(plan, quiet);
   return {
     bridge,
     log,
@@ -952,6 +1098,7 @@ async function startBridge(plan: CkLaunchPlan): Promise<CkProcessGroup> {
 
 async function startConnectProxy(
   plan: CkLaunchPlan,
+  quiet = false,
 ): Promise<DesktopConnectProxy | undefined> {
   if (
     plan.connectProxyPort === undefined ||
@@ -960,8 +1107,11 @@ async function startConnectProxy(
     return undefined;
   }
   fs.writeFileSync(plan.connectProxyLogPath, "");
-  console.log(`Starting CONNECT proxy on 127.0.0.1:${plan.connectProxyPort}`);
-  console.log(`Writing CONNECT proxy log to ${plan.connectProxyLogPath}`);
+  if (!quiet) {
+    out(
+      `${cyan(glyph.arrow())} starting CONNECT proxy on 127.0.0.1:${plan.connectProxyPort} ${dim(`(log: ${plan.connectProxyLogPath})`)}`,
+    );
+  }
   return startDesktopConnectProxy({
     host: "127.0.0.1",
     port: plan.connectProxyPort,
@@ -1433,35 +1583,45 @@ function cursorCommandUsesUserDataDir(
   );
 }
 
-function launchCursor(plan: CkLaunchPlan): ChildProcess {
-  console.log(
-    plan.profileMode === "isolated"
-      ? "Launching isolated Cursor instance"
-      : "Launching Cursor with the default signed-in profile",
-  );
-  if (plan.profileMode === "default") {
-    console.warn(
-      "Default profile mode reuses your existing Cursor auth state; it is less isolated but avoids browser login callback loss.",
+function launchCursor(
+  plan: CkLaunchPlan,
+  options: { quiet?: boolean } = {},
+): ChildProcess {
+  const quiet = options.quiet ?? false;
+  if (!quiet) {
+    out(
+      plan.profileMode === "isolated"
+        ? `${cyan(glyph.arrow())} launching isolated Cursor instance`
+        : `${cyan(glyph.arrow())} launching Cursor with the default signed-in profile`,
     );
+    if (plan.profileMode === "default") {
+      out(
+        `${yellow(glyph.warn())} default profile mode reuses your existing Cursor auth state; it is less isolated but avoids browser login callback loss.`,
+      );
+    }
   }
   const cursor = spawn(plan.cursor.executable, plan.cursor.args, {
     env: { ...process.env, ...plan.cursor.env },
     stdio: "ignore",
   });
   cursor.on("error", (error) => {
-    console.error(`Cursor launch failed: ${error.message}`);
+    out(`${red(glyph.cross())} Cursor launch failed: ${error.message}`);
   });
   return cursor;
 }
 
-function attachBridgeOutput(bridge: ChildProcess, log: fs.WriteStream): void {
+function attachBridgeOutput(
+  bridge: ChildProcess,
+  log: fs.WriteStream,
+  mirror: boolean,
+): void {
   bridge.stdout?.on("data", (chunk: Buffer) => {
     log.write(chunk);
-    process.stdout.write(chunk);
+    if (mirror) process.stdout.write(chunk);
   });
   bridge.stderr?.on("data", (chunk: Buffer) => {
     log.write(chunk);
-    process.stderr.write(chunk);
+    if (mirror) process.stderr.write(chunk);
   });
 }
 
@@ -1503,51 +1663,54 @@ function printDesktopTestReport(
   plan: CkLaunchPlan,
   report: DesktopTestReport,
 ): void {
-  console.log("");
-  console.log("Desktop Test Report");
-  console.log(`route inventory: ${report.routeInventorySeen ? "yes" : "no"}`);
-  console.log(
-    `model routes seen: ${
-      report.modelRoutesSeen.length > 0
-        ? report.modelRoutesSeen.join(", ")
-        : "none"
-    }`,
+  const field = (label: string, value: string): void =>
+    out(`${dim(`${label}:`)} ${value}`);
+  out("");
+  out(bold("Desktop Test Report"));
+  field(
+    "route inventory",
+    report.routeInventorySeen ? green("yes") : yellow("no"),
   );
-  console.log(
-    `model routes missing: ${
-      report.missingModelRoutes.length > 0
-        ? report.missingModelRoutes.join(", ")
-        : "none"
-    }`,
+  field(
+    "model routes seen",
+    report.modelRoutesSeen.length > 0
+      ? report.modelRoutesSeen.join(", ")
+      : "none",
   );
-  console.log(
-    `observed paths: ${
-      report.observedPaths.length > 0 ? report.observedPaths.join(", ") : "none"
-    }`,
+  field(
+    "model routes missing",
+    report.missingModelRoutes.length > 0
+      ? report.missingModelRoutes.join(", ")
+      : "none",
   );
-  console.log(`failed routes: ${String(report.failedRoutes.length)}`);
-  console.log(
-    `pass-through routes: ${String(report.passThroughRoutes.length)}`,
+  field(
+    "observed paths",
+    report.observedPaths.length > 0 ? report.observedPaths.join(", ") : "none",
   );
-  console.log(
-    `auth seed: ${plan.authSeedStatus ?? "not-run"}; local model seed: ${
-      plan.localModelSeedStatus ?? "not-run"
-    }`,
+  field(
+    "failed routes",
+    report.failedRoutes.length > 0
+      ? red(String(report.failedRoutes.length))
+      : String(report.failedRoutes.length),
   );
-  console.log(
-    `route categories: ${
-      report.routeCategories.length > 0
-        ? report.routeCategories
-            .map((entry) => `${entry.category}:${entry.path}`)
-            .join(", ")
-        : "none"
-    }`,
+  field("pass-through routes", String(report.passThroughRoutes.length));
+  field(
+    "auth seed",
+    `${plan.authSeedStatus ?? "not-run"}; local model seed: ${plan.localModelSeedStatus ?? "not-run"}`,
   );
-  console.log(`log: ${plan.logPath}`);
-  console.log(`state: ${plan.statePath}`);
-  console.log("diagnosis:");
+  field(
+    "route categories",
+    report.routeCategories.length > 0
+      ? report.routeCategories
+          .map((entry) => `${entry.category}:${entry.path}`)
+          .join(", ")
+      : "none",
+  );
+  field("log", plan.logPath);
+  field("state", plan.statePath);
+  out(bold("diagnosis:"));
   for (const line of report.diagnosis) {
-    console.log(`- ${line}`);
+    out(`  ${cyan(glyph.bullet())} ${line}`);
   }
 }
 
@@ -1653,51 +1816,56 @@ function configureCursorNodeTlsEnv(plan: CkLaunchPlan): void {
 }
 
 function printPlan(plan: CkLaunchPlan): void {
-  console.log("Bridge:");
-  console.log(commandForDisplay(plan.bridge));
-  console.log("");
-  console.log("Cursor:");
-  console.log(commandForDisplay(plan.cursor));
-  console.log("");
-  console.log(`State: ${plan.statePath}`);
-  console.log(`Log: ${plan.logPath}`);
+  out(bold("Bridge:"));
+  out(commandForDisplay(plan.bridge));
+  out("");
+  out(bold("Cursor:"));
+  out(commandForDisplay(plan.cursor));
+  out("");
+  out(`${dim("State:")} ${plan.statePath}`);
+  out(`${dim("Log:")} ${plan.logPath}`);
   if (plan.connectProxyPort !== undefined) {
-    console.log(`CONNECT proxy: 127.0.0.1:${plan.connectProxyPort}`);
+    out(`${dim("CONNECT proxy:")} 127.0.0.1:${plan.connectProxyPort}`);
   }
   if (plan.agentHttpPort !== undefined) {
-    console.log(`Agent HTTP bridge: 127.0.0.1:${plan.agentHttpPort}`);
+    out(`${dim("Agent HTTP bridge:")} 127.0.0.1:${plan.agentHttpPort}`);
   }
   if (plan.connectProxyLogPath !== undefined) {
-    console.log(`CONNECT proxy log: ${plan.connectProxyLogPath}`);
+    out(`${dim("CONNECT proxy log:")} ${plan.connectProxyLogPath}`);
   }
 }
 
 async function printCertInstructions(): Promise<void> {
-  const cert = await writeDesktopCertificate();
-  console.log(`cert: ${cert.certPath}`);
-  console.log(`key: ${cert.keyPath}`);
+  const cert = await withSpinner("generating desktop proxy certificate", () =>
+    writeDesktopCertificate(),
+  );
+  out(`${dim("cert:")} ${cert.certPath}`);
+  out(`${dim("key:")} ${cert.keyPath}`);
   printTrustInstructions(cert.certPath);
 }
 
 function printTrustInstructions(certPath: string): void {
-  console.log("Manual macOS trust command:");
-  console.log(desktopTrustCommand(certPath).map(shellQuote).join(" "));
+  out(bold("Manual macOS trust command:"));
+  out(desktopTrustCommand(certPath).map(shellQuote).join(" "));
 }
 
 async function printDoctor(): Promise<void> {
   const env = desktopEnv(process.env);
   const config = loadConfig(env);
-  console.log(`desktop cert: ${desktopCertificateStatus(config)}`);
-  console.log(`desktop dns: ${await desktopDnsStatus(config)}`);
-  console.log(
-    `upstream reachability: ${await upstreamReachabilityStatus(config)}`,
+  out(`\n${brandHeader("desktop launch readiness")}\n`);
+  out(`${dim("desktop cert:")} ${desktopCertificateStatus(config)}`);
+  out(`${dim("desktop dns:")} ${await desktopDnsStatus(config)}`);
+  out(
+    `${dim("upstream reachability:")} ${await upstreamReachabilityStatus(config)}`,
   );
-  console.log(`local model backend: ${await localModelBackendStatus(config)}`);
+  out(
+    `${dim("local model backend:")} ${await localModelBackendStatus(config)}`,
+  );
   if (!fs.existsSync(DESKTOP_CERT_PATH) || !fs.existsSync(DESKTOP_KEY_PATH)) {
-    console.warn("Run ck cert before launching.");
+    out(`${yellow(glyph.warn())} run ${bold("ck cert")} before launching.`);
   }
-  console.log("");
-  console.log("manual route plan: pnpm ck route");
+  out("");
+  note("manual route plan: pnpm ck route");
 }
 
 async function printRoute(
@@ -1717,38 +1885,38 @@ async function printRoute(
 }
 
 function printRoutePlan(plan: CkRoutePlan): void {
-  console.log("Desktop Manual Routing Plan");
-  console.log(`method: ${plan.method}`);
-  console.log(`primary hostname: ${plan.hostname}`);
-  console.log(`hostnames: ${plan.hostnames.join(", ")}`);
-  console.log(`bridge port: ${String(plan.bridgePort)}`);
-  console.log(
-    `upstream connect host: ${plan.upstreamConnectHost ?? "<set manually>"}`,
+  out(bold("Desktop Manual Routing Plan"));
+  out(`${dim("method:")} ${plan.method}`);
+  out(`${dim("primary hostname:")} ${plan.hostname}`);
+  out(`${dim("hostnames:")} ${plan.hostnames.join(", ")}`);
+  out(`${dim("bridge port:")} ${String(plan.bridgePort)}`);
+  out(
+    `${dim("upstream connect host:")} ${plan.upstreamConnectHost ?? "<set manually>"}`,
   );
-  console.log("");
+  out("");
   if (plan.warnings.length > 0) {
-    console.log("Warnings:");
+    out(bold("Warnings:"));
     for (const warning of plan.warnings) {
-      console.log(`- ${warning}`);
+      out(`${yellow(glyph.warn())} ${warning}`);
     }
-    console.log("");
+    out("");
   }
-  console.log("Setup commands to run manually:");
+  out(bold("Setup commands to run manually:"));
   for (const command of plan.setupCommands) {
-    console.log(commandForDisplay(command));
+    out(commandForDisplay(command));
   }
-  console.log("");
-  console.log("Verification:");
+  out("");
+  out(bold("Verification:"));
   for (const command of plan.verificationCommands) {
-    console.log(commandForDisplay(command));
+    out(commandForDisplay(command));
   }
-  console.log("");
-  console.log("Rollback:");
+  out("");
+  out(bold("Rollback:"));
   for (const command of plan.rollbackCommands) {
-    console.log(commandForDisplay(command));
+    out(commandForDisplay(command));
   }
-  console.log("");
-  console.log(
+  out("");
+  note(
     "ck prints these commands only. It does not install trust, edit hosts, configure pf, or kill Cursor for you.",
   );
 }
@@ -1756,76 +1924,80 @@ function printRoutePlan(plan: CkRoutePlan): void {
 async function printRouteStatus(): Promise<void> {
   const env = desktopEnv(process.env);
   const config = loadConfig(env);
-  console.log("Desktop Routing Status");
-  console.log(`desktop cert: ${desktopCertificateStatus(config)}`);
-  console.log(`desktop dns: ${await desktopDnsStatus(config)}`);
+  out(bold("Desktop Routing Status"));
+  out(`${dim("desktop cert:")} ${desktopCertificateStatus(config)}`);
+  out(`${dim("desktop dns:")} ${await desktopDnsStatus(config)}`);
   for (const hostname of DESKTOP_HOSTNAMES.filter(
     (hostname) => hostname !== DESKTOP_HOSTNAME,
   )) {
-    console.log(`desktop dns: ${await desktopDnsStatusForHostname(hostname)}`);
+    out(
+      `${dim("desktop dns:")} ${await desktopDnsStatusForHostname(hostname)}`,
+    );
   }
-  console.log(
-    `detected upstream connect host: ${(await detectUpstreamConnectHost()) ?? "<none; set CURSOR_UPSTREAM_CONNECT_HOST manually>"}`,
+  out(
+    `${dim("detected upstream connect host:")} ${(await detectUpstreamConnectHost()) ?? "<none; set CURSOR_UPSTREAM_CONNECT_HOST manually>"}`,
   );
-  console.log(
-    `configured upstream connect: ${
+  out(
+    `${dim("configured upstream connect:")} ${
       config.upstreamConnectHost === undefined
         ? "system DNS"
         : `${config.upstreamConnectHost}${config.upstreamConnectPort === undefined ? "" : `:${config.upstreamConnectPort}`}`
     }`,
   );
-  console.log(
-    `upstream reachability: ${await upstreamReachabilityStatus(config)}`,
+  out(
+    `${dim("upstream reachability:")} ${await upstreamReachabilityStatus(config)}`,
   );
-  console.log(`local model backend: ${await localModelBackendStatus(config)}`);
-  console.log("");
-  console.log("Next steps:");
-  console.log(
-    "- Run `pnpm ck route` before system cutover to capture a real upstream IP.",
+  out(
+    `${dim("local model backend:")} ${await localModelBackendStatus(config)}`,
   );
-  console.log("- Run `pnpm ck route rollback` to print the rollback commands.");
+  out("");
+  out(bold("Next steps:"));
+  note(
+    "Run `pnpm ck route` before system cutover to capture a real upstream IP.",
+  );
+  note("Run `pnpm ck route rollback` to print the rollback commands.");
 }
 
 function printRouteRollback(plan: CkRoutePlan): void {
-  console.log("Desktop Routing Rollback");
+  out(bold("Desktop Routing Rollback"));
   for (const command of plan.rollbackCommands) {
-    console.log(commandForDisplay(command));
+    out(commandForDisplay(command));
   }
-  console.log("");
-  console.log(
+  out("");
+  note(
     "ck prints rollback commands only. Review them before running; especially `pkill -x Cursor`.",
   );
 }
 
 async function stopBridgeFromState(): Promise<void> {
   if (!fs.existsSync(CK_STATE_PATH)) {
-    console.log("No ck state file found.");
+    out(`${gray(glyph.bullet())} No ck state file found.`);
     return;
   }
   const state = JSON.parse(fs.readFileSync(CK_STATE_PATH, "utf8")) as CkState;
   if (state.bridgePid === undefined) {
-    console.log("No bridge PID recorded.");
+    out(`${gray(glyph.bullet())} No bridge PID recorded.`);
     return;
   }
   const command = processCommandForPid(state.bridgePid);
   if (command === undefined) {
-    console.warn(
-      `No running process found for ck bridge PID ${state.bridgePid}.`,
+    out(
+      `${yellow(glyph.warn())} No running process found for ck bridge PID ${state.bridgePid}.`,
     );
     return;
   }
   if (!bridgeProcessMatchesState(command, state)) {
-    console.warn(
-      `Refusing to stop PID ${state.bridgePid}; it does not look like the ck-owned desktop bridge recorded in state.`,
+    out(
+      `${yellow(glyph.warn())} Refusing to stop PID ${state.bridgePid}; it does not look like the ck-owned desktop bridge recorded in state.`,
     );
     return;
   }
   try {
     process.kill(state.bridgePid, "SIGTERM");
-    console.log(`Stopped ck bridge process ${state.bridgePid}.`);
+    out(`${green(glyph.tick())} Stopped ck bridge process ${state.bridgePid}.`);
   } catch (error) {
-    console.warn(
-      `Could not stop bridge process ${state.bridgePid}: ${
+    out(
+      `${yellow(glyph.warn())} Could not stop bridge process ${state.bridgePid}: ${
         error instanceof Error ? error.message : String(error)
       }`,
     );
