@@ -35,6 +35,7 @@ describe("desktop CONNECT proxy", () => {
       bridgeHost: "127.0.0.1",
       bridgePort: bridge.port,
       cursorHostnames: ["api2.cursor.sh"],
+      passthrough: true,
       logPath,
     });
     servers.push(proxy.server);
@@ -89,6 +90,38 @@ describe("desktop CONNECT proxy", () => {
     const response = await connectWithWrites(proxyPort, []);
 
     expect(response).toContain("408 Request Timeout");
+  });
+
+  it("blocks non-Cursor CONNECT destinations by default (passthrough off)", async () => {
+    const bridge = await startEchoServer();
+    const passthrough = await startEchoServer();
+    const proxyPort = await freePort();
+    const proxy = await startDesktopConnectProxy({
+      host: "127.0.0.1",
+      port: proxyPort,
+      bridgeHost: "127.0.0.1",
+      bridgePort: bridge.port,
+      cursorHostnames: ["api2.cursor.sh"],
+    });
+    servers.push(proxy.server);
+
+    const response = await connectWithWrites(proxyPort, [
+      `CONNECT 127.0.0.1:${passthrough.port} HTTP/1.1\r\n\r\n`,
+    ]);
+
+    expect(response).toContain("502 Bad Gateway");
+  });
+
+  it("refuses to bind to a non-loopback host without an explicit override", async () => {
+    const proxyPort = await freePort();
+    await expect(
+      startDesktopConnectProxy({
+        host: "0.0.0.0",
+        port: proxyPort,
+        bridgeHost: "127.0.0.1",
+        bridgePort: 1,
+      }),
+    ).rejects.toThrow(/non-loopback host/);
   });
 
   it("blocks non-Cursor CONNECT destinations when passthrough is disabled", async () => {

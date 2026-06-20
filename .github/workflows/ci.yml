@@ -31,7 +31,7 @@ jobs:
       - run: pnpm model-fusion:protocol:check
       - run: pnpm release:publish:check
       - run: pnpm build
-      - run: pnpm test
+      - run: pnpm test:coverage
       - run: pnpm format:check
       - run: pnpm audit --audit-level moderate
       - run: pnpm pack

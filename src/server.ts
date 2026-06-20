@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import http, {
   type IncomingMessage,
   type Server,
@@ -248,11 +249,13 @@ export async function startServer(runtime: BridgeRuntime): Promise<Server> {
     request: IncomingMessage | http2.Http2ServerRequest,
     response: ServerResponse | http2.Http2ServerResponse,
   ) => {
-    void handleRequest(
+    handleRequest(
       runtime,
       request as IncomingMessage,
       response as ServerResponse,
-    );
+    ).catch((error: unknown) => {
+      handleRequestFailure(runtime, response as ServerResponse, error);
+    });
   };
   const server = runtime.config.useTls
     ? runtime.config.desktopMode
@@ -456,6 +459,41 @@ async function handleRequest(
   proxyRequest(request, response, runtime.config, runtime.logger);
 }
 
+function handleRequestFailure(
+  runtime: BridgeRuntime,
+  response: ServerResponse,
+  error: unknown,
+): void {
+  runtime.logger.error("request handler crashed", {
+    error: error instanceof Error ? error.message : String(error),
+  });
+  try {
+    if (response.headersSent) {
+      response.destroy();
+      return;
+    }
+    response.writeHead(500, { "content-type": "application/json" });
+    response.end(JSON.stringify({ error: "internal bridge error" }));
+  } catch {
+    response.destroy();
+  }
+}
+
+/**
+ * Length-independent constant-time comparison so bridge-token checks do not leak
+ * the secret via early-mismatch timing. A missing header never matches.
+ */
+function constantTimeEquals(
+  value: string | undefined,
+  expected: string,
+): boolean {
+  if (value === undefined) return false;
+  const valueBuf = Buffer.from(value);
+  const expectedBuf = Buffer.from(expected);
+  if (valueBuf.length !== expectedBuf.length) return false;
+  return timingSafeEqual(valueBuf, expectedBuf);
+}
+
 function authorizeRequest(
   runtime: BridgeRuntime,
   request: IncomingMessage,
@@ -468,7 +506,8 @@ function authorizeRequest(
   const authorization = headerValue(request.headers.authorization);
   const bridgeToken = headerValue(request.headers["x-cursor-rpc-auth"]);
   const authorized =
-    authorization === `Bearer ${token}` || bridgeToken === token;
+    constantTimeEquals(authorization, `Bearer ${token}`) ||
+    constantTimeEquals(bridgeToken, token);
   if (authorized) {
     return true;
   }

@@ -9,9 +9,19 @@ export interface DesktopConnectProxyOptions {
   bridgeHost: string;
   bridgePort: number;
   logPath?: string;
+  /**
+   * When true, CONNECT requests to non-Cursor hosts are tunneled through to
+   * their destination, turning this into an open forwarder. Defaults to false
+   * so only Cursor backends (cursorHostnames) are reachable.
+   */
   passthrough?: boolean;
   cursorHostnames?: readonly string[];
   headerTimeoutMs?: number;
+  /**
+   * Allow binding to a non-loopback host. Off by default to avoid exposing the
+   * proxy beyond the local machine.
+   */
+  allowExternalHost?: boolean;
 }
 
 export interface DesktopConnectProxy {
@@ -44,8 +54,13 @@ const MAX_CONNECT_HEADER_BYTES = 32 * 1024;
 export async function startDesktopConnectProxy(
   options: DesktopConnectProxyOptions,
 ): Promise<DesktopConnectProxy> {
+  if (options.allowExternalHost !== true && !isLoopbackHost(options.host)) {
+    throw new Error(
+      `Refusing to bind CONNECT proxy to non-loopback host ${options.host}. Set allowExternalHost: true to override.`,
+    );
+  }
   const cursorHostnames = new Set(options.cursorHostnames ?? DESKTOP_HOSTNAMES);
-  const passthrough = options.passthrough ?? true;
+  const passthrough = options.passthrough ?? false;
   const activeSockets = new Set<net.Socket>();
   const server = net.createServer((client) => {
     activeSockets.add(client);
@@ -213,6 +228,10 @@ function handleClient(
       client.destroy(error);
     });
   });
+}
+
+function isLoopbackHost(host: string): boolean {
+  return host === "127.0.0.1" || host === "::1" || host === "localhost";
 }
 
 function parseConnectDestination(value: string): {
