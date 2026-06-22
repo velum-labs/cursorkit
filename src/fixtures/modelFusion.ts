@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 export const MODEL_FUSION_SCHEMA_BUNDLE_HASH =
-  "sha256:955da2d6891c88d4c40746a8206439e2dae2efc1e7ffefca015e84d4ce265671";
+  "sha256:aae33b89a771fd5916e21bfffc5993d2d7ef98ecfc8542ba9570a8c99074d541";
 
 export type JsonValue =
   | null

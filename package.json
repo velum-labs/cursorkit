@@ -20,7 +20,7 @@
   "modelFusionProtocol": {
     "packageName": "@velum-labs/model-fusion-protocol",
     "version": "0.1.1",
-    "schemaBundleHash": "sha256:955da2d6891c88d4c40746a8206439e2dae2efc1e7ffefca015e84d4ce265671",
+    "schemaBundleHash": "sha256:aae33b89a771fd5916e21bfffc5993d2d7ef98ecfc8542ba9570a8c99074d541",
     "contracts": "json-schema+openapi-3.1",
     "origin": "fusionkit"
   },
