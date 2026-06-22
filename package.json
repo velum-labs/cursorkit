@@ -19,8 +19,8 @@
   },
   "modelFusionProtocol": {
     "packageName": "@velum-labs/model-fusion-protocol",
-    "version": "0.2.0",
-    "schemaBundleHash": "sha256:aae33b89a771fd5916e21bfffc5993d2d7ef98ecfc8542ba9570a8c99074d541",
+    "version": "0.3.0",
+    "schemaBundleHash": "sha256:3e8388595aefc8e82962d76e822c514db6552f6ee65e62d487534ef825ad87b8",
     "contracts": "json-schema+openapi-3.1",
     "origin": "fusionkit"
   },
@@ -83,7 +83,7 @@
     "@bufbuild/buf": "^1.70.0",
     "@bufbuild/protoc-gen-es": "^2.12.0",
     "@types/node": "24.10.1",
-    "@velum-labs/model-fusion-protocol": "0.2.0",
+    "@velum-labs/model-fusion-protocol": "0.3.0",
     "@vitest/coverage-v8": "4.1.8",
     "prettier": "3.8.4",
     "tsx": "4.22.4",
