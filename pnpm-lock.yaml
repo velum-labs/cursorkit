@@ -40,8 +40,8 @@ importers:
         specifier: 24.10.1
         version: 24.10.1
       '@velum-labs/model-fusion-protocol':
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: 0.2.0
+        version: 0.2.0
       '@vitest/coverage-v8':
         specifier: 4.1.8
         version: 4.1.8(vitest@4.1.8)
@@ -502,8 +502,8 @@ packages:
     peerDependencies:
       typescript: '*'
 
-  '@velum-labs/model-fusion-protocol@0.1.1':
-    resolution: {integrity: sha512-71ZRXosQMxPoPzUSBrzXyqmVtIFSm3Z2fmz7365RM+AyL0IZilRsTHHwmpL7S7MLZq4HnDF9zG6BypFW0VqUyA==}
+  '@velum-labs/model-fusion-protocol@0.2.0':
+    resolution: {integrity: sha512-MkNR1qCVsNZKJ3zud5L9fNTNeBdPSlDEUu4bxK3Ua2zMNiRee++qYHV6coqAlYGBMwTYdBIAO6+Chl76nRbVQA==}
 
   '@vitest/coverage-v8@4.1.8':
     resolution: {integrity: sha512-lt3kovsyHwYe00wq4D1ti0Z974fWj4NLp6siqiyEufUpyFwK9Yhi7rBhac9JL5aA0zoMrJqc4vYPZRUnI7l7nw==}
@@ -1297,7 +1297,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@velum-labs/model-fusion-protocol@0.1.1': {}
+  '@velum-labs/model-fusion-protocol@0.2.0': {}
 
   '@vitest/coverage-v8@4.1.8(vitest@4.1.8)':
     dependencies:
