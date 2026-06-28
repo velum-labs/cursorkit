@@ -1,12 +1,14 @@
 # Disclaimer
 
-This is an unofficial and unsupported interoperability research project.
+This is an unofficial and unsupported interoperability research project. It is
+not affiliated with, endorsed by, or supported by Cursor.
 
-It attempts to emulate enough of Cursor's backend protocol for personal,
-experimental use with a self-hosted model. Reverse-engineering a client protocol
-to run your own models may conflict with Cursor's Terms of Service. Do not
-deploy this project as a hosted service, do not represent it as affiliated with
-Cursor, and do not rely on it for production workloads.
+It exists for personal interoperability research: emulating enough of Cursor's
+backend protocol for experimental use with a self-hosted, OpenAI-compatible
+model. Reverse-engineering a client protocol to run your own models may conflict
+with Cursor's Terms of Service, so you are responsible for ensuring your own use
+complies with any agreements you have with Cursor.
 
-Use it only for local research where you understand the legal, security, and
-compatibility risks.
+The software is provided under the Apache License 2.0 on an "AS IS" basis,
+without warranties or conditions of any kind. Use it at your own risk, and make
+your own assessment of the legal, security, and compatibility implications.

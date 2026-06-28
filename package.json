@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.4",
   "description": "Unofficial research bridge for experimenting with Cursor's ConnectRPC protocol against a self-hosted OpenAI-compatible model.",
-  "license": "UNLICENSED",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/velum-labs/cursorkit.git"
@@ -68,7 +68,8 @@
     "proto",
     "docs",
     "README.md",
-    "DISCLAIMER.md"
+    "DISCLAIMER.md",
+    "LICENSE"
   ],
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.0",

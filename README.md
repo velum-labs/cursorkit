@@ -151,8 +151,10 @@ the experimental local plugin shape. Examples are typechecked by
 
 ## Release Gates
 
-This package remains private and local-only. See `docs/release-gates.md` for the
-checks required before sharing a tarball or changing the API stability posture.
+This package is published to public npm as `@velum-labs/cursorkit` under the
+Apache License 2.0; see `LICENSE` for the license terms and `DISCLAIMER.md` for
+the unofficial-research caveats. See `docs/release-gates.md` for the checks
+required before publishing a release or changing the API stability posture.
 Use `pnpm baseline:check` to verify generated route/config/docs drift and
 `pnpm release:check` for the authoritative deterministic local release gate,
 including package artifact smoke validation.

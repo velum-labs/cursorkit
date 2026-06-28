@@ -43,6 +43,35 @@ export type OpenAIBackendErrorCode =
   | "request_aborted"
   | "request_timeout";
 
+/**
+ * Canonical egress error taxonomy, mirrored from the fusionkit WS1 classifier
+ * (`fusionkit_core.clients.ProviderErrorCategory`) so the Cursor bridge and the
+ * fusion gateway agree on what an upstream failure *means*:
+ *
+ * - `transient`: retrying may succeed (HTTP 429 rate limits, 5xx, vendor
+ *   `overloaded_error`, timeouts). Honors `Retry-After`.
+ * - `quota_exhausted`: the account is out of money/quota (`insufficient_quota`,
+ *   billing/credit errors). Re-running the same key will not help — fail over
+ *   to the fusion ensemble.
+ * - `auth_permanent`: the request can never succeed as-is (401/403, invalid
+ *   key, `model_not_found`). Do not retry, do not blind-failover.
+ * - `unknown`: could not be classified; treated as non-retryable.
+ */
+export type OpenAIBackendErrorCategory =
+  | "transient"
+  | "quota_exhausted"
+  | "auth_permanent"
+  | "unknown";
+
+export interface OpenAIBackendErrorOptions extends ErrorOptions {
+  /** Egress taxonomy classification. Defaults from {@link OpenAIBackendErrorCode}. */
+  category?: OpenAIBackendErrorCategory;
+  /** Parsed `Retry-After` (seconds) when the upstream supplied one. */
+  retryAfter?: number;
+  /** Upstream HTTP status code, when the failure was an HTTP response. */
+  status?: number;
+}
+
 export interface OpenAIStreamOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -55,13 +84,25 @@ export interface OpenAIStreamOptions {
 }
 
 export class OpenAIBackendError extends Error {
+  readonly category: OpenAIBackendErrorCategory;
+  readonly retryAfter: number | undefined;
+  readonly status: number | undefined;
+
   constructor(
     readonly code: OpenAIBackendErrorCode,
     message: string,
-    options?: ErrorOptions,
+    options?: OpenAIBackendErrorOptions,
   ) {
     super(message, options);
     this.name = "OpenAIBackendError";
+    this.category = options?.category ?? defaultCategoryForCode(code);
+    this.retryAfter = options?.retryAfter;
+    this.status = options?.status;
+  }
+
+  /** Only `transient` failures are worth retrying as-is. */
+  get retryable(): boolean {
+    return this.category === "transient";
   }
 }
 
@@ -223,6 +264,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
           classified instanceof OpenAIBackendError
             ? classified.code
             : undefined,
+        category:
+          classified instanceof OpenAIBackendError
+            ? classified.category
+            : undefined,
         cause:
           error instanceof Error && error.cause instanceof Error
             ? error.cause.message
@@ -234,9 +279,19 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     if (!response.ok || response.body === null) {
       const body = await response.text().catch(() => "");
+      const classification = classifyUpstreamHttpError(
+        response.status,
+        response.headers.get("retry-after"),
+        body,
+      );
       const error = new OpenAIBackendError(
         "http_error",
         `Model backend returned ${response.status}: ${body}`,
+        {
+          category: classification.category,
+          retryAfter: classification.retryAfter,
+          status: response.status,
+        },
       );
       this.logger?.warn("model backend response failed", {
         modelId: this.config.id,
@@ -246,6 +301,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
         durationMs: Date.now() - started,
         bodyPreview: body.slice(0, 500),
         code: error.code,
+        category: error.category,
+        retryAfter: error.retryAfter,
       });
       abortContext.dispose();
       throw error;
@@ -302,6 +359,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
         code:
           classified instanceof OpenAIBackendError
             ? classified.code
+            : undefined,
+        category:
+          classified instanceof OpenAIBackendError
+            ? classified.category
             : undefined,
       });
       throw classified;
@@ -496,6 +557,144 @@ function createRequestAbortContext(
       upstreamSignal?.removeEventListener("abort", abortFromUpstream);
     },
   };
+}
+
+// Lower-cased substrings matched against the upstream error body. Mirrors the
+// fusionkit WS1 marker sets so both egress points classify identically.
+const QUOTA_MARKERS = [
+  "insufficient_quota",
+  "insufficient quota",
+  "exceeded your current quota",
+  "billing_hard_limit_reached",
+  "billing",
+  "credit balance",
+  "out of credits",
+  "payment required",
+  "quota exceeded",
+] as const;
+
+const AUTH_MARKERS = [
+  "invalid api key",
+  "invalid_api_key",
+  "invalid x-api-key",
+  "authentication_error",
+  "permission_error",
+  "permission denied",
+  "permission_denied",
+  "model_not_found",
+  "model not found",
+  "does not exist",
+  "no such model",
+  "unauthorized",
+] as const;
+
+const TRANSIENT_MARKERS = [
+  "overloaded",
+  "rate_limit",
+  "rate limit",
+  "ratelimit",
+  "try again",
+  "timeout",
+  "timed out",
+  "temporarily unavailable",
+  "service unavailable",
+  "service_unavailable",
+] as const;
+
+export interface BackendErrorClassification {
+  category: OpenAIBackendErrorCategory;
+  retryAfter: number | undefined;
+}
+
+/**
+ * Classify a non-2xx upstream (vendor/gateway) response into the egress
+ * taxonomy. Reads the status code, the `Retry-After` header, and the raw error
+ * body so a vendor 429 / `insufficient_quota` / billing signal is no longer
+ * collapsed into a generic `http_error`.
+ */
+export function classifyUpstreamHttpError(
+  status: number,
+  retryAfterHeader: string | null | undefined,
+  body: string,
+): BackendErrorClassification {
+  return {
+    category: categoryForUpstream(status, body.toLowerCase()),
+    retryAfter: parseRetryAfter(retryAfterHeader),
+  };
+}
+
+function categoryForUpstream(
+  status: number,
+  blob: string,
+): OpenAIBackendErrorCategory {
+  // Quota first: an OpenAI `insufficient_quota` is delivered as HTTP 429, so it
+  // must win over the generic "429 is transient" rule below.
+  if (QUOTA_MARKERS.some((marker) => blob.includes(marker))) {
+    return "quota_exhausted";
+  }
+  if (status === 401 || status === 403) {
+    return "auth_permanent";
+  }
+  if (status === 404 && blob.includes("model")) {
+    return "auth_permanent";
+  }
+  if (AUTH_MARKERS.some((marker) => blob.includes(marker))) {
+    return "auth_permanent";
+  }
+  if (status === 429) {
+    return "transient";
+  }
+  if (status >= 500) {
+    return "transient";
+  }
+  if (TRANSIENT_MARKERS.some((marker) => blob.includes(marker))) {
+    return "transient";
+  }
+  return "unknown";
+}
+
+/**
+ * Parse an HTTP `Retry-After` header. Supports both the delta-seconds form
+ * (`"7"`) and the HTTP-date form (`"Wed, 21 Oct 2025 07:28:00 GMT"`), returning
+ * a non-negative seconds value, or `undefined` when absent/unparseable.
+ */
+export function parseRetryAfter(
+  value: string | null | undefined,
+): number | undefined {
+  if (value === null || value === undefined) {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds)) {
+    return seconds >= 0 ? seconds : undefined;
+  }
+  const dateMs = Date.parse(trimmed);
+  if (!Number.isNaN(dateMs)) {
+    const deltaSeconds = (dateMs - Date.now()) / 1000;
+    return deltaSeconds > 0 ? deltaSeconds : 0;
+  }
+  return undefined;
+}
+
+function defaultCategoryForCode(
+  code: OpenAIBackendErrorCode,
+): OpenAIBackendErrorCategory {
+  switch (code) {
+    case "request_timeout":
+      return "transient";
+    case "http_error":
+    case "malformed_sse":
+    case "request_aborted":
+      return "unknown";
+    default: {
+      const exhaustive: never = code;
+      return exhaustive;
+    }
+  }
 }
 
 function classifyBackendError(

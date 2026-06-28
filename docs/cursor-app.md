@@ -55,6 +55,11 @@ settings.
 It does not run `sudo`, install certificate trust, edit `/etc/hosts`, modify
 `pf`, bind privileged ports, or kill your normal Cursor instance.
 
+Set `CK_WORKSPACE_PATH=<repo>` to make the launched Cursor open a specific
+project while ck keeps its certs/state/logs under the current directory. This is
+how an embedding launcher (for example `fusionkit cursor --ide`) opens the
+user's repo without writing a `.cursor-rpc/` folder into it.
+
 Useful commands:
 
 ```bash

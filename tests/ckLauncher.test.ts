@@ -419,6 +419,33 @@ describe("ck launcher", () => {
     );
   });
 
+  it("opens an overridden workspace while keeping state under cwd", () => {
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-rpc-ck-"));
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-rpc-repo-"));
+    try {
+      const plan = buildCkLaunchPlan({
+        cwd: tempDir,
+        workspacePath: repoDir,
+        bridgePort: 9555,
+        connectProxyPort: 9666,
+        env: {},
+      });
+
+      expect(plan.workspacePath).toBe(repoDir);
+      expect(plan.cursor.args).toContain(repoDir);
+      expect(plan.cursor.args).not.toContain(tempDir);
+      // State, logs, and certs still live under cwd, not the opened repo.
+      expect(plan.logPath).toBe(
+        path.join(tempDir, ".cursor-rpc", "ck", "bridge.log"),
+      );
+      expect(plan.userDataDir).toBe(
+        path.join(tempDir, ".cursor-rpc", "ck", "user-data"),
+      );
+    } finally {
+      fs.rmSync(repoDir, { recursive: true, force: true });
+    }
+  });
+
   it("can build a default-profile Cursor command for auth-sensitive testing", () => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "cursor-rpc-ck-"));
     const plan = buildCkLaunchPlan({

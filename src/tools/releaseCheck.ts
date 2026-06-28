@@ -83,6 +83,7 @@ export const REQUIRED_PACKAGE_ENTRIES = [
   "package/package.json",
   "package/README.md",
   "package/DISCLAIMER.md",
+  "package/LICENSE",
   "package/dist/src/cli.js",
   "package/dist/src/cli.d.ts",
   "package/proto/agent/v1/agent.proto",

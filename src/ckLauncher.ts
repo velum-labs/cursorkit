@@ -448,8 +448,16 @@ export function buildCkLaunchPlan(options: {
   instanceId?: string;
   seedAuthFromDefault?: boolean;
   cwd?: string;
+  /**
+   * Folder Cursor opens as its workspace. Defaults to {@link cwd}; set it to
+   * decouple the opened project from the ck state directory (which stays under
+   * {@link cwd}), so an embedding launcher can keep certs/state/logs in a
+   * scratch dir while still opening the user's real repo.
+   */
+  workspacePath?: string;
 }): CkLaunchPlan {
   const cwd = options.cwd ?? process.cwd();
+  const workspacePath = options.workspacePath ?? cwd;
   const profileMode = options.profileMode ?? "isolated";
   const stateDir =
     options.instanceId === undefined
@@ -495,7 +503,7 @@ export function buildCkLaunchPlan(options: {
       userDataDir,
       extensionsDir,
       options.debugPort,
-      cwd,
+      workspacePath,
       options.bridgePort,
       profileMode === "isolated",
       connectProxyPort,
@@ -509,7 +517,7 @@ export function buildCkLaunchPlan(options: {
     ...(connectProxyLogPath !== undefined ? { connectProxyLogPath } : {}),
     userDataDir,
     extensionsDir,
-    workspacePath: cwd,
+    workspacePath,
     profileMode,
     seedAuthFromDefault:
       profileMode === "isolated" && options.seedAuthFromDefault !== false,
@@ -884,6 +892,14 @@ async function runCkCommand(parsed: CkArgs): Promise<void> {
     parsed.profileMode === "isolated" ? await chooseFreePort() : undefined;
   const agentHttpPort =
     parsed.profileMode === "isolated" ? await chooseFreePort() : undefined;
+  // CK_WORKSPACE_PATH lets an embedding launcher open the user's real repo while
+  // keeping ck's state/cert/log directory under cwd (a scratch dir). Unset for
+  // normal `pnpm ck`, where the workspace is the current directory.
+  const workspacePathEnv = process.env.CK_WORKSPACE_PATH;
+  const workspacePath =
+    workspacePathEnv !== undefined && workspacePathEnv.length > 0
+      ? workspacePathEnv
+      : undefined;
   const plan = buildCkLaunchPlan({
     env: process.env,
     bridgePort,
@@ -893,6 +909,7 @@ async function runCkCommand(parsed: CkArgs): Promise<void> {
     debugPort: parsed.debugPort,
     instanceId: parsed.instanceId,
     seedAuthFromDefault: parsed.seedAuthFromDefault,
+    ...(workspacePath !== undefined ? { workspacePath } : {}),
   });
 
   if (parsed.dryRun) {

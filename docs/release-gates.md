@@ -81,7 +81,7 @@ Package smoke validates:
 
 - `pnpm pack` succeeds after a build.
 - The tarball contains the required `dist/src`, `proto`, `docs`, `README.md`,
-  and `DISCLAIMER.md` files.
+  `DISCLAIMER.md`, and `LICENSE` files.
 - `examples/` is intentionally excluded from the tarball; source examples are
   typechecked by `pnpm examples:check` against the built package exports.
 - A temporary clean project can install the tarball with `pnpm add --offline`.

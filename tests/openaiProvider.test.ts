@@ -3,7 +3,13 @@ import http from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { Logger } from "../src/logger.js";
-import { OpenAICompatibleProvider } from "../src/providers/openai.js";
+import {
+  OpenAIBackendError,
+  type OpenAIBackendErrorCategory,
+  OpenAICompatibleProvider,
+  classifyUpstreamHttpError,
+  parseRetryAfter,
+} from "../src/providers/openai.js";
 
 const servers: http.Server[] = [];
 
@@ -219,6 +225,226 @@ describe("OpenAICompatibleProvider observability", () => {
     ]);
   });
 });
+
+interface ClassifierCase {
+  label: string;
+  status: number;
+  retryAfter: string | null;
+  body: string;
+  expectedCategory: OpenAIBackendErrorCategory;
+  expectedRetryAfter: number | undefined;
+}
+
+const CLASSIFIER_CASES: ClassifierCase[] = [
+  {
+    label: "openai_rate_limit",
+    status: 429,
+    retryAfter: "12",
+    body: JSON.stringify({
+      error: { type: "rate_limit_error", message: "Rate limit reached" },
+    }),
+    expectedCategory: "transient",
+    expectedRetryAfter: 12,
+  },
+  {
+    label: "openai_insufficient_quota_wins_over_429",
+    status: 429,
+    retryAfter: null,
+    body: JSON.stringify({
+      error: {
+        code: "insufficient_quota",
+        type: "insufficient_quota",
+        message: "You exceeded your current quota",
+      },
+    }),
+    expectedCategory: "quota_exhausted",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "anthropic_credit_balance_too_low",
+    status: 400,
+    retryAfter: null,
+    body: JSON.stringify({
+      type: "error",
+      error: {
+        type: "invalid_request_error",
+        message: "Your credit balance is too low to access the API",
+      },
+    }),
+    expectedCategory: "quota_exhausted",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "anthropic_overloaded",
+    status: 529,
+    retryAfter: null,
+    body: JSON.stringify({
+      type: "error",
+      error: { type: "overloaded_error", message: "Overloaded" },
+    }),
+    expectedCategory: "transient",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "openai_invalid_api_key",
+    status: 401,
+    retryAfter: null,
+    body: JSON.stringify({
+      error: { code: "invalid_api_key", message: "Incorrect API key provided" },
+    }),
+    expectedCategory: "auth_permanent",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "model_not_found_404",
+    status: 404,
+    retryAfter: null,
+    body: JSON.stringify({
+      error: { code: "model_not_found", message: "The model does not exist" },
+    }),
+    expectedCategory: "auth_permanent",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "permission_denied_403",
+    status: 403,
+    retryAfter: null,
+    body: "403 PERMISSION_DENIED",
+    expectedCategory: "auth_permanent",
+    expectedRetryAfter: undefined,
+  },
+  {
+    label: "server_error_5xx",
+    status: 503,
+    retryAfter: "5",
+    body: "service unavailable",
+    expectedCategory: "transient",
+    expectedRetryAfter: 5,
+  },
+  {
+    label: "unclassified_bad_request",
+    status: 400,
+    retryAfter: null,
+    body: "malformed request",
+    expectedCategory: "unknown",
+    expectedRetryAfter: undefined,
+  },
+];
+
+describe("classifyUpstreamHttpError", () => {
+  it.each(CLASSIFIER_CASES)(
+    "classifies $label as $expectedCategory",
+    ({ status, retryAfter, body, expectedCategory, expectedRetryAfter }) => {
+      const result = classifyUpstreamHttpError(status, retryAfter, body);
+      expect(result.category).toBe(expectedCategory);
+      expect(result.retryAfter).toBe(expectedRetryAfter);
+    },
+  );
+
+  it("parses HTTP-date Retry-After headers into a non-negative delay", () => {
+    const future = new Date(Date.now() + 30_000).toUTCString();
+    const delay = parseRetryAfter(future);
+    expect(delay).toBeGreaterThan(0);
+    expect(delay).toBeLessThanOrEqual(30);
+  });
+
+  it("ignores absent or unparseable Retry-After headers", () => {
+    expect(parseRetryAfter(null)).toBeUndefined();
+    expect(parseRetryAfter(undefined)).toBeUndefined();
+    expect(parseRetryAfter("   ")).toBeUndefined();
+    expect(parseRetryAfter("soon")).toBeUndefined();
+  });
+});
+
+describe("OpenAICompatibleProvider error classification", () => {
+  it("surfaces a classified quota_exhausted error on a 429 insufficient_quota", async () => {
+    const server = http.createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(429, {
+          "content-type": "application/json",
+          "retry-after": "30",
+        });
+        response.end(
+          JSON.stringify({
+            error: {
+              code: "insufficient_quota",
+              type: "insufficient_quota",
+              message: "You exceeded your current quota",
+            },
+          }),
+        );
+      });
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const provider = new OpenAICompatibleProvider({
+      id: "local-qwen",
+      displayName: "local-qwen",
+      providerModel: "mlx-community/Qwen3.5-4B-8bit",
+      baseUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      contextTokenLimit: 128000,
+    });
+
+    const error = await collectStreamError(provider);
+    expect(error).toBeInstanceOf(OpenAIBackendError);
+    const backendError = error as OpenAIBackendError;
+    expect(backendError.code).toBe("http_error");
+    expect(backendError.category).toBe("quota_exhausted");
+    expect(backendError.status).toBe(429);
+    expect(backendError.retryAfter).toBe(30);
+    expect(backendError.retryable).toBe(false);
+  });
+
+  it("classifies a vendor 429 rate limit as a retryable transient failure", async () => {
+    const server = http.createServer((request, response) => {
+      request.resume();
+      request.on("end", () => {
+        response.writeHead(429, {
+          "content-type": "application/json",
+          "retry-after": "7",
+        });
+        response.end(
+          JSON.stringify({
+            error: { type: "rate_limit_error", message: "Rate limit reached" },
+          }),
+        );
+      });
+    });
+    servers.push(server);
+    const port = await listen(server);
+    const provider = new OpenAICompatibleProvider({
+      id: "local-qwen",
+      displayName: "local-qwen",
+      providerModel: "mlx-community/Qwen3.5-4B-8bit",
+      baseUrl: `http://127.0.0.1:${port}/v1`,
+      apiKey: "",
+      contextTokenLimit: 128000,
+    });
+
+    const error = await collectStreamError(provider);
+    const backendError = error as OpenAIBackendError;
+    expect(backendError.category).toBe("transient");
+    expect(backendError.retryAfter).toBe(7);
+    expect(backendError.retryable).toBe(true);
+  });
+});
+
+async function collectStreamError(
+  provider: OpenAICompatibleProvider,
+): Promise<unknown> {
+  try {
+    for await (const _chunk of provider.streamCompletion([
+      { role: "user", content: "hi" },
+    ])) {
+      // Drain — we expect the stream to throw before yielding.
+    }
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected streamCompletion to throw");
+}
 
 async function listen(server: http.Server): Promise<number> {
   return new Promise((resolve, reject) => {
