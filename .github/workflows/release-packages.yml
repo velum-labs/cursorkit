@@ -117,13 +117,14 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         # The ./ prefix is required so npm treats the argument as a local tarball
         # rather than a GitHub owner/repo git spec.
-        run: npm publish ./dist-release/*.tgz --provenance --access public --dry-run
+        run: npm publish ./dist-release/*.tgz --provenance --access public --registry https://registry.npmjs.org --dry-run
 
       - name: Publish @velum-labs/cursorkit to npm
         if: >-
           github.event_name == 'release' &&
           steps.metadata.outputs.publishable == 'true'
-        # No NODE_AUTH_TOKEN: publishing is via OIDC trusted publishing. The ./
-        # prefix is required so npm treats the argument as a local tarball rather
-        # than a GitHub owner/repo git spec.
-        run: npm publish ./dist-release/*.tgz --provenance --access public
+        # No NODE_AUTH_TOKEN: publishing is via OIDC trusted publishing (naming
+        # the registry is fine; only an _authToken in .npmrc shadows OIDC). The
+        # ./ prefix is required so npm treats the argument as a local tarball
+        # rather than a GitHub owner/repo git spec.
+        run: npm publish ./dist-release/*.tgz --provenance --access public --registry https://registry.npmjs.org
