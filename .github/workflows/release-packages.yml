@@ -39,21 +39,24 @@ jobs:
         with:
           version: 10.33.4
 
+      # NB: no `registry-url:` here on purpose. setup-node's registry-url writes
+      # a `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` line into .npmrc;
+      # a present (or empty) _authToken makes npm use token auth and SHADOWS OIDC
+      # trusted publishing. npm publishes to the default registry without it.
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: pnpm
-          registry-url: https://registry.npmjs.org
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: vendor/extract-cursor-protos/go.mod
           cache-dependency-path: vendor/extract-cursor-protos/go.mod
 
-      # `npm publish --provenance` performs the OIDC exchange via the npm CLI,
-      # which must be >= 11.5.1 for trusted publishing. Once a Trusted Publisher
-      # is configured on npmjs.com publishing uses OIDC automatically; the
-      # NPM_TOKEN below is the bootstrap fallback for the first publish.
+      # `npm publish` performs the OIDC exchange via the npm CLI, which must be
+      # >= 11.5.1 for trusted publishing. A Trusted Publisher for
+      # @velum-labs/cursorkit is configured on npmjs.com, so publishing is
+      # token-free via OIDC (provenance is emitted automatically).
       - name: Update npm for OIDC trusted publishing
         run: npm install -g npm@latest
 
@@ -110,12 +113,6 @@ jobs:
           path: dist-release/*.tgz
           if-no-files-found: error
 
-      - name: Configure npm registry auth
-        if: github.event_name == 'release'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" >> "$HOME/.npmrc"
-
       - name: Dry-run publish (no deploy)
         if: github.event_name == 'workflow_dispatch'
         # The ./ prefix is required so npm treats the argument as a local tarball
@@ -126,8 +123,7 @@ jobs:
         if: >-
           github.event_name == 'release' &&
           steps.metadata.outputs.publishable == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        # The ./ prefix is required so npm treats the argument as a local tarball
-        # rather than a GitHub owner/repo git spec.
+        # No NODE_AUTH_TOKEN: publishing is via OIDC trusted publishing. The ./
+        # prefix is required so npm treats the argument as a local tarball rather
+        # than a GitHub owner/repo git spec.
         run: npm publish ./dist-release/*.tgz --provenance --access public
