@@ -39,7 +39,13 @@ rollback instructions.
 - `MODEL_CONTEXT_TOKEN_LIMIT`: advertised local context window. Defaults to `128000`.
 - `MODEL_REQUEST_TIMEOUT_MS`: optional request deadline for OpenAI-compatible local backend calls.
 - `BRIDGE_HARDCODED_RESPONSE`: optional fixed local model response for deterministic experiments.
-- `BRIDGE_MODELS_JSON`: JSON array for multiple local models. Each item supports `id`, `displayName`, `providerModel`, `baseUrl`, `apiKey`, `contextTokenLimit`, `requestTimeoutMs`, and `hardcodedResponse`.
+- `BRIDGE_MODELS_JSON`: legacy JSON array or versioned `{ "version": 2,
+"models": [...] }` envelope for multiple local models. Each model supports
+  `id`, `displayName`, `providerModel`, `baseUrl`, `apiKey`,
+  `contextTokenLimit`, `requestTimeoutMs`, `hardcodedResponse`, and an optional
+  discovered `reasoning` capability. Cursor renders only that model's ordered
+  opaque effort IDs and forwards the selected value as `reasoning_effort`;
+  models without capability metadata do not receive fabricated tiers.
 
 ## Safety And Diagnostics
 

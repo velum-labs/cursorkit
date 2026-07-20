@@ -49,7 +49,7 @@ export function mergeLocalDesktopModelsIntoApplicationUser(
   for (const model of models) {
     preferences[model.id] = {
       modelId: model.id,
-      parameters: localDesktopParameterValues(true),
+      parameters: localDesktopParameterValues(model, true),
       updatedAt,
     };
   }
@@ -61,7 +61,7 @@ export function mergeLocalDesktopModelsIntoApplicationUser(
     const modelConfig = ensureRecord(aiSettings, "modelConfig");
     const selectedModel = {
       modelId: firstModel.id,
-      parameters: localDesktopParameterValues(true),
+      parameters: localDesktopParameterValues(firstModel, true),
     };
     for (const key of ["composer", "background-composer"]) {
       modelConfig[key] = {
@@ -113,14 +113,14 @@ export function buildLocalDesktopModelEntry(
     supportsNonMaxMode: true,
     supportsPlanMode: true,
     supportsSandboxing: false,
-    supportsThinking: false,
+    supportsThinking: model.reasoning?.status === "supported",
     cloudAgentEffortModes: [],
     defaultOn: true,
     degradationStatus: 0,
     isRecommendedForBackgroundComposer: false,
     legacySlugs: [model.id],
     idAliases: [model.id, model.displayName],
-    parameterDefinitions: localDesktopParameterDefinitions(),
+    parameterDefinitions: localDesktopParameterDefinitions(model),
     namedModelSectionIndex: 10_000,
     visibleInRoutedModelView: true,
     tooltipData,
@@ -138,37 +138,47 @@ function localDesktopVariantConfig(
   isMaxMode: boolean,
 ): Record<string, unknown> {
   return {
-    parameterValues: localDesktopParameterValues(isMaxMode),
+    parameterValues: localDesktopParameterValues(model, isMaxMode),
     displayName: model.displayName,
     isMaxMode,
     isDefaultMaxConfig: isMaxMode,
     isDefaultNonMaxConfig: !isMaxMode,
     tooltipData,
     displayNameOutsidePicker: model.displayName,
-    variantStringRepresentation: localDesktopVariantString(model.id, isMaxMode),
+    variantStringRepresentation: localDesktopVariantString(model, isMaxMode),
     legacySlug: model.id,
   };
 }
 
 function localDesktopVariantString(
-  modelId: string,
+  model: LocalModelConfig,
   isMaxMode: boolean,
 ): string {
   const context = isMaxMode ? "1m" : "272k";
-  return `${modelId}[context=${context},reasoning=medium,fast=false]`;
+  const effort =
+    model.reasoning?.defaultEffort ?? model.reasoning?.efforts?.[0]?.id;
+  return `${model.id}[context=${context}${
+    effort === undefined ? "" : `,reasoning=${effort}`
+  },fast=false]`;
 }
 
 function localDesktopParameterValues(
+  model: LocalModelConfig,
   isMaxMode: boolean,
 ): Array<Record<string, string>> {
+  const effort =
+    model.reasoning?.defaultEffort ?? model.reasoning?.efforts?.[0]?.id;
   return [
     { id: "context", value: isMaxMode ? "1m" : "272k" },
-    { id: "reasoning", value: "medium" },
+    ...(effort === undefined ? [] : [{ id: "reasoning", value: effort }]),
     { id: "fast", value: "false" },
   ];
 }
 
-function localDesktopParameterDefinitions(): Array<Record<string, unknown>> {
+function localDesktopParameterDefinitions(
+  model: LocalModelConfig,
+): Array<Record<string, unknown>> {
+  const efforts = model.reasoning?.efforts ?? [];
   return [
     {
       id: "context",
@@ -183,24 +193,25 @@ function localDesktopParameterDefinitions(): Array<Record<string, unknown>> {
         },
       },
     },
-    {
-      id: "reasoning",
-      name: "Reasoning",
-      markdownTooltip:
-        "Reasoning effort the model uses to generate its response.",
-      parameterType: {
-        enumParameter: {
-          values: [
-            { value: "none", displayName: "None" },
-            { value: "low", displayName: "Low" },
-            { value: "medium", displayName: "Medium" },
-            { value: "high", displayName: "High" },
-            { value: "extra-high", displayName: "Extra High" },
-          ],
-        },
-      },
-      isCycleableByHotkey: true,
-    },
+    ...(efforts.length === 0
+      ? []
+      : [
+          {
+            id: "reasoning",
+            name: "Reasoning",
+            markdownTooltip:
+              "Reasoning effort supported by the selected model route.",
+            parameterType: {
+              enumParameter: {
+                values: efforts.map((effort) => ({
+                  value: effort.id,
+                  displayName: effort.label ?? effort.id,
+                })),
+              },
+            },
+            isCycleableByHotkey: true,
+          },
+        ]),
     {
       id: "fast",
       name: "Fast",

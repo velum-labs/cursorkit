@@ -75,6 +75,7 @@ export interface OpenAIBackendErrorOptions extends ErrorOptions {
 export interface OpenAIStreamOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
+  reasoningEffort?: string;
   /**
    * Observability correlation id forwarded to the model backend (gateway) as
    * `x-fusion-trace-id`. The gateway honors it so the Cursor edge shares one
@@ -193,6 +194,9 @@ export class OpenAICompatibleProvider implements ModelProvider {
       messages,
       stream: true,
       ...(tools.length > 0 ? { tools } : {}),
+      ...(options.reasoningEffort !== undefined
+        ? { reasoning_effort: options.reasoningEffort }
+        : {}),
     };
     const requestTimeoutMs =
       options.timeoutMs ??

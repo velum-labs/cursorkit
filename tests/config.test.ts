@@ -119,6 +119,32 @@ describe("loadConfig", () => {
     expect(config.models[0]?.providerModel).toBe("llama");
   });
 
+  it("loads versioned per-model reasoning capabilities without fabricating tiers", () => {
+    const config = loadConfig({
+      BRIDGE_MODELS_JSON: JSON.stringify({
+        version: 2,
+        models: [
+          {
+            id: "opaque",
+            baseUrl: "http://localhost:11434/v1",
+            reasoning: {
+              status: "supported",
+              efforts: [{ id: "quick" }, { id: "deep", aliases: ["max"] }],
+              defaultEffort: "quick",
+              provenance: "provider",
+            },
+          },
+        ],
+      }),
+    });
+    expect(config.models[0]?.reasoning).toEqual({
+      status: "supported",
+      efforts: [{ id: "quick" }, { id: "deep", aliases: ["max"] }],
+      defaultEffort: "quick",
+      provenance: "provider",
+    });
+  });
+
   it("separates Cursor-facing model id from provider model id", () => {
     const config = loadConfig({
       BRIDGE_MODELS_JSON: JSON.stringify([

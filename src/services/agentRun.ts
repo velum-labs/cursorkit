@@ -22,6 +22,7 @@ import type { ChatMessage, OpenAIStreamOptions } from "../providers/openai.js";
 export interface LocalAgentRunDecision {
   model: RegisteredModel;
   messages: ChatMessage[];
+  reasoningEffort?: string;
   diagnostics: AgentRunDiagnostics;
 }
 
@@ -159,9 +160,17 @@ function getLocalAgentRunDecisionFromRequest(
   const diagnostics = buildAgentRunDiagnostics(request, modelId);
   const contextMessages = buildAgentContextMessages(request, userMessage);
   diagnostics.injectedContextMessages = contextMessages.length;
+  const requestedEffort = request.requestedModel?.parameters.find(
+    (parameter) => parameter.id === "reasoning",
+  )?.value;
+  const reasoningEffort =
+    requestedEffort === undefined
+      ? undefined
+      : resolveReasoningEffort(model, requestedEffort);
 
   return {
     model,
+    ...(reasoningEffort !== undefined ? { reasoningEffort } : {}),
     messages: [
       ...contextMessages,
       {
@@ -204,7 +213,12 @@ export async function writeLocalAgentRunResponse(
   try {
     for await (const text of decision.model.provider.streamCompletion(
       decision.messages,
-      options,
+      {
+        ...options,
+        ...(decision.reasoningEffort !== undefined
+          ? { reasoningEffort: decision.reasoningEffort }
+          : {}),
+      },
     )) {
       outputCharacters += text.length;
       response.write(
@@ -245,6 +259,23 @@ export async function writeLocalAgentRunResponse(
     });
     endLocalAgentRunFailure(response);
   }
+}
+
+function resolveReasoningEffort(
+  model: RegisteredModel,
+  requested: string,
+): string {
+  for (const effort of model.reasoning?.efforts ?? []) {
+    if (
+      effort.id === requested ||
+      effort.aliases?.includes(requested) === true
+    ) {
+      return effort.id;
+    }
+  }
+  throw new Error(
+    `reasoning effort "${requested}" is not supported by model "${model.id}"`,
+  );
 }
 
 function endLocalAgentRunFailure(response: ServerResponse): void {

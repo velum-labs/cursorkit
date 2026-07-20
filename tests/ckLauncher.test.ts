@@ -202,6 +202,12 @@ describe("ck launcher", () => {
       baseUrl: "http://127.0.0.1:8080/v1",
       apiKey: "local",
       contextTokenLimit: 128000,
+      reasoning: {
+        status: "supported",
+        efforts: [{ id: "quick" }, { id: "deep", label: "Deep" }],
+        defaultEffort: "deep",
+        provenance: "provider",
+      },
     });
 
     expect(entry).toMatchObject({
@@ -222,11 +228,11 @@ describe("ck launcher", () => {
         isDefaultNonMaxConfig: true,
         parameterValues: [
           { id: "context", value: "272k" },
-          { id: "reasoning", value: "medium" },
+          { id: "reasoning", value: "deep" },
           { id: "fast", value: "false" },
         ],
         variantStringRepresentation:
-          "local-qwen[context=272k,reasoning=medium,fast=false]",
+          "local-qwen[context=272k,reasoning=deep,fast=false]",
         legacySlug: "local-qwen",
       }),
       expect.objectContaining({
@@ -234,11 +240,11 @@ describe("ck launcher", () => {
         isDefaultMaxConfig: true,
         parameterValues: [
           { id: "context", value: "1m" },
-          { id: "reasoning", value: "medium" },
+          { id: "reasoning", value: "deep" },
           { id: "fast", value: "false" },
         ],
         variantStringRepresentation:
-          "local-qwen[context=1m,reasoning=medium,fast=false]",
+          "local-qwen[context=1m,reasoning=deep,fast=false]",
         legacySlug: "local-qwen",
       }),
     ]);
@@ -274,6 +280,12 @@ describe("ck launcher", () => {
         baseUrl: "http://127.0.0.1:8080/v1",
         apiKey: "local",
         contextTokenLimit: 128000,
+        reasoning: {
+          status: "supported",
+          efforts: [{ id: "quick" }, { id: "deep" }],
+          defaultEffort: "deep",
+          provenance: "provider",
+        },
       },
     ]);
 
@@ -289,7 +301,7 @@ describe("ck launcher", () => {
           modelId: "local-qwen",
           parameters: [
             { id: "context", value: "1m" },
-            { id: "reasoning", value: "medium" },
+            { id: "reasoning", value: "deep" },
             { id: "fast", value: "false" },
           ],
         },
@@ -303,7 +315,7 @@ describe("ck launcher", () => {
               modelId: "local-qwen",
               parameters: [
                 { id: "context", value: "1m" },
-                { id: "reasoning", value: "medium" },
+                { id: "reasoning", value: "deep" },
                 { id: "fast", value: "false" },
               ],
             },
@@ -317,7 +329,7 @@ describe("ck launcher", () => {
               modelId: "local-qwen",
               parameters: [
                 { id: "context", value: "1m" },
-                { id: "reasoning", value: "medium" },
+                { id: "reasoning", value: "deep" },
                 { id: "fast", value: "false" },
               ],
             },

@@ -66,9 +66,10 @@ describe("OpenAICompatibleProvider observability", () => {
     );
 
     const chunks: string[] = [];
-    for await (const chunk of provider.streamCompletion([
-      { role: "user", content: "hello from test" },
-    ])) {
+    for await (const chunk of provider.streamCompletion(
+      [{ role: "user", content: "hello from test" }],
+      { reasoningEffort: "deep" },
+    )) {
       chunks.push(chunk);
     }
 
@@ -78,6 +79,7 @@ describe("OpenAICompatibleProvider observability", () => {
         model: "mlx-community/Qwen3.5-4B-8bit",
         messages: [{ role: "user", content: "hello from test" }],
         stream: true,
+        reasoning_effort: "deep",
       },
     ]);
     expect(logs).toContainEqual(

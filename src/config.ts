@@ -41,6 +41,18 @@ export type LogLevel = "debug" | "info" | "warn" | "error";
 export type ModelPayloadLogging = "summary" | "full";
 export type AgentToolPolicy = "safe" | "all";
 
+export interface LocalReasoningCapability {
+  status: "supported" | "unsupported" | "unknown";
+  efforts?: Array<{
+    id: string;
+    label?: string;
+    description?: string;
+    aliases?: string[];
+  }>;
+  defaultEffort?: string;
+  provenance: "provider" | "config" | "unknown";
+}
+
 export interface LocalModelConfig {
   id: string;
   displayName: string;
@@ -48,6 +60,7 @@ export interface LocalModelConfig {
   baseUrl: string;
   apiKey: string;
   contextTokenLimit: number;
+  reasoning?: LocalReasoningCapability;
   requestTimeoutMs?: number;
   hardcodedResponse?: string;
 }
@@ -208,11 +221,18 @@ function parseModels(
   }
 
   const parsed = JSON.parse(raw) as unknown;
-  if (!Array.isArray(parsed)) {
-    throw new Error("BRIDGE_MODELS_JSON must be a JSON array");
+  const items = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && parsed.version === 2 && Array.isArray(parsed.models)
+      ? parsed.models
+      : undefined;
+  if (items === undefined) {
+    throw new Error(
+      "BRIDGE_MODELS_JSON must be a legacy JSON array or version 2 model envelope",
+    );
   }
 
-  return parsed.map((item, index) => {
+  return items.map((item, index) => {
     if (!isRecord(item)) {
       throw new Error(`BRIDGE_MODELS_JSON[${index}] must be an object`);
     }
@@ -233,6 +253,9 @@ function parseModels(
         Number.isFinite(item.contextTokenLimit)
           ? item.contextTokenLimit
           : fallback.contextTokenLimit,
+      ...(parseReasoningCapability(item.reasoning) !== undefined
+        ? { reasoning: parseReasoningCapability(item.reasoning) }
+        : {}),
       requestTimeoutMs:
         typeof item.requestTimeoutMs === "number" &&
         Number.isFinite(item.requestTimeoutMs) &&
@@ -245,6 +268,53 @@ function parseModels(
           : undefined,
     };
   });
+}
+
+function parseReasoningCapability(
+  value: unknown,
+): LocalReasoningCapability | undefined {
+  if (
+    !isRecord(value) ||
+    (value.status !== "supported" &&
+      value.status !== "unsupported" &&
+      value.status !== "unknown") ||
+    (value.provenance !== "provider" &&
+      value.provenance !== "config" &&
+      value.provenance !== "unknown")
+  ) {
+    return undefined;
+  }
+  const efforts = Array.isArray(value.efforts)
+    ? value.efforts.flatMap((effort) => {
+        if (!isRecord(effort) || typeof effort.id !== "string") return [];
+        return [
+          {
+            id: effort.id,
+            ...(typeof effort.label === "string"
+              ? { label: effort.label }
+              : {}),
+            ...(typeof effort.description === "string"
+              ? { description: effort.description }
+              : {}),
+            ...(Array.isArray(effort.aliases)
+              ? {
+                  aliases: effort.aliases.filter(
+                    (alias): alias is string => typeof alias === "string",
+                  ),
+                }
+              : {}),
+          },
+        ];
+      })
+    : undefined;
+  return {
+    status: value.status,
+    provenance: value.provenance,
+    ...(efforts !== undefined ? { efforts } : {}),
+    ...(typeof value.defaultEffort === "string"
+      ? { defaultEffort: value.defaultEffort }
+      : {}),
+  };
 }
 
 function parseLogLevel(value: string | undefined): LogLevel {

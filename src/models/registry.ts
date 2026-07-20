@@ -12,6 +12,7 @@ export interface RegisteredModel {
   baseUrl: string;
   apiKey: string;
   contextTokenLimit: number;
+  reasoning?: LocalModelConfig["reasoning"];
   provider: ModelProvider;
 }
 
@@ -62,6 +63,9 @@ export function registerConfiguredModels(
       baseUrl: config.baseUrl,
       apiKey: config.apiKey,
       contextTokenLimit: config.contextTokenLimit,
+      ...(config.reasoning !== undefined
+        ? { reasoning: config.reasoning }
+        : {}),
       provider: providerFactory(config),
     });
   }

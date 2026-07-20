@@ -51,7 +51,7 @@ export function mergeAvailableModels(
         supportsAgent: true,
         degradationStatus:
           AvailableModelsResponse_DegradationStatus.AVAILABLE_MODELS_RESPONSE_DEGRADATION_STATUS_DEGRADATION_STATUS_UNSPECIFIED,
-        supportsThinking: false,
+        supportsThinking: model.reasoning?.status === "supported",
         supportsImages: false,
         supportsAutoContext: false,
         supportsMaxMode: true,
@@ -65,7 +65,7 @@ export function mergeAvailableModels(
         inputboxShortModelName: model.displayName,
         contextTokenLimit: model.contextTokenLimit,
         isUserAdded: true,
-        parameterDefinitions: localParameterDefinitions(),
+        parameterDefinitions: localParameterDefinitions(model),
         legacySlugs: [model.id],
         idAliases: uniqueStrings([model.id, model.displayName]),
         namedModelSectionIndex: 1,
@@ -233,21 +233,29 @@ function localVariantConfig(model: RegisteredModel, isMaxMode: boolean) {
     isMaxMode,
     isDefaultMaxConfig: isMaxMode,
     isDefaultNonMaxConfig: !isMaxMode,
-    parameterValues: localParameterValues(isMaxMode),
+    parameterValues: localParameterValues(model, isMaxMode),
     tooltipData: create(AvailableModelsResponse_TooltipDataSchema, {
       markdownContent: `**${model.displayName}**<br />Local OpenAI-compatible model.`,
     }),
-    variantStringRepresentation: localVariantString(model.id, isMaxMode),
+    variantStringRepresentation: localVariantString(model, isMaxMode),
     legacySlug: model.id,
   });
 }
 
-function localVariantString(modelId: string, isMaxMode: boolean): string {
+function localVariantString(
+  model: RegisteredModel,
+  isMaxMode: boolean,
+): string {
   const context = isMaxMode ? "1m" : "272k";
-  return `${modelId}[context=${context},reasoning=medium,fast=false]`;
+  const effort =
+    model.reasoning?.defaultEffort ?? model.reasoning?.efforts?.[0]?.id;
+  return `${model.id}[context=${context}${
+    effort === undefined ? "" : `,reasoning=${effort}`
+  },fast=false]`;
 }
 
-function localParameterDefinitions() {
+function localParameterDefinitions(model: RegisteredModel) {
+  const efforts = model.reasoning?.efforts ?? [];
   return [
     create(ModelParameterDefinitionSchema, {
       id: "context",
@@ -271,42 +279,36 @@ function localParameterDefinitions() {
         ),
       }),
     }),
-    create(ModelParameterDefinitionSchema, {
-      id: "reasoning",
-      name: "Reasoning",
-      markdownTooltip:
-        "Reasoning effort the model uses to generate its response.",
-      parameterType: create(ModelParameterDefinition_ModelParameterTypeSchema, {
-        enumParameter: create(
-          ModelParameterDefinition_EnumParameterDefinitionSchema,
-          {
-            values: [
-              create(
-                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-                { value: "none", displayName: "None" },
-              ),
-              create(
-                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-                { value: "low", displayName: "Low" },
-              ),
-              create(
-                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-                { value: "medium", displayName: "Medium" },
-              ),
-              create(
-                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-                { value: "high", displayName: "High" },
-              ),
-              create(
-                ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
-                { value: "extra-high", displayName: "Extra High" },
-              ),
-            ],
-          },
-        ),
-      }),
-      isCycleableByHotkey: true,
-    }),
+    ...(efforts.length === 0
+      ? []
+      : [
+          create(ModelParameterDefinitionSchema, {
+            id: "reasoning",
+            name: "Reasoning",
+            markdownTooltip:
+              "Reasoning effort supported by the selected model route.",
+            parameterType: create(
+              ModelParameterDefinition_ModelParameterTypeSchema,
+              {
+                enumParameter: create(
+                  ModelParameterDefinition_EnumParameterDefinitionSchema,
+                  {
+                    values: efforts.map((effort) =>
+                      create(
+                        ModelParameterDefinition_EnumParameterDefinition_EnumParameterValueSchema,
+                        {
+                          value: effort.id,
+                          displayName: effort.label ?? effort.id,
+                        },
+                      ),
+                    ),
+                  },
+                ),
+              },
+            ),
+            isCycleableByHotkey: true,
+          }),
+        ]),
     create(ModelParameterDefinitionSchema, {
       id: "fast",
       name: "Fast",
@@ -320,16 +322,22 @@ function localParameterDefinitions() {
   ];
 }
 
-function localParameterValues(isMaxMode: boolean) {
+function localParameterValues(model: RegisteredModel, isMaxMode: boolean) {
+  const effort =
+    model.reasoning?.defaultEffort ?? model.reasoning?.efforts?.[0]?.id;
   return [
     create(AgentV1_RequestedModel_ModelParameterValueSchema, {
       id: "context",
       value: isMaxMode ? "1m" : "272k",
     }),
-    create(AgentV1_RequestedModel_ModelParameterValueSchema, {
-      id: "reasoning",
-      value: "medium",
-    }),
+    ...(effort === undefined
+      ? []
+      : [
+          create(AgentV1_RequestedModel_ModelParameterValueSchema, {
+            id: "reasoning",
+            value: effort,
+          }),
+        ]),
     create(AgentV1_RequestedModel_ModelParameterValueSchema, {
       id: "fast",
       value: "false",

@@ -285,7 +285,6 @@ describe("bridge server", () => {
     expect(localModel?.namedModelSectionIndex).toBe(1);
     expect(localModel?.parameterDefinitions ?? []).toEqual([
       expect.objectContaining({ id: "context", name: "Context" }),
-      expect.objectContaining({ id: "reasoning", name: "Reasoning" }),
       expect.objectContaining({ id: "fast", name: "Fast" }),
     ]);
     expect(localModel?.legacySlugs).toContain("local-model");
@@ -293,7 +292,6 @@ describe("bridge server", () => {
     expect(localModel?.variants).toHaveLength(2);
     expect(localModel?.variants?.[0]?.parameterValues ?? []).toEqual([
       expect.objectContaining({ id: "context", value: "272k" }),
-      expect.objectContaining({ id: "reasoning", value: "medium" }),
       expect.objectContaining({ id: "fast", value: "false" }),
     ]);
     expect(localModel?.variants?.[0]?.tooltipData).toBeDefined();
@@ -301,7 +299,7 @@ describe("bridge server", () => {
       "Local Model",
     );
     expect(localModel?.variants?.[0]?.variantStringRepresentation).toBe(
-      "local-model[context=272k,reasoning=medium,fast=false]",
+      "local-model[context=272k,fast=false]",
     );
     expect(localModel?.variants?.[0]?.legacySlug).toBe("local-model");
     expect(localModel?.variants?.[0]).toMatchObject({
@@ -311,8 +309,7 @@ describe("bridge server", () => {
     expect(localModel?.variants?.[1]).toMatchObject({
       isMaxMode: true,
       isDefaultMaxConfig: true,
-      variantStringRepresentation:
-        "local-model[context=1m,reasoning=medium,fast=false]",
+      variantStringRepresentation: "local-model[context=1m,fast=false]",
       legacySlug: "local-model",
     });
   });

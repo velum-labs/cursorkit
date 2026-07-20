@@ -1466,7 +1466,13 @@ async function writeLocalAgentRunResponseWithCursorTools(
       decision.model.provider,
       messages,
       tools,
-      { signal, traceId },
+      {
+        signal,
+        traceId,
+        ...(decision.reasoningEffort !== undefined
+          ? { reasoningEffort: decision.reasoningEffort }
+          : {}),
+      },
     )) {
       if (event.type === "text") {
         outputCharacters += event.text.length;
